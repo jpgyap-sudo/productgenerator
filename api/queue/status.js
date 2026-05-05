@@ -6,7 +6,7 @@
 import { supabase, QUEUE_TABLE, RESULTS_TABLE } from '../../lib/supabase.js';
 
 export const config = {
-  runtime: 'edge'
+  runtime: 'nodejs'
 };
 
 export default async function handler(req) {

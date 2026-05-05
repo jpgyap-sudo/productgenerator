@@ -4,9 +4,10 @@
 //  to ACTIVE, and kicks off background processing via waitUntil().
 // ═══════════════════════════════════════════════════════════════════
 import { supabase, QUEUE_TABLE, RESULTS_TABLE, BUCKET_NAME } from '../../lib/supabase.js';
+import { waitUntil } from '@vercel/functions';
 
 export const config = {
-  runtime: 'edge'
+  runtime: 'nodejs'
 };
 
 export default async function handler(req) {
@@ -75,17 +76,16 @@ export default async function handler(req) {
     }
 
     // Kick off background processing using waitUntil
-    // This is available in Vercel Edge Functions via the platform
+    // This keeps the function alive after the response is sent
     const processUrl = new URL('/api/process-item', req.url);
     processUrl.searchParams.set('ids', itemIds.join(','));
     if (resolution) processUrl.searchParams.set('res', resolution);
 
-    // Fire-and-forget: start background processing
-    // In Vercel Edge Functions, we use waitUntil to keep the function alive.
-    // For Node.js runtime, we just fire the request and let it run.
-    fetch(processUrl.toString(), { method: 'POST' }).catch(e => {
-      console.error('Background processing request failed:', e);
-    });
+    waitUntil(
+      fetch(processUrl.toString(), { method: 'POST' }).catch(e => {
+        console.error('Background processing request failed:', e);
+      })
+    );
 
     return new Response(JSON.stringify({
       success: true,

@@ -10,7 +10,7 @@ import { supabase, QUEUE_TABLE, RESULTS_TABLE, BUCKET_NAME } from '../lib/supaba
 import { uploadToFal, generateView, VIEWS } from '../lib/fal.js';
 
 export const config = {
-  runtime: 'edge',
+  runtime: 'nodejs',
   // Allow up to 300 seconds (5 minutes) for background processing
   maxDuration: 300
 };
