@@ -792,6 +792,21 @@ const lbClose    = document.getElementById('lbClose');
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const setStatus = msg => statusLine.textContent = msg;
 
+function formatError(value, fallback = 'Something went wrong') {
+  if (!value) return fallback;
+  if (typeof value === 'string') return value;
+  if (value instanceof Error) return formatError(value.message, fallback);
+  if (Array.isArray(value)) return value.map(v => formatError(v, '')).filter(Boolean).join('; ') || fallback;
+  if (typeof value === 'object') {
+    const direct = value.message || value.detail || value.error || value.reason || value.description;
+    if (direct && direct !== value) return formatError(direct, fallback);
+    const issue = value.msg || value.loc || value.type;
+    if (issue) return [value.msg, Array.isArray(value.loc) ? value.loc.join('.') : value.loc, value.type].filter(Boolean).join(' ');
+    try { return JSON.stringify(value).slice(0, 240); } catch (e) { return fallback; }
+  }
+  return String(value);
+}
+
 function blobToDataUrl(blob) {
   return new Promise(res => {
     const r = new FileReader();
@@ -813,7 +828,7 @@ function toast(msg, type = 'info') {
   const container = document.getElementById('toastContainer');
   const el = document.createElement('div');
   el.className = `toast ${type}`;
-  el.textContent = msg;
+  el.textContent = formatError(msg);
   container.appendChild(el);
   setTimeout(() => { el.style.opacity = '0'; el.style.transition = 'opacity 0.3s'; setTimeout(() => el.remove(), 300); }, 3500);
 }
@@ -1326,7 +1341,7 @@ async function retryFailedViews(item, images) {
   try {
     imageUrl = await uploadToFal(apiKey, item.dataUrl);
   } catch (e) {
-    toast(`Upload failed: ${e.message}`, 'error');
+    toast(`Upload failed: ${formatError(e)}`, 'error');
     return;
   }
 
@@ -1363,7 +1378,7 @@ async function uploadToFal(apiKey, dataUrl) {
       body: '{}'
     });
   } catch (e) {
-    throw new Error(`Could not reach fal storage auth (${e.message})`);
+    throw new Error(`Could not reach fal storage auth (${formatError(e)})`);
   }
   if (!tokenRes.ok) throw new Error(`Storage auth failed: ${tokenRes.status} — check your fal.ai API key`);
   const { token, base_url } = await tokenRes.json();
@@ -1379,7 +1394,7 @@ async function uploadToFal(apiKey, dataUrl) {
       body: form
     });
   } catch (e) {
-    throw new Error(`Could not upload to fal CDN (${e.message})`);
+    throw new Error(`Could not upload to fal CDN (${formatError(e)})`);
   }
   if (!upRes.ok) throw new Error(`CDN upload failed: ${upRes.status}`);
   const upData = await upRes.json();
@@ -1433,8 +1448,8 @@ async function generateView(view, apiKey, desc, imageUrl) {
 
     if (!res.ok) {
       let em = `API error ${res.status}`;
-      try { const ej = await res.json(); em = ej.detail || ej.message || em; } catch(e2){}
-      throw new Error(em);
+      try { em = await res.json(); } catch(e2){}
+      throw new Error(formatError(em, `API error ${res.status}`));
     }
 
     const result = await res.json();
@@ -1472,7 +1487,7 @@ async function generateView(view, apiKey, desc, imageUrl) {
         await sleep(delay);
         return generateView(view, apiKey, desc, imageUrl);
       }
-      body.innerHTML = `<span class="rerr">${escHtml(e.message)}</span>`;
+      body.innerHTML = `<span class="rerr">${escHtml(formatError(e))}</span>`;
       badge.textContent = 'error'; badge.className = 'rbadge rb-err';
     }
     return null;
@@ -1519,8 +1534,9 @@ startBtn.addEventListener('click', async () => {
         imageUrl = await uploadToFal(apiKey, item.dataUrl);
         setActiveProg('Upload done! Generating 5 views...');
       } catch(e) {
-        setStatus(`Upload failed: ${e.message}`);
-        setActiveProg('❌ Upload error: ' + e.message);
+        const msg = formatError(e);
+        setStatus(`Upload failed: ${msg}`);
+        setActiveProg('❌ Upload error: ' + msg);
         updateQueueItem(item.id, STATUS.ERROR, 'upload failed');
         const dot = document.getElementById('active-dot');
         if (dot) { dot.style.animation = 'none'; dot.style.background = 'var(--error)'; }
