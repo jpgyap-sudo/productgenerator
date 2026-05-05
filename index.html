@@ -813,7 +813,7 @@ textarea:focus { outline: none; border-color: var(--text-secondary); }
     <div class="sidebar-foot">
       <button class="btn-start" id="startBtn" disabled>▶ Start Queue</button>
       <button class="btn-stop" id="stopBtn">⏹ Stop After Current</button>
-      <div class="status" id="statusLine">Select images, add descriptions, then click ✚ to add to queue.</div>
+      <div class="status" id="statusLine">Select images, add descriptions, then click ▶ Start Queue.</div>
       <div class="cost" id="costEst"></div>
     </div>
   </aside>
@@ -1587,12 +1587,13 @@ dmToggle.addEventListener('click', () => {
 
 // ── READY CHECK ───────────────────────────────────────────────────
 function checkReady() {
-  const hasPending = queue.some(q => q.status === STATUS.WAIT);
+  const hasQueueItems = queue.some(q => q.status === STATUS.WAIT);
+  const hasPendingItems = pendingItems.length > 0;
   // Description is optional — the reference image is the primary source.
-  // Only API key + pending items are required to start.
+  // Only API key + pending/queue items are required to start.
   startBtn.disabled = !(
     getApiKey().length > 10 &&
-    hasPending &&
+    (hasQueueItems || hasPendingItems) &&
     !isRunning
   );
   // Show/hide clear buttons
@@ -1769,6 +1770,20 @@ function removeItem(id) {
   updateCost();
   checkReady();
   saveState();
+  // Also remove from Supabase so it doesn't come back on reload
+  deleteQueueItemFromSupabase(id);
+}
+
+async function deleteQueueItemFromSupabase(id) {
+  if (!supabaseClient || !supaConnected) return;
+  try {
+    await supabaseClient
+      .from(SUPA_QUEUE_TABLE)
+      .delete()
+      .eq('id', id);
+  } catch (e) {
+    console.warn('Failed to delete from Supabase:', e);
+  }
 }
 
 // ── PENDING PREVIEW ─────────────────────────────────────────────────
@@ -2297,6 +2312,33 @@ startBtn.addEventListener('click', async () => {
   const apiKey = getApiKey();
   if (!apiKey) return;
   const globalDesc = descEl.value.trim();
+
+  // Move all pending items to the queue first
+  if (pendingItems.length > 0) {
+    const itemsToAdd = [...pendingItems];
+    pendingItems = [];
+    for (const item of itemsToAdd) {
+      item.status = STATUS.WAIT;
+      queue.push(item);
+    }
+    renderPendingList();
+    renderQueue();
+    updateCost();
+    saveState();
+    // Upload images to Supabase in background
+    if (supabaseClient && supaConnected) {
+      for (const item of itemsToAdd) {
+        uploadImageToSupabase(item.id, item.dataUrl).then(url => {
+          if (url) {
+            item.supabaseUrl = url;
+            item.dataUrl = url;
+            saveState();
+          }
+        }).catch(err => console.warn('Background image upload failed:', err));
+      }
+    }
+    toast(`Added ${itemsToAdd.length} item${itemsToAdd.length > 1 ? 's' : ''} to queue`, 'info');
+  }
 
   isStopped = false;
   isRunning = true;
