@@ -1,4 +1,4 @@
-# Product Image Studio
+d# Product Image Studio
 
 AI-powered product photography studio — generates 5 professional views (front, side, isometric, back, interior scene) from a single product image using [fal.ai](https://fal.ai) Nano Banana 2 model.
 
