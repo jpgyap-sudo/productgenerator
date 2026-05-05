@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Product Image Studio</title>
 <meta name="description" content="AI-powered product photography studio — generate 5 professional views from a single product image using fal.ai"/>
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; connect-src 'self' https://fal.run https://rest.alpha.fal.ai https://*.fal.ai https://*.fal-cdn.com https://*.fal-cdn.net; font-src 'self' data:;"/>
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; connect-src 'self' https://fal.run https://rest.alpha.fal.ai https://api.fal.ai https://*.fal.ai https://v3.fal.media https://fal.media https://*.fal.media https://*.fal-cdn.com https://*.fal-cdn.net; font-src 'self' data:;"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <style>
 /* ── RESET & BASE ─────────────────────────────────────────────── */
@@ -1355,22 +1355,32 @@ async function retryFailedViews(item, images) {
 
 // ── API: UPLOAD ────────────────────────────────────────────────────
 async function uploadToFal(apiKey, dataUrl) {
-  const tokenRes = await fetch('https://rest.alpha.fal.ai/storage/auth/token?storage_type=fal-cdn-v3', {
-    method: 'POST',
-    headers: { 'Authorization': `Key ${apiKey}`, 'Content-Type': 'application/json' },
-    body: '{}'
-  });
+  let tokenRes;
+  try {
+    tokenRes = await fetch('https://rest.alpha.fal.ai/storage/auth/token?storage_type=fal-cdn-v3', {
+      method: 'POST',
+      headers: { 'Authorization': `Key ${apiKey}`, 'Content-Type': 'application/json' },
+      body: '{}'
+    });
+  } catch (e) {
+    throw new Error(`Could not reach fal storage auth (${e.message})`);
+  }
   if (!tokenRes.ok) throw new Error(`Storage auth failed: ${tokenRes.status} — check your fal.ai API key`);
   const { token, base_url } = await tokenRes.json();
 
   const blob = dataUrlToBlob(dataUrl);
   const form = new FormData();
   form.append('file', blob, 'product.jpg');
-  const upRes = await fetch(`${base_url}/files/upload`, {
-    method: 'POST',
-    headers: { 'Authorization': `Bearer ${token}` },
-    body: form
-  });
+  let upRes;
+  try {
+    upRes = await fetch(`${base_url}/files/upload`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}` },
+      body: form
+    });
+  } catch (e) {
+    throw new Error(`Could not upload to fal CDN (${e.message})`);
+  }
   if (!upRes.ok) throw new Error(`CDN upload failed: ${upRes.status}`);
   const upData = await upRes.json();
   const url = upData.access_url || upData.url;
