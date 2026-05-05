@@ -295,6 +295,22 @@ textarea:focus { outline: none; border-color: var(--text-secondary); }
 .b-done { background: var(--success-bg); color: var(--success); }
 .b-error { background: var(--error-bg); color: var(--error); }
 .b-stopped { background: var(--border-light); color: var(--text-secondary); }
+.q-desc-wrap { margin-top: 3px; }
+.q-desc-text {
+  font-size: 10px; color: var(--text-muted); line-height: 1.4;
+  cursor: pointer; overflow: hidden; text-overflow: ellipsis;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  word-break: break-word;
+}
+.q-desc-text:hover { color: var(--accent); }
+.q-desc-edit {
+  font-size: 10px; line-height: 1.4; padding: 3px 5px;
+  border: 1px solid var(--accent); border-radius: 4px;
+  background: var(--surface); color: var(--text);
+  width: 100%; resize: vertical; min-height: 32px;
+  font-family: inherit;
+}
+.q-desc-edit:focus { outline: none; border-color: var(--accent); }
 .q-actions { display: flex; gap: 2px; flex-shrink: 0; }
 .q-btn-sm {
   background: none; border: none; color: var(--text-dim);
@@ -732,8 +748,8 @@ textarea:focus { outline: none; border-color: var(--text-secondary); }
     <div class="sidebar-scroll">
 
       <div class="block">
-        <span class="lbl">Product Description</span>
-        <textarea id="desc" placeholder="Describe color, material, legs, style. English or Chinese OK.&#10;&#10;Example: tan leather dining chair, curved back, dark smoked ash wood legs"></textarea>
+        <span class="lbl">Description <span style="font-weight:400;text-transform:none;color:var(--text-muted);letter-spacing:0;">(optional — guide for AI)</span></span>
+        <textarea id="desc" placeholder="Optional: describe color, material, style to guide the AI.&#10;The original product image is always used as the primary reference.&#10;&#10;Example: tan leather dining chair, curved back, dark smoked ash wood legs"></textarea>
       </div>
 
       <div class="block">
@@ -786,7 +802,7 @@ textarea:focus { outline: none; border-color: var(--text-secondary); }
     <div class="sidebar-foot">
       <button class="btn-start" id="startBtn" disabled>▶ Start Queue</button>
       <button class="btn-stop" id="stopBtn">⏹ Stop After Current</button>
-      <div class="status" id="statusLine">Add images and a description to begin.</div>
+      <div class="status" id="statusLine">Add images to get started. Description is optional.</div>
       <div class="cost" id="costEst"></div>
     </div>
   </aside>
@@ -827,18 +843,23 @@ textarea:focus { outline: none; border-color: var(--text-secondary); }
 //  CONSTANTS
 // ══════════════════════════════════════════════════════════════════
 
+function buildDesc(desc) {
+  return (desc && desc.trim()) ? desc : 'the product from the reference image';
+}
+
 const VIEWS = [
-  { id:1, label:'Front view',     prompt: d=>`Use the reference image as the product identity for this ${d}. Create a clean front-facing studio catalog photo on a solid white background. Preserve the visible color, material, silhouette, and important details as closely as possible. Soft even lighting, centered composition.` },
-  { id:2, label:'Side view',      prompt: d=>`Use the reference image as the product identity for this ${d}. Create a clean side-profile studio catalog photo on a solid white background. Preserve the visible color, material, silhouette, and important details as closely as possible. Soft even lighting, centered composition.` },
-  { id:3, label:'Isometric view', prompt: d=>`Use the reference image as the product identity for this ${d}. Create a clean 45-degree isometric studio catalog photo on a solid white background. Preserve the visible color, material, silhouette, and important details as closely as possible. Soft even lighting, centered composition.` },
-  { id:4, label:'Back view',      prompt: d=>`Use the reference image as the product identity for this ${d}. Create a clean rear-view studio catalog photo on a solid white background. Infer hidden rear details naturally from the visible design. Soft even lighting, centered composition.` },
-  { id:5, label:'Interior scene', prompt: d=>`Use the reference image as the product identity for this ${d}. Place matching products in a refined modern dining interior with a round dark marble table, warm pendant light, light wood floor, large windows, and natural decor. Photorealistic interior product photography.` }
+  { id:1, label:'Front view',     prompt: d=>`Use the reference image as the product identity for this ${buildDesc(d)}. Create a clean front-facing studio catalog photo on a solid white background. Preserve the visible color, material, silhouette, and important details as closely as possible. Soft even lighting, centered composition.` },
+  { id:2, label:'Side view',      prompt: d=>`Use the reference image as the product identity for this ${buildDesc(d)}. Create a clean side-profile studio catalog photo on a solid white background. Preserve the visible color, material, silhouette, and important details as closely as possible. Soft even lighting, centered composition.` },
+  { id:3, label:'Isometric view', prompt: d=>`Use the reference image as the product identity for this ${buildDesc(d)}. Create a clean 45-degree isometric studio catalog photo on a solid white background. Preserve the visible color, material, silhouette, and important details as closely as possible. Soft even lighting, centered composition.` },
+  { id:4, label:'Back view',      prompt: d=>`Use the reference image as the product identity for this ${buildDesc(d)}. Create a clean rear-view studio catalog photo on a solid white background. Infer hidden rear details naturally from the visible design. Soft even lighting, centered composition.` },
+  { id:5, label:'Interior scene', prompt: d=>`Use the reference image as the product identity for this ${buildDesc(d)}. Place matching products in a refined modern dining interior with a round dark marble table, warm pendant light, light wood floor, large windows, and natural decor. Photorealistic interior product photography.` }
 ];
 
 function fallbackPrompt(view, desc) {
-  if (view.id === 1) return `Create a clean studio product photo of this ${desc} from the reference image on a white background.`;
-  if (view.id === 5) return `Create a photorealistic modern interior scene featuring this ${desc} from the reference image.`;
-  return `Create a clean ${view.label.toLowerCase()} product photo of this ${desc} from the reference image on a white background.`;
+  const d = buildDesc(desc);
+  if (view.id === 1) return `Create a clean studio product photo of this ${d} from the reference image on a white background.`;
+  if (view.id === 5) return `Create a photorealistic modern interior scene featuring this ${d} from the reference image.`;
+  return `Create a clean ${view.label.toLowerCase()} product photo of this ${d} from the reference image on a white background.`;
 }
 
 const STATUS = {
@@ -1169,7 +1190,7 @@ async function initSupabase() {
     supaStatus.className = 'supa-status connected';
     toast('Supabase connected — queue will persist in the cloud', 'success');
 
-    // Load queue from Supabase
+    // Load queue from Supabase (overrides localStorage with cloud data)
     await loadQueueFromSupabase();
     // Load API key from Supabase (cross-device sync)
     await loadApiKeyFromSupabase();
@@ -1228,22 +1249,45 @@ async function saveQueueToSupabase() {
         name: q.name,
         image_url: imageUrl,
         status: q.status,
-        supabase_url: imageUrl
+        supabase_url: imageUrl,
+        description: q.desc || ''
       });
     }
 
-    // Upsert all queue items
-    const { error } = await supabaseClient
-      .from(SUPA_QUEUE_TABLE)
-      .upsert(queueData.map(item => ({
+    // Upsert all queue items — only include fields that exist in the table
+    // to avoid errors if the 'description' column hasn't been added yet
+    const rows = queueData.map(item => {
+      const row = {
         id: item.id,
         name: item.name,
         image_url: item.image_url,
         status: item.status,
         updated_at: new Date().toISOString()
-      })), { onConflict: 'id' });
+      };
+      // Include description only if it has a value (graceful fallback)
+      if (item.description) row.description = item.description;
+      return row;
+    });
 
-    if (error) console.warn('Supabase save error:', error);
+    const { error } = await supabaseClient
+      .from(SUPA_QUEUE_TABLE)
+      .upsert(rows, { onConflict: 'id', ignoreDuplicates: false });
+
+    if (error) {
+      // If error is about missing 'description' column, retry without it
+      if (error.message && error.message.includes('description')) {
+        const fallbackRows = rows.map(r => {
+          const { description, ...rest } = r;
+          return rest;
+        });
+        const { error: retryErr } = await supabaseClient
+          .from(SUPA_QUEUE_TABLE)
+          .upsert(fallbackRows, { onConflict: 'id', ignoreDuplicates: false });
+        if (retryErr) console.warn('Supabase save error (fallback):', retryErr);
+      } else {
+        console.warn('Supabase save error:', error);
+      }
+    }
   } catch (e) {
     console.warn('Failed to save to Supabase:', e);
   }
@@ -1267,16 +1311,21 @@ async function loadQueueFromSupabase() {
         name: row.name,
         dataUrl: row.image_url || '',  // Use Supabase URL as dataUrl for display
         supabaseUrl: row.image_url || '',
-        status: row.status || STATUS.WAIT
+        status: row.status || STATUS.WAIT,
+        desc: row.description || ''
       }));
       nextId = queue.reduce((m, q) => Math.max(m, q.id), 0) + 1;
       renderQueue();
       updateCost();
       checkReady();
       toast(`Loaded ${queue.length} item(s) from Supabase`, 'info');
+    } else {
+      // No data in Supabase — keep whatever was loaded from localStorage
+      console.log('Supabase queue is empty, keeping localStorage data');
     }
   } catch (e) {
     console.warn('Failed to load from Supabase:', e);
+    // Keep localStorage data as fallback
   }
 }
 
@@ -1318,7 +1367,8 @@ function saveState() {
         id: q.id, name: q.name,
         dataUrl: q.status === STATUS.WAIT ? q.dataUrl : '',
         status: q.status,
-        supabaseUrl: q.supabaseUrl || ''
+        supabaseUrl: q.supabaseUrl || '',
+        desc: q.desc || ''
       })),
       nb2Res,
       nextId,
@@ -1332,9 +1382,9 @@ function saveState() {
     // Storage full or unavailable — silently ignore
   }
 
-  // Also save to Supabase if connected
-  saveQueueToSupabase();
-  saveApiKeyToSupabase();
+  // Also save to Supabase if connected (fire-and-forget, but log errors)
+  saveQueueToSupabase().catch(err => console.warn('Supabase save failed:', err));
+  saveApiKeyToSupabase().catch(err => console.warn('Supabase API key save failed:', err));
 }
 
 function getApiKey() {
@@ -1379,7 +1429,7 @@ function saveApiKeyFromInput() {
   toast('API key saved', 'success');
 }
 
-function loadState() {
+async function loadState() {
   try {
     // 1. Environment variable takes priority (Vercel deployment)
     if (ENV_API_KEY) {
@@ -1420,7 +1470,8 @@ function loadState() {
     }
 
     // 3. Auto-connect to Supabase with hardcoded credentials
-    initSupabase();
+    // This will override localStorage data with cloud data if connected
+    await initSupabase();
   } catch (e) {
     // Ignore corrupt state
   }
@@ -1453,9 +1504,10 @@ dmToggle.addEventListener('click', () => {
 // ── READY CHECK ───────────────────────────────────────────────────
 function checkReady() {
   const hasPending = queue.some(q => q.status === STATUS.WAIT);
+  // Description is optional — the reference image is the primary source.
+  // Only API key + pending items are required to start.
   startBtn.disabled = !(
     getApiKey().length > 10 &&
-    descEl.value.trim().length > 0 &&
     hasPending &&
     !isRunning
   );
@@ -1534,7 +1586,9 @@ async function addFiles(files) {
     }
     const dataUrl = await blobToDataUrl(file);
     const name = file.name.replace(/\.[^.]+$/, '');
-    queue.push({ id: nextId++, name, dataUrl, status: STATUS.WAIT });
+    // Use the current global description as the default per-item description
+    const currentDesc = descEl.value.trim();
+    queue.push({ id: nextId++, name, dataUrl, desc: currentDesc, status: STATUS.WAIT });
     added++;
   }
   if (added > 0) toast(`Added ${added} image${added > 1 ? 's' : ''} to queue`, 'success');
@@ -1560,6 +1614,7 @@ function renderQueue() {
     const canRemove = item.status === STATUS.WAIT;
     const canMoveUp = idx > 0 && item.status === STATUS.WAIT;
     const canMoveDown = idx < queue.length - 1 && item.status === STATUS.WAIT;
+    const itemDesc = item.desc || descEl.value.trim() || '';
 
     const div = document.createElement('div');
     div.className = `q-item ${sc.item}`;
@@ -1569,6 +1624,11 @@ function renderQueue() {
       <div class="q-info">
         <div class="q-name">${escHtml(item.name)}</div>
         <div class="q-sub" id="qsub-${item.id}">5 renders · ~$${(NB2_PRICES[nb2Res]*5).toFixed(2)}</div>
+        ${item.status === STATUS.WAIT ? `
+        <div class="q-desc-wrap" id="qdescw-${item.id}">
+          <div class="q-desc-text" id="qdesct-${item.id}" onclick="editDesc(${item.id})" title="Click to edit description">${escHtml(itemDesc || 'No description')}</div>
+          <textarea class="q-desc-edit" id="qdesce-${item.id}" style="display:none;" placeholder="Enter description for this image..." onblur="saveDesc(${item.id})" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();this.blur();}">${escHtml(itemDesc)}</textarea>
+        </div>` : ''}
       </div>
       <span class="q-badge ${sc.badge}" id="qbadge-${item.id}">${sl}</span>
       <div class="q-actions">
@@ -1578,6 +1638,31 @@ function renderQueue() {
       </div>`;
     queueList.appendChild(div);
   });
+}
+
+function editDesc(id) {
+  const textEl = document.getElementById(`qdesct-${id}`);
+  const editEl = document.getElementById(`qdesce-${id}`);
+  if (!textEl || !editEl) return;
+  textEl.style.display = 'none';
+  editEl.style.display = 'block';
+  editEl.focus();
+  editEl.setSelectionRange(editEl.value.length, editEl.value.length);
+}
+
+function saveDesc(id) {
+  const textEl = document.getElementById(`qdesct-${id}`);
+  const editEl = document.getElementById(`qdesce-${id}`);
+  if (!textEl || !editEl) return;
+  const val = editEl.value.trim();
+  const item = queue.find(q => q.id === id);
+  if (item) {
+    item.desc = val;
+  }
+  textEl.textContent = escHtml(val || 'No description');
+  textEl.style.display = 'block';
+  editEl.style.display = 'none';
+  saveState();
 }
 
 function escHtml(s) {
@@ -1798,7 +1883,7 @@ async function dlZip(itemId, name, images) {
 // ── RETRY FAILED VIEWS ────────────────────────────────────────────
 async function retryFailedViews(item, images) {
   const apiKey = getApiKey();
-  const desc = descEl.value.trim();
+  const desc = item.desc || descEl.value.trim();
   if (!apiKey || !desc) { toast('API key and description required', 'error'); return; }
 
   const failedViews = VIEWS.filter(v => !images[v.id]);
@@ -2024,8 +2109,8 @@ stopBtn.addEventListener('click', () => {
 
 startBtn.addEventListener('click', async () => {
   const apiKey = getApiKey();
-  const desc   = descEl.value.trim();
-  if (!apiKey || !desc) return;
+  if (!apiKey) return;
+  const globalDesc = descEl.value.trim();
 
   isStopped = false;
   isRunning = true;
@@ -2043,6 +2128,10 @@ startBtn.addEventListener('click', async () => {
     const batch = items.slice(i, i + parallelism);
     const batchResults = await Promise.all(batch.map(async (item) => {
       if (isStopped) { updateQueueItem(item.id, STATUS.STOPPED, 'skipped'); return null; }
+
+      // Use per-item description, falling back to global description.
+      // Description is optional — the reference image is the primary source.
+      const desc = item.desc || globalDesc || '';
 
       updateQueueItem(item.id, STATUS.ACTIVE, 'uploading...');
       createActiveCard(item);
@@ -2164,11 +2253,13 @@ if (!checkAccess()) {
 }
 
 // ── INIT ───────────────────────────────────────────────────────────
-loadState();
-renderQueue();
-updateCost();
-checkReady();
-updateLogBadge();
+(async function init() {
+  await loadState();
+  renderQueue();
+  updateCost();
+  checkReady();
+  updateLogBadge();
+})();
 </script>
 </body>
 </html>

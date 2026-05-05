@@ -85,6 +85,7 @@ CREATE TABLE product_queue (
   name TEXT NOT NULL,
   image_url TEXT,
   status TEXT NOT NULL DEFAULT 'wait',
+  description TEXT DEFAULT '',
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -107,6 +108,11 @@ ALTER TABLE app_config ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "anon_all_config" ON app_config
   FOR ALL USING (true) WITH CHECK (true);
 ```
+
+> **⚠️ If you already created the table without the `description` column**, run this ALTER statement to add it:
+> ```sql
+> ALTER TABLE product_queue ADD COLUMN description TEXT DEFAULT '';
+> ```
 
 ### Step 3: Create a storage bucket
 
