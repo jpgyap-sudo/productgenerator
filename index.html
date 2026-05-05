@@ -1487,6 +1487,18 @@ async function generateView(view, apiKey, desc, imageUrl, attempt = 0) {
           limit_generations: false,
           safety_tolerance: '5'
         }
+      },
+      {
+        label: 'GPT Image 2 medium',
+        url: 'https://fal.run/openai/gpt-image-2/edit',
+        body: {
+          prompt: fallbackPrompt(view, desc),
+          image_urls: [imageUrl],
+          image_size: view.id === 5 ? 'landscape_16_9' : 'square',
+          quality: 'medium',
+          num_images: 1,
+          output_format: 'jpeg'
+        }
       }
     ];
     const request = attempts[Math.min(attempt, attempts.length - 1)];
@@ -1524,7 +1536,7 @@ async function generateView(view, apiKey, desc, imageUrl, attempt = 0) {
       body.innerHTML = `<span class="rph">Stopped</span>`;
       badge.textContent = 'stopped'; badge.className = 'rbadge rb-stop';
     } else {
-      if (isInvalidRequestError(e) && attempt < 2) {
+      if (isInvalidRequestError(e) && attempt < attempts.length - 1) {
         badge.textContent = 'retrying...';
         badge.className = 'rbadge rb-gen';
         body.innerHTML = `<div class="spinner"></div>`;
