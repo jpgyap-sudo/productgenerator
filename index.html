@@ -764,13 +764,24 @@ textarea:focus { outline: none; border-color: var(--text-secondary); }
       </div>
 
       <div class="block">
-        <span class="lbl">Add to Queue</span>
+        <span class="lbl">Select Images</span>
         <label for="fileInput" class="upload-box" id="dropZone">
           <span class="icon">📷</span>
-          <span class="txt">Click here to add images</span>
+          <span class="txt">Click to select product images</span>
           <span class="sub">PNG · JPG · WEBP · multiple OK · max 10MB each</span>
         </label>
         <input type="file" id="fileInput" accept="image/*" multiple style="position:absolute;left:-9999px;top:-9999px;"/>
+      </div>
+
+      <!-- ── PENDING PREVIEW (before adding to queue) ──────────── -->
+      <div id="pendingArea" style="display:none;">
+        <div class="block" style="border-bottom:none;padding-bottom:0.3rem;">
+          <span class="lbl">Preview — add description & confirm</span>
+        </div>
+        <div id="pendingList" class="q-list" style="padding-top:0;"></div>
+        <div class="block" style="border-top:1px solid var(--border-light);padding-top:0.6rem;padding-bottom:0.6rem;">
+          <button class="btn-start" id="confirmAddBtn" style="font-size:12px;padding:8px;" disabled>✚ Add Selected to Queue</button>
+        </div>
       </div>
 
       <div class="par-block">
@@ -802,7 +813,7 @@ textarea:focus { outline: none; border-color: var(--text-secondary); }
     <div class="sidebar-foot">
       <button class="btn-start" id="startBtn" disabled>▶ Start Queue</button>
       <button class="btn-stop" id="stopBtn">⏹ Stop After Current</button>
-      <div class="status" id="statusLine">Add images to get started. Description is optional.</div>
+      <div class="status" id="statusLine">Select images, add descriptions, then click ✚ to add to queue.</div>
       <div class="cost" id="costEst"></div>
     </div>
   </aside>
@@ -938,6 +949,7 @@ const ENV_API_KEY = (function(){
 
 // ── STATE ──────────────────────────────────────────────────────────
 let queue = [];
+let pendingItems = [];
 let nb2Res = '0.5K';
 let isStopped = false;
 let isRunning = false;
@@ -945,6 +957,8 @@ let nextId = 1;
 let darkMode = false;
 let parallelism = 1;
 let savedApiKey = '';
+// Per-item skip signal — set to item id to skip that item
+let skipItemId = null;
 // Track retries per view without mutating VIEWS
 const retryMap = new Map();
 
@@ -980,6 +994,11 @@ const logPanel   = document.getElementById('logPanel');
 const logList    = document.getElementById('logList');
 const logBadge   = document.getElementById('logBadge');
 const logCount   = document.getElementById('logCount');
+
+// ── PENDING ELEMENTS ────────────────────────────────────────────────
+const pendingArea = document.getElementById('pendingArea');
+const pendingList = document.getElementById('pendingList');
+const confirmAddBtn = document.getElementById('confirmAddBtn');
 
 // ── SUPABASE ELEMENTS ──────────────────────────────────────────────
 const supaStatus  = document.getElementById('supaStatus');
@@ -1408,6 +1427,14 @@ function saveState() {
         supabaseUrl: q.supabaseUrl || '',
         desc: q.desc || ''
       })),
+      pendingItems: pendingItems.map(p => ({
+        id: p.id, name: p.name,
+        dataUrl: '',
+        hasLocalImage: true,
+        status: STATUS.WAIT,
+        supabaseUrl: '',
+        desc: p.desc || ''
+      })),
       nb2Res,
       nextId,
       darkMode,
@@ -1491,6 +1518,14 @@ async function loadState() {
         queue.forEach(q => {
           if (q.hasLocalImage && !q.dataUrl && !q.supabaseUrl) {
             q.needsReupload = true;
+          }
+        });
+      }
+      if (state.pendingItems) {
+        pendingItems = state.pendingItems;
+        pendingItems.forEach(p => {
+          if (p.hasLocalImage && !p.dataUrl && !p.supabaseUrl) {
+            p.needsReupload = true;
           }
         });
       }
@@ -1638,27 +1673,13 @@ async function addFiles(files) {
     // Use the current global description as the default per-item description
     const currentDesc = descEl.value.trim();
     const newItem = { id: nextId++, name, dataUrl, desc: currentDesc, status: STATUS.WAIT, supabaseUrl: '' };
-    queue.push(newItem);
+    pendingItems.push(newItem);
     added++;
-
-    // Immediately upload image to Supabase storage so it persists across reloads
-    if (supabaseClient && supaConnected) {
-      uploadImageToSupabase(newItem.id, dataUrl).then(url => {
-        if (url) {
-          newItem.supabaseUrl = url;
-          // Update dataUrl to use the Supabase URL for future loads
-          newItem.dataUrl = url;
-          saveState();
-        }
-      }).catch(err => console.warn('Background image upload failed:', err));
-    }
   }
-  if (added > 0) toast(`Added ${added} image${added > 1 ? 's' : ''} to queue`, 'success');
-  renderQueue();
-  updateCost();
-  checkReady();
-  saveState();
-  if (queue.length) welcomeState.style.display = 'none';
+  if (added > 0) {
+    toast(`Added ${added} image${added > 1 ? 's' : ''} — add description & confirm`, 'info');
+    renderPendingList();
+  }
 }
 
 // ── QUEUE RENDER ───────────────────────────────────────────────────
@@ -1673,7 +1694,7 @@ function renderQueue() {
   queue.forEach((item, idx) => {
     const sc = STATUS_CLASS[item.status] || STATUS_CLASS[STATUS.WAIT];
     const sl = STATUS_LABEL[item.status] || STATUS_LABEL[STATUS.WAIT];
-    const canRemove = item.status === STATUS.WAIT;
+    const canRemove = true; // Allow removing any item regardless of status
     const canMoveUp = idx > 0 && item.status === STATUS.WAIT;
     const canMoveDown = idx < queue.length - 1 && item.status === STATUS.WAIT;
     const itemDesc = item.desc || descEl.value.trim() || '';
@@ -1686,11 +1707,10 @@ function renderQueue() {
       <div class="q-info">
         <div class="q-name">${escHtml(item.name)}</div>
         <div class="q-sub" id="qsub-${item.id}">5 renders · ~$${(NB2_PRICES[nb2Res]*5).toFixed(2)}</div>
-        ${item.status === STATUS.WAIT ? `
         <div class="q-desc-wrap" id="qdescw-${item.id}">
           <div class="q-desc-text" id="qdesct-${item.id}" onclick="editDesc(${item.id})" title="Click to edit description">${escHtml(itemDesc || 'No description')}</div>
           <textarea class="q-desc-edit" id="qdesce-${item.id}" style="display:none;" placeholder="Enter description for this image..." onblur="saveDesc(${item.id})" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();this.blur();}">${escHtml(itemDesc)}</textarea>
-        </div>` : ''}
+        </div>
       </div>
       <span class="q-badge ${sc.badge}" id="qbadge-${item.id}">${sl}</span>
       <div class="q-actions">
@@ -1750,6 +1770,109 @@ function removeItem(id) {
   checkReady();
   saveState();
 }
+
+// ── PENDING PREVIEW ─────────────────────────────────────────────────
+function renderPendingList() {
+  if (!pendingItems.length) {
+    pendingArea.style.display = 'none';
+    return;
+  }
+  pendingArea.style.display = 'block';
+  pendingList.innerHTML = '';
+  pendingItems.forEach(item => {
+    const div = document.createElement('div');
+    div.className = 'q-item';
+    div.id = `pi-${item.id}`;
+    div.innerHTML = `
+      <img class="q-thumb" src="${item.dataUrl}" alt="${item.name}"/>
+      <div class="q-info">
+        <div class="q-name">${escHtml(item.name)}</div>
+        <div class="q-desc-wrap">
+          <textarea class="q-desc-edit" id="pdesc-${item.id}" style="display:block;width:100%;" placeholder="Enter description for this image (optional)..." oninput="updatePendingDesc(${item.id},this.value)">${escHtml(item.desc || '')}</textarea>
+        </div>
+      </div>
+      <div class="q-actions">
+        <button class="q-btn-sm" onclick="addPendingToQueue(${item.id})" title="Add to queue">✚</button>
+        <button class="q-btn-sm danger" onclick="removePendingItem(${item.id})" title="Remove">✕</button>
+      </div>`;
+    pendingList.appendChild(div);
+  });
+  confirmAddBtn.disabled = false;
+}
+
+function updatePendingDesc(id, val) {
+  const item = pendingItems.find(p => p.id === id);
+  if (item) item.desc = val;
+}
+
+function removePendingItem(id) {
+  pendingItems = pendingItems.filter(p => p.id !== id);
+  renderPendingList();
+  if (!pendingItems.length) {
+    checkReady();
+  }
+}
+
+async function addPendingToQueue(id) {
+  const idx = pendingItems.findIndex(p => p.id === id);
+  if (idx === -1) return;
+  const item = pendingItems[idx];
+  pendingItems.splice(idx, 1);
+
+  // Add to actual queue
+  item.status = STATUS.WAIT;
+  queue.push(item);
+  renderQueue();
+  updateCost();
+  checkReady();
+  saveState();
+
+  // Upload image to Supabase storage in background
+  if (supabaseClient && supaConnected) {
+    uploadImageToSupabase(item.id, item.dataUrl).then(url => {
+      if (url) {
+        item.supabaseUrl = url;
+        item.dataUrl = url;
+        saveState();
+      }
+    }).catch(err => console.warn('Background image upload failed:', err));
+  }
+
+  renderPendingList();
+  if (queue.length) welcomeState.style.display = 'none';
+  toast(`Added "${item.name}" to queue`, 'success');
+}
+
+confirmAddBtn.addEventListener('click', async () => {
+  const items = [...pendingItems];
+  if (!items.length) return;
+  pendingItems = [];
+  for (const item of items) {
+    item.status = STATUS.WAIT;
+    queue.push(item);
+  }
+  renderQueue();
+  updateCost();
+  checkReady();
+  saveState();
+
+  // Upload all images to Supabase in background
+  if (supabaseClient && supaConnected) {
+    for (const item of items) {
+      uploadImageToSupabase(item.id, item.dataUrl).then(url => {
+        if (url) {
+          item.supabaseUrl = url;
+          item.dataUrl = url;
+          saveState();
+        }
+      }).catch(err => console.warn('Background image upload failed:', err));
+    }
+  }
+
+  renderPendingList();
+  if (queue.length) welcomeState.style.display = 'none';
+  toast(`Added ${items.length} item${items.length > 1 ? 's' : ''} to queue`, 'success');
+});
 
 // ── CLEAR BUTTONS ─────────────────────────────────────────────────
 clearDoneBtn.addEventListener('click', () => {
@@ -1814,6 +1937,7 @@ function createActiveCard(item) {
     <div class="sec-title">
       <span class="pulse" id="active-dot"></span>
       <span id="active-title">Generating: ${escHtml(item.name)}</span>
+      <button class="btn-skip" id="skipBtn" title="Skip this item and proceed to next" style="margin-left:auto;font-size:11px;padding:4px 10px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text);cursor:pointer;">⏭ Skip</button>
     </div>
     <div class="active-card">
       <div class="card-head">
@@ -2036,7 +2160,7 @@ async function generateView(view, apiKey, desc, imageUrl, attempt = 0) {
     if (isStopped) throw new Error(STOP_SIGNAL);
 
     const controller = new AbortController();
-    const stopCheck = setInterval(() => { if (isStopped) controller.abort(); }, 500);
+    const stopCheck = setInterval(() => { if (isStopped || skipItemId) controller.abort(); }, 500);
 
     const attempts = [
       {
@@ -2195,9 +2319,23 @@ startBtn.addEventListener('click', async () => {
       // Description is optional — the reference image is the primary source.
       const desc = item.desc || globalDesc || '';
 
+      // Reset skip signal for this item
+      skipItemId = null;
+
       updateQueueItem(item.id, STATUS.ACTIVE, 'uploading...');
       createActiveCard(item);
       setActiveProg('Uploading reference image to fal.ai...');
+
+      // Wire up the Skip button
+      const skipBtn = document.getElementById('skipBtn');
+      if (skipBtn) {
+        skipBtn.onclick = () => {
+          skipItemId = item.id;
+          skipBtn.textContent = '⏭ Skipping...';
+          skipBtn.disabled = true;
+          setStatus(`Skipping ${item.name}...`);
+        };
+      }
 
       let imageUrl;
       try {
@@ -2212,6 +2350,18 @@ startBtn.addEventListener('click', async () => {
         logFailure(item.name, 0, 'Upload', msg, 0);
         const dot = document.getElementById('active-dot');
         if (dot) { dot.style.animation = 'none'; dot.style.background = 'var(--error)'; }
+        return null;
+      }
+
+      // Check if user clicked Skip during upload
+      if (skipItemId === item.id) {
+        updateQueueItem(item.id, STATUS.STOPPED, 'skipped');
+        setStatus(`Skipped ${item.name}`);
+        const dot = document.getElementById('active-dot');
+        if (dot) { dot.style.animation = 'none'; dot.style.background = 'var(--text-dim)'; }
+        const title = document.getElementById('active-title');
+        if (title) title.textContent = '⏭ Skipped: ' + item.name;
+        setActiveProg('Skipped by user.');
         return null;
       }
 
@@ -2318,6 +2468,7 @@ if (!checkAccess()) {
 (async function init() {
   await loadState();
   renderQueue();
+  renderPendingList();
   updateCost();
   checkReady();
   updateLogBadge();
