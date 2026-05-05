@@ -116,6 +116,29 @@ body {
 }
 .topbar input:focus { outline: none; border-color: var(--accent); }
 .topbar input::placeholder { color: #555; }
+.topbar input.is-saved {
+  color: var(--accent);
+  -webkit-text-security: disc;
+  user-select: none;
+}
+.api-save-btn {
+  background: var(--accent);
+  border: 1px solid var(--accent);
+  color: #000;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  line-height: 1;
+  flex-shrink: 0;
+}
+.api-save-btn:disabled {
+  background: transparent;
+  border-color: var(--topbar-input-border);
+  color: #666;
+  cursor: default;
+}
 
 /* Dark mode toggle */
 .dm-toggle {
@@ -490,6 +513,7 @@ textarea:focus { outline: none; border-color: var(--text-secondary); }
 @media (max-width: 480px) {
   .topbar { flex-wrap: wrap; height: auto; padding: 8px; gap: 6px; }
   .topbar input[type="password"] { width: 140px; }
+  .api-save-btn { padding: 6px 8px; }
   .renders-grid { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
   .batch-grid { grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); }
   .main { padding: 0.75rem; }
@@ -507,6 +531,7 @@ textarea:focus { outline: none; border-color: var(--text-secondary); }
   <div class="topbar-right">
     <label for="apiKey">fal.ai Key</label>
     <input type="password" id="apiKey" placeholder="Paste your fal.ai key..." autocomplete="off"/>
+    <button class="api-save-btn" id="apiKeySave" type="button" disabled>Save</button>
     <button class="dm-toggle" id="dmToggle" title="Toggle dark mode" aria-label="Toggle dark mode">🌙</button>
   </div>
 </div>
@@ -677,11 +702,13 @@ let isRunning = false;
 let nextId = 1;
 let darkMode = false;
 let parallelism = 1;
+let savedApiKey = '';
 // Track retries per view without mutating VIEWS
 const retryMap = new Map();
 
 // ── ELEMENTS ──────────────────────────────────────────────────────
 const apiKeyEl   = document.getElementById('apiKey');
+const apiKeySave = document.getElementById('apiKeySave');
 const descEl     = document.getElementById('desc');
 const fileInput  = document.getElementById('fileInput');
 const dropZone   = document.getElementById('dropZone');
@@ -759,7 +786,7 @@ function saveState() {
       nb2Res,
       nextId,
       darkMode,
-      apiKey: apiKeyEl.value,
+      apiKey: savedApiKey,
       desc: descEl.value,
       parallelism
     };
@@ -769,15 +796,54 @@ function saveState() {
   }
 }
 
+function getApiKey() {
+  return (ENV_API_KEY || savedApiKey).trim();
+}
+
+function showSavedApiKeyState(source) {
+  apiKeyEl.value = 'saved-api-key';
+  apiKeyEl.disabled = true;
+  apiKeyEl.classList.add('is-saved');
+  apiKeyEl.title = source === 'env'
+    ? 'API key is set via Vercel environment variable (FAL_API_KEY)'
+    : 'API key is saved. Click Edit to replace it.';
+  apiKeyEl.placeholder = source === 'env' ? 'Using env var FAL_API_KEY' : 'API key saved';
+  apiKeySave.textContent = source === 'env' ? 'Saved' : 'Edit';
+  apiKeySave.disabled = source === 'env';
+  apiKeySave.title = source === 'env' ? 'Managed by Vercel environment variable' : 'Replace saved API key';
+}
+
+function showApiKeyEntryState() {
+  apiKeyEl.value = '';
+  apiKeyEl.disabled = false;
+  apiKeyEl.classList.remove('is-saved');
+  apiKeyEl.title = '';
+  apiKeyEl.placeholder = savedApiKey ? 'Enter a new fal.ai key...' : 'Paste your fal.ai key...';
+  apiKeySave.textContent = 'Save';
+  apiKeySave.disabled = true;
+  apiKeySave.title = 'Save API key';
+  apiKeyEl.focus();
+}
+
+function saveApiKeyFromInput() {
+  const key = apiKeyEl.value.trim();
+  if (key.length <= 10) {
+    toast('Enter a valid fal.ai API key first', 'error');
+    return;
+  }
+  savedApiKey = key;
+  showSavedApiKeyState('manual');
+  saveState();
+  checkReady();
+  toast('API key saved', 'success');
+}
+
 function loadState() {
   try {
     // 1. Environment variable takes priority (Vercel deployment)
     if (ENV_API_KEY) {
-      apiKeyEl.value = ENV_API_KEY;
-      apiKeyEl.disabled = true;
-      apiKeyEl.title = 'API key is set via Vercel environment variable (FAL_API_KEY)';
-      apiKeyEl.style.borderColor = 'var(--accent)';
-      apiKeyEl.placeholder = '✓ Using env var FAL_API_KEY';
+      savedApiKey = ENV_API_KEY;
+      showSavedApiKeyState('env');
     }
 
     // 2. Load from localStorage (fallback for local dev / manual entry)
@@ -800,7 +866,10 @@ function loadState() {
       applyDarkMode();
     }
     // Only load from localStorage if env var is NOT set
-    if (!ENV_API_KEY && state.apiKey) apiKeyEl.value = state.apiKey;
+    if (!ENV_API_KEY && state.apiKey) {
+      savedApiKey = state.apiKey;
+      showSavedApiKeyState('manual');
+    }
     if (state.desc) descEl.value = state.desc;
     if (state.parallelism) {
       parallelism = state.parallelism;
@@ -840,7 +909,7 @@ dmToggle.addEventListener('click', () => {
 function checkReady() {
   const hasPending = queue.some(q => q.status === STATUS.WAIT);
   startBtn.disabled = !(
-    apiKeyEl.value.trim().length > 10 &&
+    getApiKey().length > 10 &&
     descEl.value.trim().length > 0 &&
     hasPending &&
     !isRunning
@@ -858,7 +927,23 @@ function updateCost() {
   costEst.textContent = `~$${(n * price).toFixed(2)} for ${n} product${n>1?'s':''} · ${nb2Res} resolution`;
 }
 
-apiKeyEl.addEventListener('input', () => { checkReady(); saveState(); });
+apiKeyEl.addEventListener('input', () => {
+  apiKeySave.disabled = apiKeyEl.value.trim().length <= 10;
+  checkReady();
+});
+apiKeyEl.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !apiKeySave.disabled && apiKeySave.textContent === 'Save') {
+    saveApiKeyFromInput();
+  }
+});
+apiKeySave.addEventListener('click', () => {
+  if (apiKeySave.textContent === 'Edit') {
+    showApiKeyEntryState();
+    checkReady();
+    return;
+  }
+  saveApiKeyFromInput();
+});
 descEl.addEventListener('input', () => { checkReady(); saveState(); });
 
 // ── RESOLUTION PICKER ──────────────────────────────────────────────
@@ -1167,7 +1252,7 @@ async function dlZip(itemId, name, images) {
 
 // ── RETRY FAILED VIEWS ────────────────────────────────────────────
 async function retryFailedViews(item, images) {
-  const apiKey = apiKeyEl.value.trim();
+  const apiKey = getApiKey();
   const desc = descEl.value.trim();
   if (!apiKey || !desc) { toast('API key and description required', 'error'); return; }
 
@@ -1334,7 +1419,7 @@ stopBtn.addEventListener('click', () => {
 });
 
 startBtn.addEventListener('click', async () => {
-  const apiKey = apiKeyEl.value.trim();
+  const apiKey = getApiKey();
   const desc   = descEl.value.trim();
   if (!apiKey || !desc) return;
 
