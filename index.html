@@ -1071,6 +1071,14 @@ let queueLog = [];
 function recoverInterruptedStatus(item) {
   if (item.status !== STATUS.ACTIVE) return item.status || STATUS.WAIT;
   item.interruptedOnLoad = true;
+  // If the item has a supabaseUrl (image was uploaded to cloud), we can auto-resume
+  // without needing a re-upload. The dataUrl will be restored from supabaseUrl.
+  if (item.supabaseUrl) {
+    item.dataUrl = item.supabaseUrl;
+    item.needsReupload = false;
+  } else {
+    item.needsReupload = true;
+  }
   return STATUS.WAIT;
 }
 
@@ -1514,10 +1522,12 @@ async function saveQueueToSupabase() {
   if (!supabaseClient || !supaConnected) return;
 
   try {
-    // Upload images for waiting items that have local dataUrl but no supabaseUrl yet
+    // Upload images for items that have local dataUrl but no supabaseUrl yet.
+    // This includes WAIT items (queued) and ACTIVE items (currently processing)
+    // so that images survive a page reload even during active generation.
     const uploadPromises = [];
     for (const q of queue) {
-      if (q.status === STATUS.WAIT && q.dataUrl && !q.supabaseUrl) {
+      if (q.dataUrl && !q.supabaseUrl) {
         // Check if dataUrl is a local base64 blob (not already a URL)
         if (q.dataUrl.startsWith('data:')) {
           const promise = uploadImageToSupabase(q.id, q.dataUrl).then(url => {
@@ -1679,7 +1689,7 @@ async function saveState() {
         // Don't store dataUrl in localStorage — it's too large (multi-MB base64).
         // Instead, store a flag so we know to re-upload on next session.
         dataUrl: '',
-        hasLocalImage: q.status === STATUS.WAIT && !!q.dataUrl && q.dataUrl.startsWith('data:'),
+        hasLocalImage: (q.status === STATUS.WAIT || q.status === STATUS.ACTIVE) && !!q.dataUrl && q.dataUrl.startsWith('data:'),
         status: q.status,
         supabaseUrl: q.supabaseUrl || '',
         desc: q.desc || ''
@@ -1808,12 +1818,12 @@ async function loadState() {
         queue.forEach(q => {
           // Browser reloads abort the live fal.ai requests, so the item must be queued again.
           q.status = recoverInterruptedStatus(q);
-          if (q.hasLocalImage && !q.dataUrl && !q.supabaseUrl) {
-            q.needsReupload = true;
-          }
-          // If supabaseUrl is set, use it as dataUrl for display
+          // If supabaseUrl is set, use it as dataUrl for display (survives reload)
           if (q.supabaseUrl && !q.dataUrl) {
             q.dataUrl = q.supabaseUrl;
+            q.needsReupload = false;
+          } else if (q.hasLocalImage && !q.dataUrl && !q.supabaseUrl) {
+            q.needsReupload = true;
           }
         });
       }
@@ -2379,26 +2389,66 @@ function restoreInterruptedActiveCard() {
   const skipBtn = document.getElementById('skipBtn');
   const timerEl = document.getElementById('active-timer');
 
-  if (title) title.textContent = `Ready to resume: ${item.name}`;
-  if (prog) {
-    prog.textContent = item.needsReupload
-      ? 'The page reloaded while this was generating. Re-upload the image, then start the queue again.'
-      : 'The page reloaded while this was generating. Click Start Queue to generate the 5 views again.';
-  }
-  if (dot) { dot.className = 'pulse'; dot.style.animation = 'none'; dot.style.background = ''; }
-  if (timerEl) timerEl.textContent = 'paused';
+  if (title) title.textContent = `Resuming: ${item.name}`;
+  if (prog) prog.textContent = 'Page was reloaded — automatically re-generating the 5 views...';
+  if (dot) { dot.className = 'pulse'; dot.style.animation = ''; dot.style.background = ''; }
+  if (timerEl) timerEl.textContent = 'resuming...';
   if (skipBtn) {
-    skipBtn.textContent = 'Resume';
-    skipBtn.disabled = !!item.needsReupload;
-    skipBtn.onclick = () => startBtn.click();
+    skipBtn.textContent = '⏭ Skip';
+    skipBtn.disabled = false;
+    skipBtn.className = 'btn-skip';
   }
+
   VIEWS.forEach(v => {
     const badge = document.getElementById(`rb-${v.id}`);
     const body = document.getElementById(`rbody-${v.id}`);
     if (badge) { badge.textContent = 'queued'; badge.className = 'rbadge rb-wait'; }
     if (body) body.innerHTML = `<span class="rph">${v.label}</span>`;
   });
-  setStatus(item.needsReupload ? `${item.name} needs the original image uploaded again.` : `${item.name} is queued again after reload.`);
+
+  if (item.needsReupload) {
+    // Image was lost on reload (no supabaseUrl) — cannot auto-resume
+    if (prog) {
+      prog.innerHTML = 'The page reloaded while this was generating and the image was lost. '
+        + '<strong style="color:var(--error);">Please re-upload the image below:</strong>';
+    }
+    if (skipBtn) {
+      skipBtn.textContent = 'Re-upload & Resume';
+      skipBtn.disabled = false;
+      skipBtn.onclick = () => {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'image/*';
+        input.onchange = async (e) => {
+          const file = e.target.files[0];
+          if (!file) return;
+          if (file.size > MAX_FILE_SIZE) {
+            toast(`${file.name} exceeds 10MB limit`, 'error');
+            return;
+          }
+          skipBtn.textContent = 'Uploading...';
+          skipBtn.disabled = true;
+          const dataUrl = await blobToDataUrl(file);
+          item.dataUrl = dataUrl;
+          item.needsReupload = false;
+          const thumb = document.getElementById('active-thumb');
+          if (thumb) thumb.src = dataUrl;
+          await saveState();
+          toast('Image re-uploaded — starting queue...', 'success');
+          startBtn.click();
+        };
+        input.click();
+      };
+    }
+    setStatus(`${item.name} needs the original image uploaded again.`);
+  } else {
+    // Image is available (via supabaseUrl) — auto-resume immediately
+    setStatus(`Auto-resuming ${item.name} after page reload...`);
+    // Small delay to let the DOM settle, then auto-start the queue
+    setTimeout(() => {
+      startBtn.click();
+    }, 500);
+  }
 }
 
 // ── ACTIVE CARD PROGRESS BAR & TIMER ───────────────────────────────
@@ -3079,6 +3129,10 @@ startBtn.addEventListener('click', async () => {
         createActiveCard(item);
         setActiveProg('Uploading reference image to fal.ai...');
         addQueueLogEntry('start', item.name, 'Started processing');
+        
+        // Immediately save state to Supabase so the image is uploaded to the cloud.
+        // This ensures the image survives a page reload even during active generation.
+        await saveState();
 
         // Wire up the Skip button
         const skipBtn = document.getElementById('skipBtn');
@@ -3198,7 +3252,7 @@ window.addEventListener('beforeunload', function(e) {
       queue: queue.map(q => ({
         id: q.id, name: q.name,
         dataUrl: '',
-        hasLocalImage: q.status === STATUS.WAIT && !!q.dataUrl && q.dataUrl.startsWith('data:'),
+        hasLocalImage: (q.status === STATUS.WAIT || q.status === STATUS.ACTIVE) && !!q.dataUrl && q.dataUrl.startsWith('data:'),
         status: q.status,
         supabaseUrl: q.supabaseUrl || '',
         desc: q.desc || ''
