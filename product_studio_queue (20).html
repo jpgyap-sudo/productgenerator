@@ -1,0 +1,656 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Product Image Studio</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f0efe9; color: #1a1a1a; }
+
+/* TOP BAR */
+.topbar { background: #1a1a1a; color: #fff; height: 52px; display: flex; align-items: center; justify-content: space-between; padding: 0 1.5rem; position: sticky; top: 0; z-index: 100; }
+.topbar h1 { font-size: 15px; font-weight: 600; }
+.pill { font-size: 10px; padding: 3px 9px; border-radius: 99px; background: #c9a84c; color: #000; font-weight: 700; margin-left: 10px; }
+.topbar input { background: #2a2a2a; border: 1px solid #3a3a3a; color: #fff; padding: 6px 10px; border-radius: 6px; font-size: 12px; width: 230px; font-family: monospace; }
+.topbar input:focus { outline: none; border-color: #c9a84c; }
+.topbar input::placeholder { color: #555; }
+
+/* LAYOUT */
+.layout { display: grid; grid-template-columns: 300px 1fr; height: calc(100vh - 52px); }
+
+/* SIDEBAR */
+.sidebar { background: #fff; border-right: 1px solid #ddd; display: flex; flex-direction: column; height: 100%; overflow: hidden; }
+.sidebar-scroll { flex: 1; overflow-y: auto; }
+.block { padding: 1rem 1.25rem; border-bottom: 1px solid #f0f0f0; }
+.lbl { display: block; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #999; margin-bottom: 8px; }
+textarea { width: 100%; padding: 8px 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 12px; font-family: inherit; line-height: 1.6; resize: vertical; min-height: 70px; background: #fafafa; color: #1a1a1a; }
+textarea:focus { outline: none; border-color: #888; }
+
+/* QUALITY BUTTONS */
+.q-btns { display: flex; gap: 4px; }
+.q-btn { flex: 1; padding: 7px 4px; font-size: 11px; border: 1px solid #ddd; border-radius: 6px; background: #fff; cursor: pointer; font-family: inherit; text-align: center; color: #555; line-height: 1.3; }
+.q-btn:hover { border-color: #c9a84c; }
+.q-btn.active { background: #1a1a1a; color: #fff; border-color: #1a1a1a; }
+.q-btn .price { font-size: 9px; color: inherit; opacity: 0.7; }
+
+/* UPLOAD */
+.upload-wrap { position: relative; }
+.upload-box { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; border: 2px dashed #ccc; border-radius: 8px; padding: 1.5rem 1rem; cursor: pointer; background: #fafafa; text-align: center; min-height: 110px; transition: all 0.2s; }
+.upload-box:hover { border-color: #888; background: #f5f5f5; }
+.upload-box.drag { border-color: #c9a84c; background: #fffdf5; }
+.upload-box .icon { font-size: 26px; }
+.upload-box .txt { font-size: 12px; color: #555; }
+.upload-box .sub { font-size: 11px; color: #aaa; }
+
+/* QUEUE LIST */
+.q-list { padding: 0.75rem; }
+.q-empty { text-align: center; padding: 1.5rem 1rem; color: #bbb; font-size: 12px; line-height: 1.6; }
+.q-item { display: flex; align-items: center; gap: 8px; padding: 7px 8px; border-radius: 7px; border: 1px solid #eee; background: #fafafa; margin-bottom: 6px; }
+.q-item.is-active { background: #fffdf0; border-color: #c9a84c; }
+.q-item.is-done { background: #f0faf0; border-color: #b5ddb5; }
+.q-item.is-error { background: #fff5f5; border-color: #f5c0c0; }
+.q-thumb { width: 36px; height: 36px; border-radius: 5px; object-fit: cover; flex-shrink: 0; border: 1px solid #e0e0e0; }
+.q-info { flex: 1; min-width: 0; }
+.q-name { font-size: 11px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.q-sub { font-size: 10px; color: #aaa; margin-top: 1px; }
+.q-badge { font-size: 9px; padding: 2px 7px; border-radius: 99px; font-weight: 600; flex-shrink: 0; white-space: nowrap; }
+.b-wait { background: #f0f0f0; color: #888; }
+.b-active { background: #fff3cd; color: #856404; }
+.b-done { background: #d4edda; color: #155724; }
+.b-error { background: #f8d7da; color: #721c24; }
+.b-stopped { background: #e2e3e5; color: #6c757d; }
+.q-rm { background: none; border: none; color: #ccc; cursor: pointer; font-size: 14px; padding: 0 2px; flex-shrink: 0; }
+.q-rm:hover { color: #e05555; }
+
+/* BOTTOM CONTROLS */
+.sidebar-foot { padding: 1rem 1.25rem; border-top: 1px solid #eee; flex-shrink: 0; }
+.btn-start { width: 100%; padding: 11px; font-size: 13px; font-weight: 600; border-radius: 7px; border: none; background: #1a1a1a; color: #fff; cursor: pointer; margin-bottom: 8px; }
+.btn-start:hover { opacity: 0.85; }
+.btn-start:disabled { opacity: 0.35; cursor: not-allowed; }
+.btn-stop { width: 100%; padding: 9px; font-size: 12px; font-weight: 600; border-radius: 7px; border: 1.5px solid #e05555; background: #fff; color: #e05555; cursor: pointer; display: none; margin-bottom: 8px; }
+.status { font-size: 11px; color: #888; text-align: center; min-height: 16px; margin-bottom: 4px; }
+.cost { font-size: 11px; color: #aaa; text-align: center; }
+
+/* MAIN */
+.main { overflow-y: auto; padding: 1.5rem; }
+.welcome { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 60vh; gap: 1rem; text-align: center; }
+.welcome .wi { font-size: 52px; opacity: 0.25; }
+.welcome h2 { font-size: 20px; font-weight: 500; color: #bbb; }
+.welcome p { font-size: 13px; color: #bbb; max-width: 340px; line-height: 1.7; }
+
+/* ACTIVE SECTION */
+.sec-title { font-size: 13px; font-weight: 700; margin-bottom: 1rem; display: flex; align-items: center; gap: 8px; }
+.pulse { width: 8px; height: 8px; border-radius: 50%; background: #c9a84c; animation: pulse 1s infinite; flex-shrink: 0; }
+.pulse.done { background: #28a745; animation: none; }
+@keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:0.3;} }
+@keyframes spin { to { transform: rotate(360deg); } }
+.spinner { width: 18px; height: 18px; border: 2px solid #eee; border-top-color: #c9a84c; border-radius: 50%; animation: spin 0.7s linear infinite; }
+
+/* ACTIVE CARD */
+.active-card { background: #fff; border-radius: 10px; border: 1px solid #e0ddd6; overflow: hidden; margin-bottom: 1.5rem; }
+.card-head { padding: 12px 16px; border-bottom: 1px solid #f0f0f0; display: flex; align-items: center; gap: 10px; }
+.card-thumb { width: 44px; height: 44px; border-radius: 6px; object-fit: cover; border: 1px solid #eee; flex-shrink: 0; }
+.card-info h3 { font-size: 13px; font-weight: 600; }
+.card-info p { font-size: 11px; color: #888; margin-top: 2px; }
+.renders-grid { padding: 14px; display: grid; grid-template-columns: repeat(auto-fill, minmax(155px, 1fr)); gap: 10px; }
+.rslot { background: #fafafa; border: 1px solid #eee; border-radius: 8px; overflow: hidden; }
+.rslot-head { padding: 7px 10px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #f0f0f0; }
+.rslot-title { font-size: 10px; font-weight: 600; color: #444; }
+.rbadge { font-size: 9px; padding: 2px 6px; border-radius: 99px; }
+.rb-wait { background: #f0f0f0; color: #888; }
+.rb-gen { background: #fff3cd; color: #856404; }
+.rb-ok { background: #d4edda; color: #155724; }
+.rb-err { background: #f8d7da; color: #721c24; }
+.rb-stop { background: #e2e3e5; color: #6c757d; }
+.rslot-body { padding: 8px; min-height: 110px; display: flex; align-items: center; justify-content: center; flex-direction: column; }
+.rslot-body img { width: 100%; border-radius: 5px; display: block; }
+.rph { font-size: 10px; color: #ccc; text-align: center; }
+.rerr { font-size: 10px; color: #e05555; text-align: center; padding: 4px; }
+
+/* BATCH CARDS */
+.batch-card { background: #fff; border-radius: 10px; border: 1px solid #e0ddd6; overflow: hidden; margin-bottom: 1rem; }
+.batch-head { padding: 12px 16px; border-bottom: 1px solid #f0f0f0; display: flex; align-items: center; gap: 10px; }
+.batch-thumb { width: 44px; height: 44px; border-radius: 6px; object-fit: cover; border: 1px solid #eee; flex-shrink: 0; }
+.batch-info { flex: 1; }
+.batch-info h3 { font-size: 13px; font-weight: 600; }
+.batch-info p { font-size: 11px; color: #888; margin-top: 1px; }
+.btn-zip { padding: 7px 14px; font-size: 11px; font-weight: 600; border-radius: 6px; border: none; background: #1a1a1a; color: #fff; cursor: pointer; }
+.btn-zip:hover { opacity: 0.8; }
+.batch-grid { padding: 12px; display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
+.bslot { border-radius: 7px; overflow: hidden; background: #f5f5f5; border: 1px solid #eee; }
+.bslot img { width: 100%; display: block; }
+.bslot-label { font-size: 9px; color: #888; padding: 3px 6px; background: #fafafa; border-top: 1px solid #eee; text-align: center; }
+.btn-dl1 { display: block; font-size: 10px; padding: 4px 8px; background: #f5f5f5; border-top: 1px solid #eee; text-align: center; color: #555; cursor: pointer; border: none; width: 100%; font-family: inherit; }
+.btn-dl1:hover { background: #efefef; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div style="display:flex;align-items:center;">
+    <h1>Product Image Studio</h1>
+    <span class="pill">⚡ Nano Banana 2</span>
+  </div>
+  <div style="display:flex;align-items:center;gap:10px;">
+    <span style="font-size:11px;color:#555;">fal.ai API Key</span>
+    <input type="password" id="apiKey" placeholder="Paste your fal.ai key here..." autocomplete="off"/>
+  </div>
+</div>
+
+<div class="layout">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="sidebar-scroll">
+
+      <div class="block">
+        <span class="lbl">Product Description</span>
+        <textarea id="desc" placeholder="Describe color, material, legs, style. English or Chinese OK.&#10;&#10;Example: tan leather dining chair, curved back, dark smoked ash wood legs"></textarea>
+      </div>
+
+      <div class="block">
+        <span class="lbl">Resolution — Nano Banana 2</span>
+        <div class="q-btns">
+          <button class="q-btn active" onclick="setRes('0.5K',this)">0.5K<br><span class="price">$0.06/img</span></button>
+          <button class="q-btn" onclick="setRes('1K',this)">1K<br><span class="price">$0.08/img</span></button>
+          <button class="q-btn" onclick="setRes('2K',this)">2K<br><span class="price">$0.12/img</span></button>
+          <button class="q-btn" onclick="setRes('4K',this)">4K<br><span class="price">$0.16/img</span></button>
+        </div>
+        <div style="font-size:10px;color:#aaa;margin-top:8px;line-height:1.5;" id="resNote">0.5K (512px) — fastest & cheapest, good for drafts and previews.</div>
+      </div>
+
+      <div class="block">
+        <span class="lbl">Add to Queue</span>
+        <!-- label + hidden input: most reliable cross-browser approach -->
+        <label for="fileInput" class="upload-box" id="dropZone">
+          <span class="icon">📷</span>
+          <span class="txt">Click here to add images</span>
+          <span class="sub">PNG · JPG · WEBP · multiple OK</span>
+        </label>
+        <input type="file" id="fileInput" accept="image/*" multiple style="position:absolute;left:-9999px;top:-9999px;"/>
+      </div>
+
+      <div class="block" style="padding-bottom:0.5rem;">
+        <span class="lbl">Queue (<span id="qCount">0</span> items)</span>
+      </div>
+      <div class="q-list" id="queueList">
+        <div class="q-empty">No items yet.<br/>Add product images above.</div>
+      </div>
+
+    </div>
+
+    <div class="sidebar-foot">
+      <button class="btn-start" id="startBtn" disabled>▶ Start Queue</button>
+      <button class="btn-stop" id="stopBtn">⏹ Stop After Current</button>
+      <div class="status" id="statusLine">Add images and a description to begin.</div>
+      <div class="cost" id="costEst"></div>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="main" id="mainPanel">
+    <div class="welcome" id="welcomeState">
+      <span class="wi">🪑</span>
+      <h2>Queue up your products</h2>
+      <p>Add product images on the left. Each generates 5 separate views — front, side, isometric, back, and luxury interior. Finished batches appear here to download.</p>
+    </div>
+  </main>
+
+</div>
+
+<script>
+// ── VIEWS ─────────────────────────────────────────────────────────
+const VIEWS = [
+  { id:1, label:'Front view',     prompt: d=>`Product photo of a chair: ${d}. Keep the EXACT same chair — same upholstery color, texture, leg design, shape. Change ONLY the background to pure solid white (#FFFFFF). Chair front-facing, perfectly centered, soft even studio lighting. Commercial product photography. Do not alter the chair in any way.` },
+  { id:2, label:'Side view',      prompt: d=>`Product photo of a chair: ${d}. Keep the EXACT same chair. Rotate to pure side profile (90-degree, left side to camera). Pure white background (#FFFFFF), centered, soft studio lighting. Commercial furniture catalog photography.` },
+  { id:3, label:'Isometric view', prompt: d=>`Product photo of a chair: ${d}. Keep the EXACT same chair. Show from 45-degree isometric angle (front-right corner, elevated). Pure white background (#FFFFFF), centered, diffused lighting. High-end furniture catalog. Preserve all details exactly.` },
+  { id:4, label:'Back view',      prompt: d=>`Product photo of a chair: ${d}. Keep the EXACT same chair. Show direct rear/back view. Pure white background (#FFFFFF), centered, even lighting. Show back panel, upholstery detail, leg configuration. Commercial product photography.` },
+  { id:5, label:'Interior scene', prompt: d=>`Product photo of a chair: ${d}. Place FOUR of these EXACT chairs around a round dark marble dining table with fluted pedestal base. Luxury modern condo, floor-to-ceiling windows, city skyline. Warm pendant light, light oak floor, textured walls, green plant centerpiece. Photorealistic, Architectural Digest quality. Chairs must match the reference exactly.` }
+];
+
+// ── STATE ──────────────────────────────────────────────────────────
+let queue = [];
+let nb2Res = '0.5K';
+let isStopped = false;
+let isRunning = false;
+let nextId = 1;
+
+const NB2_PRICES = { '0.5K':0.06, '1K':0.08, '2K':0.12, '4K':0.16 };
+const NB2_NOTES  = {
+  '0.5K': '0.5K (512px) — fastest & cheapest, good for drafts and previews.',
+  '1K':   '1K (1024px) — best balance of speed and quality.',
+  '2K':   '2K (2048px) — high quality, slightly slower.',
+  '4K':   '4K (4096px) — premium quality for final hero images.'
+};
+
+// ── ELEMENTS ──────────────────────────────────────────────────────
+const apiKeyEl   = document.getElementById('apiKey');
+const descEl     = document.getElementById('desc');
+const fileInput  = document.getElementById('fileInput');
+const dropZone   = document.getElementById('dropZone');
+const startBtn   = document.getElementById('startBtn');
+const stopBtn    = document.getElementById('stopBtn');
+const statusLine = document.getElementById('statusLine');
+const costEst    = document.getElementById('costEst');
+const queueList  = document.getElementById('queueList');
+const qCount     = document.getElementById('qCount');
+const mainPanel  = document.getElementById('mainPanel');
+const welcomeState = document.getElementById('welcomeState');
+
+// ── HELPERS ────────────────────────────────────────────────────────
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const setStatus = msg => statusLine.textContent = msg;
+
+function blobToDataUrl(blob) {
+  return new Promise(res => {
+    const r = new FileReader();
+    r.onload = () => res(r.result);
+    r.readAsDataURL(blob);
+  });
+}
+
+function checkReady() {
+  startBtn.disabled = !(
+    apiKeyEl.value.trim().length > 10 &&
+    descEl.value.trim().length > 0 &&
+    queue.some(q => q.status === 'wait') &&
+    !isRunning
+  );
+}
+
+function updateCost() {
+  const n = queue.filter(q => q.status === 'wait').length;
+  if (!n) { costEst.textContent = ''; return; }
+  const price = NB2_PRICES[nb2Res] * 5;
+  costEst.textContent = `~$${(n * price).toFixed(2)} for ${n} product${n>1?'s':''} · ${nb2Res} resolution`;
+}
+
+apiKeyEl.addEventListener('input', checkReady);
+descEl.addEventListener('input', checkReady);
+
+// ── RESOLUTION PICKER ──────────────────────────────────────────────
+function setRes(res, btn) {
+  nb2Res = res;
+  document.querySelectorAll('.q-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('resNote').textContent = NB2_NOTES[res];
+  updateCost();
+}
+
+// ── FILE UPLOAD ────────────────────────────────────────────────────
+fileInput.addEventListener('change', e => {
+  addFiles([...e.target.files]);
+  fileInput.value = ''; // reset so same file can be re-added
+});
+
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropZone.classList.remove('drag');
+  addFiles([...e.dataTransfer.files].filter(f => f.type.startsWith('image/')));
+});
+
+async function addFiles(files) {
+  for (const file of files) {
+    if (!file.type.startsWith('image/')) continue;
+    const dataUrl = await blobToDataUrl(file);
+    const name = file.name.replace(/\.[^.]+$/, '');
+    queue.push({ id: nextId++, name, dataUrl, status: 'wait' });
+  }
+  renderQueue();
+  updateCost();
+  checkReady();
+  if (queue.length) welcomeState.style.display = 'none';
+}
+
+// ── QUEUE RENDER ───────────────────────────────────────────────────
+function renderQueue() {
+  qCount.textContent = queue.length;
+  if (!queue.length) {
+    queueList.innerHTML = '<div class="q-empty">No items yet.<br/>Add product images above.</div>';
+    return;
+  }
+  queueList.innerHTML = '';
+  queue.forEach(item => {
+    const cls = {wait:'',active:'is-active',done:'is-done',error:'is-error',stopped:''}[item.status]||'';
+    const bcls = {wait:'b-wait',active:'b-active',done:'b-done',error:'b-error',stopped:'b-stopped'}[item.status]||'b-wait';
+    const btxt = {wait:'queued',active:'generating',done:'done ✓',error:'error',stopped:'stopped'}[item.status]||'queued';
+    const removeBtn = item.status === 'wait' ? `<button class="q-rm" onclick="removeItem(${item.id})" title="Remove">✕</button>` : '';
+    const div = document.createElement('div');
+    div.className = `q-item ${cls}`;
+    div.id = `qi-${item.id}`;
+    div.innerHTML = `
+      <img class="q-thumb" src="${item.dataUrl}" alt="${item.name}"/>
+      <div class="q-info">
+        <div class="q-name">${item.name}</div>
+        <div class="q-sub" id="qsub-${item.id}">5 renders · ~$${(NB2_PRICES[nb2Res]*5).toFixed(2)}</div>
+      </div>
+      <span class="q-badge ${bcls}" id="qbadge-${item.id}">${btxt}</span>
+      ${removeBtn}`;
+    queueList.appendChild(div);
+  });
+}
+
+function removeItem(id) {
+  queue = queue.filter(q => q.id !== id);
+  renderQueue();
+  updateCost();
+  checkReady();
+}
+
+function updateQueueItem(id, status, subText) {
+  const item = queue.find(q => q.id === id);
+  if (item) item.status = status;
+  const el = document.getElementById(`qi-${id}`);
+  const badge = document.getElementById(`qbadge-${id}`);
+  const sub = document.getElementById(`qsub-${id}`);
+  if (!el || !badge) return;
+  const cls = {wait:'',active:'is-active',done:'is-done',error:'is-error',stopped:''}[status]||'';
+  el.className = `q-item ${cls}`;
+  const bcls = {wait:'b-wait',active:'b-active',done:'b-done',error:'b-error',stopped:'b-stopped'}[status]||'b-wait';
+  const btxt = {wait:'queued',active:'generating',done:'done ✓',error:'error',stopped:'stopped'}[status]||status;
+  badge.className = `q-badge ${bcls}`;
+  badge.textContent = btxt;
+  if (subText && sub) sub.textContent = subText;
+}
+
+// ── ACTIVE CARD ────────────────────────────────────────────────────
+function createActiveCard(item) {
+  const old = document.getElementById('active-section');
+  if (old) old.remove();
+  welcomeState.style.display = 'none';
+
+  const sec = document.createElement('div');
+  sec.id = 'active-section';
+  sec.innerHTML = `
+    <div class="sec-title">
+      <span class="pulse" id="active-dot"></span>
+      <span id="active-title">Generating: ${item.name}</span>
+    </div>
+    <div class="active-card">
+      <div class="card-head">
+        <img class="card-thumb" src="${item.dataUrl}" alt="${item.name}"/>
+        <div class="card-info">
+          <h3>${item.name}</h3>
+          <p id="active-prog">Starting...</p>
+        </div>
+      </div>
+      <div class="renders-grid" id="active-grid"></div>
+    </div>`;
+  mainPanel.insertBefore(sec, mainPanel.firstChild);
+
+  const grid = document.getElementById('active-grid');
+  VIEWS.forEach(v => {
+    const slot = document.createElement('div');
+    slot.className = 'rslot';
+    slot.innerHTML = `
+      <div class="rslot-head">
+        <span class="rslot-title">Img ${v.id} — ${v.label}</span>
+        <span class="rbadge rb-wait" id="rb-${v.id}">waiting</span>
+      </div>
+      <div class="rslot-body" id="rbody-${v.id}">
+        <span class="rph">${v.label}</span>
+      </div>`;
+    grid.appendChild(slot);
+  });
+}
+
+const setActiveProg = msg => { const el = document.getElementById('active-prog'); if (el) el.textContent = msg; };
+
+// ── BATCH CARD ─────────────────────────────────────────────────────
+function createBatchCard(item, images) {
+  let batchSec = document.getElementById('batch-section');
+  if (!batchSec) {
+    batchSec = document.createElement('div');
+    batchSec.id = 'batch-section';
+    batchSec.innerHTML = `<div class="sec-title" style="margin-top:1rem;"><span class="pulse done"></span><span>Completed Batches</span></div>`;
+    mainPanel.appendChild(batchSec);
+  }
+
+  const count = Object.keys(images).length;
+  const card = document.createElement('div');
+  card.className = 'batch-card';
+  card.innerHTML = `
+    <div class="batch-head">
+      <img class="batch-thumb" src="${item.dataUrl}" alt="${item.name}"/>
+      <div class="batch-info">
+        <h3>${item.name}</h3>
+        <p>${count} of 5 renders completed</p>
+      </div>
+      <button class="btn-zip" id="bzip-${item.id}">⬇ ZIP</button>
+    </div>
+    <div class="batch-grid" id="bgrid-${item.id}"></div>`;
+  batchSec.appendChild(card);
+
+  const grid = document.getElementById(`bgrid-${item.id}`);
+  VIEWS.forEach(v => {
+    const img = images[v.id];
+    const slot = document.createElement('div');
+    slot.className = 'bslot';
+    if (img) {
+      const src = `data:image/jpeg;base64,${img.b64}`;
+      slot.innerHTML = `
+        <img src="${src}" alt="${v.label}"/>
+        <div class="bslot-label">Img ${v.id} — ${v.label}</div>
+        <button class="btn-dl1" onclick="dlOne('${src}','${item.name}_img${v.id}')">⬇ Download</button>`;
+    } else {
+      slot.innerHTML = `
+        <div style="min-height:90px;display:flex;align-items:center;justify-content:center;"><span style="font-size:10px;color:#ccc;">Not generated</span></div>
+        <div class="bslot-label">Img ${v.id} — ${v.label}</div>`;
+    }
+    grid.appendChild(slot);
+  });
+
+  document.getElementById(`bzip-${item.id}`).addEventListener('click', () => dlZip(item.id, item.name, images));
+}
+
+function dlOne(src, filename) {
+  const a = document.createElement('a');
+  a.href = src; a.download = filename + '.jpg'; a.click();
+}
+
+async function dlZip(itemId, name, images) {
+  const btn = document.getElementById(`bzip-${itemId}`);
+  btn.textContent = 'Zipping...'; btn.disabled = true;
+  const zip = new JSZip();
+  Object.entries(images).forEach(([id, {b64, label}]) => {
+    zip.file(`${name}_img${id}_${label.replace(/ /g,'_')}.jpg`, b64, { base64: true });
+  });
+  const blob = await zip.generateAsync({ type: 'blob' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = `${name}_renders.zip`; a.click();
+  URL.revokeObjectURL(url);
+  btn.textContent = '⬇ ZIP'; btn.disabled = false;
+}
+
+// ── API: UPLOAD ────────────────────────────────────────────────────
+async function uploadToFal(apiKey, dataUrl) {
+  // Step 1: get upload token
+  const tokenRes = await fetch('https://rest.alpha.fal.ai/storage/auth/token?storage_type=fal-cdn-v3', {
+    method: 'POST',
+    headers: { 'Authorization': `Key ${apiKey}`, 'Content-Type': 'application/json' },
+    body: '{}'
+  });
+  if (!tokenRes.ok) throw new Error(`Storage auth failed: ${tokenRes.status} — check your fal.ai API key`);
+  const { token, base_url } = await tokenRes.json();
+
+  // Step 2: upload to CDN
+  const blob = await (await fetch(dataUrl)).blob();
+  const form = new FormData();
+  form.append('file', blob, 'product.jpg');
+  const upRes = await fetch(`${base_url}/files/upload`, {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${token}` },
+    body: form
+  });
+  if (!upRes.ok) throw new Error(`CDN upload failed: ${upRes.status}`);
+  const upData = await upRes.json();
+  const url = upData.access_url || upData.url;
+  if (!url) throw new Error('No URL in upload response');
+  return url;
+}
+
+// ── API: GENERATE VIEW ─────────────────────────────────────────────
+async function generateView(view, apiKey, desc, imageUrl) {
+  const badge = document.getElementById(`rb-${view.id}`);
+  const body  = document.getElementById(`rbody-${view.id}`);
+  if (!badge || !body) return null;
+
+  badge.textContent = 'generating...'; badge.className = 'rbadge rb-gen';
+  body.innerHTML = `<div class="spinner"></div>`;
+
+  try {
+    if (isStopped) throw new Error('__STOPPED__');
+
+    // Use fal.run DIRECT (synchronous) — same as fal.ai website, no polling needed
+    const controller = new AbortController();
+    const stopCheck = setInterval(() => { if (isStopped) controller.abort(); }, 500);
+
+    let res;
+    try {
+      res = await fetch('https://fal.run/fal-ai/nano-banana-2/edit', {
+        method: 'POST',
+        headers: { 'Authorization': `Key ${apiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prompt: view.prompt(desc),
+          image_urls: [imageUrl],
+          resolution: nb2Res,
+          aspect_ratio: view.id === 5 ? '16:9' : '1:1',
+          output_format: 'jpeg',
+          num_images: 1,
+          limit_generations: true
+        }),
+        signal: controller.signal
+      });
+    } finally {
+      clearInterval(stopCheck);
+    }
+
+    if (isStopped) throw new Error('__STOPPED__');
+
+    if (!res.ok) {
+      let em = `API error ${res.status}`;
+      try { const ej = await res.json(); em = ej.detail || ej.message || em; } catch(e2){}
+      throw new Error(em);
+    }
+
+    const result = await res.json();
+    const imgUrl = result.images?.[0]?.url || result.output?.images?.[0]?.url || result.data?.images?.[0]?.url;
+    if (!imgUrl) throw new Error('No image URL in response — ' + JSON.stringify(result).slice(0,200));
+
+    const imgBlob = await (await fetch(imgUrl)).blob();
+    const b64 = (await blobToDataUrl(imgBlob)).split(',')[1];
+    const src = `data:image/jpeg;base64,${b64}`;
+
+    body.innerHTML = `<img src="${src}" alt="${view.label}"/>`;
+    badge.textContent = 'done'; badge.className = 'rbadge rb-ok';
+    return { b64, label: view.label };
+
+  } catch(e) {
+    if (e.message === '__STOPPED__') {
+      body.innerHTML = `<span class="rph">Stopped</span>`;
+      badge.textContent = 'stopped'; badge.className = 'rbadge rb-stop';
+    } else {
+      // Auto-retry once
+      if (!view._retried) {
+        view._retried = true;
+        badge.textContent = 'retrying...'; badge.className = 'rbadge rb-gen';
+        body.innerHTML = `<div class="spinner"></div>`;
+        await sleep(3000);
+        const r = await generateView(view, apiKey, desc, imageUrl);
+        view._retried = false;
+        return r;
+      }
+      body.innerHTML = `<span class="rerr">${e.message}</span>`;
+      badge.textContent = 'error'; badge.className = 'rbadge rb-err';
+    }
+    return null;
+  }
+}
+
+// ── MAIN LOOP ──────────────────────────────────────────────────────
+stopBtn.addEventListener('click', () => {
+  isStopped = true;
+  stopBtn.disabled = true;
+  stopBtn.textContent = '⏹ Stopping...';
+  setStatus('Stopping after current image...');
+});
+
+startBtn.addEventListener('click', async () => {
+  const apiKey = apiKeyEl.value.trim();
+  const desc   = descEl.value.trim();
+  if (!apiKey || !desc) return;
+
+  // Hard reset
+  isStopped = false;
+  isRunning = true;
+  startBtn.disabled = true;
+  stopBtn.style.display = 'block';
+  stopBtn.disabled = false;
+  stopBtn.textContent = '⏹ Stop After Current';
+
+  const pending = queue.filter(q => q.status === 'wait');
+  setStatus(`Processing ${pending.length} product${pending.length>1?'s':''}...`);
+
+  for (let i = 0; i < queue.length; i++) {
+    const item = queue[i];
+    if (item.status !== 'wait') continue;
+    if (isStopped) { updateQueueItem(item.id, 'stopped', 'skipped'); continue; }
+
+    updateQueueItem(item.id, 'active', 'uploading...');
+    createActiveCard(item);
+    setActiveProg('Uploading reference image to fal.ai...');
+
+    // Upload
+    let imageUrl;
+    try {
+      setStatus(`${item.name}: uploading image...`);
+      imageUrl = await uploadToFal(apiKey, item.dataUrl);
+      setActiveProg('Upload done! Generating 5 views in parallel...');
+    } catch(e) {
+      setStatus(`Upload failed: ${e.message}`);
+      setActiveProg('❌ Upload error: ' + e.message);
+      updateQueueItem(item.id, 'error', 'upload failed');
+      const dot = document.getElementById('active-dot');
+      if (dot) { dot.style.animation = 'none'; dot.style.background = '#e05555'; }
+      continue;
+    }
+
+    // Generate all 5 in parallel
+    setStatus(`${item.name}: generating all 5 views...`);
+    const results = await Promise.all(VIEWS.map(view => generateView(view, apiKey, desc, imageUrl)));
+    const images = {};
+    VIEWS.forEach((v, i) => { if (results[i]) images[v.id] = results[i]; });
+
+    // Finalize
+    const doneCount = Object.keys(images).length;
+    const finalStatus = isStopped && doneCount < 5 ? 'stopped' : doneCount === 5 ? 'done' : 'error';
+    updateQueueItem(item.id, finalStatus, `${doneCount}/5 done`);
+
+    const dot = document.getElementById('active-dot');
+    const title = document.getElementById('active-title');
+    if (dot) { dot.style.animation = 'none'; dot.style.background = finalStatus === 'done' ? '#28a745' : '#e05555'; }
+    if (title) title.textContent = (finalStatus === 'done' ? '✓ Done: ' : 'Partial: ') + item.name;
+    setActiveProg(finalStatus === 'done' ? '✓ All 5 images generated!' : `${doneCount}/5 images generated.`);
+
+    if (doneCount > 0) createBatchCard(item, images);
+    updateCost();
+    if (isStopped) break;
+  }
+
+  isRunning = false;
+  isStopped = false;
+  stopBtn.style.display = 'none';
+  stopBtn.textContent = '⏹ Stop After Current';
+  startBtn.disabled = false;
+  checkReady();
+  const done = queue.filter(q => q.status === 'done').length;
+  const total = queue.filter(q => q.status !== 'wait').length;
+  setStatus(total > 0 ? `Complete — ${done}/${total} fully generated.` : 'Ready.');
+});
+</script>
+</body>
+</html>
