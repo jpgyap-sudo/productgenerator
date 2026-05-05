@@ -651,52 +651,6 @@ textarea:focus { outline: none; border-color: var(--text-secondary); }
 .btn-dl-all:hover { background: var(--success); color: #fff; }
 .btn-dl-all:disabled { opacity: 0.4; cursor: not-allowed; background: var(--success-bg); color: var(--success); }
 
-/* ── ACCESS GATE ─────────────────────────────────────────────── */
-.access-overlay {
-  position: fixed; inset: 0; z-index: 9999;
-  background: var(--bg);
-  display: flex; align-items: center; justify-content: center;
-  transition: opacity 0.4s ease, visibility 0.4s ease;
-}
-.access-overlay.hidden {
-  opacity: 0; visibility: hidden; pointer-events: none;
-}
-.access-card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 2.5rem 2rem;
-  max-width: 380px; width: 90%;
-  text-align: center;
-  box-shadow: 0 8px 40px rgba(0,0,0,0.12);
-}
-.access-card .lock-icon { font-size: 40px; margin-bottom: 0.75rem; }
-.access-card h2 { font-size: 18px; font-weight: 600; margin-bottom: 0.4rem; }
-.access-card p { font-size: 13px; color: var(--text-secondary); margin-bottom: 1.25rem; line-height: 1.5; }
-.access-card input[type="email"] {
-  width: 100%; padding: 10px 12px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  font-size: 14px; font-family: inherit;
-  background: var(--surface-2); color: var(--text);
-  outline: none; transition: border-color var(--transition);
-  margin-bottom: 0.75rem;
-}
-.access-card input[type="email"]:focus { border-color: var(--accent); }
-.access-card .access-error {
-  font-size: 12px; color: var(--error);
-  min-height: 18px; margin-bottom: 0.5rem;
-}
-.access-card .btn-access {
-  width: 100%; padding: 10px; font-size: 14px; font-weight: 600;
-  border-radius: 7px; border: none;
-  background: var(--topbar-bg); color: var(--topbar-text);
-  cursor: pointer; transition: opacity var(--transition);
-}
-.access-card .btn-access:hover { opacity: 0.85; }
-.access-card .btn-access:disabled { opacity: 0.35; cursor: not-allowed; }
-.access-card .hint { font-size: 11px; color: var(--text-dim); margin-top: 1rem; }
-
 /* ── LOG PANEL ───────────────────────────────────────────────── */
 .log-panel {
   background: var(--surface);
@@ -844,19 +798,6 @@ textarea:focus { outline: none; border-color: var(--text-secondary); }
 </style>
 </head>
 <body>
-
-<!-- ── ACCESS GATE ────────────────────────────────────────────── -->
-<div class="access-overlay" id="accessOverlay">
-  <div class="access-card">
-    <div class="lock-icon">🔐</div>
-    <h2>Authorized Access Only</h2>
-    <p>Enter your email to access Product Image Studio.</p>
-    <input type="email" id="accessEmail" placeholder="your@email.com" autocomplete="email" spellcheck="false"/>
-    <div class="access-error" id="accessError"></div>
-    <button class="btn-access" id="accessBtn">Unlock Access</button>
-    <div class="hint">Only authorized emails can use this application.</div>
-  </div>
-</div>
 
 <!-- ── TOP BAR ────────────────────────────────────────────────── -->
 <div class="topbar">
@@ -3238,69 +3179,6 @@ startBtn.addEventListener('click', async () => {
   addQueueLogEntry('info', '', `Queue finished — ${done}/${total} fully generated`);
   await saveState();
 });
-
-// ── ACCESS GATE ────────────────────────────────────────────────────
-const AUTHORIZED_EMAIL = 'jpgyap@gmail.com';
-const AUTH_SESSION_KEY = 'product_studio_auth';
-
-const accessOverlay = document.getElementById('accessOverlay');
-const accessEmail   = document.getElementById('accessEmail');
-const accessError   = document.getElementById('accessError');
-const accessBtn     = document.getElementById('accessBtn');
-
-function checkAccess() {
-  try {
-    if (sessionStorage.getItem(AUTH_SESSION_KEY) === AUTHORIZED_EMAIL) {
-      accessOverlay.classList.add('hidden');
-      return true;
-    }
-  } catch(e) {}
-  return false;
-}
-
-function grantAccess() {
-  try { sessionStorage.setItem(AUTH_SESSION_KEY, AUTHORIZED_EMAIL); } catch(e) {}
-  accessOverlay.classList.add('hidden');
-  accessEmail.value = '';
-  accessError.textContent = '';
-}
-
-function denyAccess(msg) {
-  accessError.textContent = msg;
-  accessBtn.disabled = false;
-  accessBtn.textContent = 'Unlock Access';
-  accessEmail.focus();
-}
-
-accessBtn.addEventListener('click', () => {
-  const email = accessEmail.value.trim().toLowerCase();
-  if (!email) {
-    accessError.textContent = 'Please enter your email address.';
-    accessEmail.focus();
-    return;
-  }
-  accessBtn.disabled = true;
-  accessBtn.textContent = 'Verifying...';
-  setTimeout(() => {
-    if (email === AUTHORIZED_EMAIL) {
-      grantAccess();
-    } else {
-      denyAccess('Access denied. This email is not authorized.');
-    }
-  }, 600);
-});
-
-accessEmail.addEventListener('keydown', e => {
-  if (e.key === 'Enter') accessBtn.click();
-});
-
-// Run access check on load
-if (!checkAccess()) {
-  accessOverlay.style.display = 'flex';
-  setTimeout(() => accessEmail.focus(), 300);
-} else {
-  accessOverlay.classList.add('hidden');
-}
 
 // ── BEFOREUNLOAD HANDLER ────────────────────────────────────────────
 // Ensure queue data is saved to Supabase before the page unloads.
