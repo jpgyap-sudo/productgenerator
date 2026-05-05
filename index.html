@@ -1608,14 +1608,18 @@ async function loadQueueFromSupabase() {
     if (data && data.length > 0) {
       // Map Supabase rows back to queue items
       // Supabase data takes priority over localStorage data
-      const supaItems = data.map(row => ({
-        id: row.id,
-        name: row.name,
-        dataUrl: row.image_url || '',  // Use Supabase URL as dataUrl for display
-        supabaseUrl: row.image_url || '',
-        status: row.status || STATUS.WAIT,
-        desc: row.description || ''
-      }));
+      const supaItems = data.map(row => {
+        // Reset ACTIVE → WAIT on load: in-flight fal.ai requests can't survive a page refresh
+        const status = (row.status === STATUS.ACTIVE) ? STATUS.WAIT : (row.status || STATUS.WAIT);
+        return {
+          id: row.id,
+          name: row.name,
+          dataUrl: row.image_url || '',
+          supabaseUrl: row.image_url || '',
+          status,
+          desc: row.description || ''
+        };
+      });
 
       // Merge: for items that exist in both localStorage and Supabase,
       // Supabase wins. For items only in localStorage, keep them.
@@ -1806,6 +1810,8 @@ async function loadState() {
         // from supabaseUrl after Supabase connects, or the user can re-upload.
         // Mark items that had local images so we know to restore them.
         queue.forEach(q => {
+          // Reset ACTIVE → WAIT on load: in-flight fal.ai requests can't survive a page refresh
+          if (q.status === STATUS.ACTIVE) q.status = STATUS.WAIT;
           if (q.hasLocalImage && !q.dataUrl && !q.supabaseUrl) {
             q.needsReupload = true;
           }
@@ -2008,7 +2014,10 @@ function renderQueue() {
   qCount.textContent = queue.length;
   if (!queue.length) {
     queueList.innerHTML = '<div class="q-empty">No items yet.<br/>Add product images above.</div>';
-    welcomeState.style.display = 'block';
+    // Only show welcome state if there's no active section (i.e., not currently processing)
+    if (!document.getElementById('active-section')) {
+      welcomeState.style.display = 'block';
+    }
     return;
   }
   // Hide welcome state when there are items in the queue
@@ -2207,6 +2216,10 @@ clearDoneBtn.addEventListener('click', async () => {
     }
   });
   queue = queue.filter(q => q.status === STATUS.WAIT || q.status === STATUS.ACTIVE);
+  // If no items remain and no active section, show welcome state
+  if (!queue.length && !document.getElementById('active-section')) {
+    welcomeState.style.display = 'block';
+  }
   renderQueue();
   updateCost();
   checkReady();
@@ -2223,6 +2236,9 @@ clearAllBtn.addEventListener('click', async () => {
   document.querySelectorAll('[id^="bc-"]').forEach(el => el.remove());
   const batchSection = document.getElementById('batch-section');
   if (batchSection) batchSection.remove();
+  // Also remove the active section if it exists (e.g., from a previous run)
+  const activeSec = document.getElementById('active-section');
+  if (activeSec) activeSec.remove();
   queue = [];
   renderQueue();
   updateCost();
@@ -2253,6 +2269,18 @@ function createActiveCard(item) {
   // Don't remove the old active section — update it if it exists.
   // This prevents the right panel from flickering/disappearing during parallel processing.
   let sec = document.getElementById('active-section');
+  
+  // Ensure welcome state is hidden whenever we have an active card
+  welcomeState.style.display = 'none';
+  
+  if (sec) {
+    // Verify the section is still attached to mainPanel; if not, remove the stale reference
+    // and recreate it below.
+    if (!mainPanel.contains(sec)) {
+      sec = null;
+    }
+  }
+  
   if (sec) {
     // Update existing active card with new item info
     const thumb = document.getElementById('active-thumb');
@@ -2282,10 +2310,14 @@ function createActiveCard(item) {
     // Reset elapsed timer
     const timerEl = document.getElementById('active-timer');
     if (timerEl) timerEl.textContent = '⏱ 0s';
+    
+    // Ensure the active section is the first child of mainPanel so it's always visible
+    // at the top, before any batch sections or log panels.
+    if (mainPanel.firstChild !== sec) {
+      mainPanel.insertBefore(sec, mainPanel.firstChild);
+    }
     return;
   }
-
-  welcomeState.style.display = 'none';
 
   sec = document.createElement('div');
   sec.id = 'active-section';
@@ -2382,7 +2414,14 @@ function createBatchCard(item, images) {
     batchSec = document.createElement('div');
     batchSec.id = 'batch-section';
     batchSec.innerHTML = `<div class="sec-title" style="margin-top:1rem;"><span class="pulse done"></span><span>Completed Batches</span><button class="btn-dl-all" id="dlAllBtn" onclick="downloadAllBatches()">⬇ Download All</button></div>`;
-    mainPanel.appendChild(batchSec);
+    // Insert batch section AFTER the active section (if it exists), otherwise at the end
+    const activeSec = document.getElementById('active-section');
+    if (activeSec) {
+      // Insert after the active section (nextSibling is fine even if null — insertBefore with null appends)
+      mainPanel.insertBefore(batchSec, activeSec.nextSibling);
+    } else {
+      mainPanel.appendChild(batchSec);
+    }
   }
 
   const count = Object.keys(images).length;
@@ -2597,7 +2636,13 @@ function restoreBatchCards() {
     batchSec = document.createElement('div');
     batchSec.id = 'batch-section';
     batchSec.innerHTML = `<div class="sec-title" style="margin-top:1rem;"><span class="pulse done"></span><span>Completed Batches</span><button class="btn-dl-all" id="dlAllBtn" onclick="downloadAllBatches()">⬇ Download All</button></div>`;
-    mainPanel.appendChild(batchSec);
+    // Insert after the active section if it exists, otherwise append
+    const activeSec = document.getElementById('active-section');
+    if (activeSec) {
+      mainPanel.insertBefore(batchSec, activeSec.nextSibling);
+    } else {
+      mainPanel.appendChild(batchSec);
+    }
   }
 
   completedItems.forEach(item => {
@@ -2706,12 +2751,38 @@ async function uploadToFal(apiKey, dataUrl) {
 
 // ── API: GENERATE VIEW ─────────────────────────────────────────────
 async function generateView(view, apiKey, desc, imageUrl, attempt = 0) {
-  const badge = document.getElementById(`rb-${view.id}`);
-  const body  = document.getElementById(`rbody-${view.id}`);
+  let badge = document.getElementById(`rb-${view.id}`);
+  let body  = document.getElementById(`rbody-${view.id}`);
   if (!badge || !body) {
-    // Active card render slots missing — log to queue log for debugging
-    addQueueLogEntry('error', 'System', `Render slot missing for view ${view.id} — active card may have been removed`);
-    return null;
+    // Active card render slots missing — try to recreate the render grid
+    // This can happen if the active section was detached and recreated
+    const sec = document.getElementById('active-section');
+    const grid = document.getElementById('active-grid');
+    if (sec && grid) {
+      // Recreate the render slots in the existing active grid
+      VIEWS.forEach(v => {
+        if (!document.getElementById(`rb-${v.id}`)) {
+          const slot = document.createElement('div');
+          slot.className = 'rslot';
+          slot.innerHTML = `
+            <div class="rslot-head">
+              <span class="rslot-title">Img ${v.id} — ${v.label}</span>
+              <span class="rbadge rb-wait" id="rb-${v.id}">waiting</span>
+            </div>
+            <div class="rslot-body" id="rbody-${v.id}">
+              <span class="rph">${v.label}</span>
+            </div>`;
+          grid.appendChild(slot);
+        }
+      });
+      // Re-fetch badge and body after recreation
+      badge = document.getElementById(`rb-${view.id}`);
+      body  = document.getElementById(`rbody-${view.id}`);
+    }
+    if (!badge || !body) {
+      addQueueLogEntry('error', 'System', `Render slot missing for view ${view.id} — active card may have been removed`);
+      return null;
+    }
   }
 
   badge.textContent = 'generating...'; badge.className = 'rbadge rb-gen';
@@ -2959,6 +3030,11 @@ startBtn.addEventListener('click', async () => {
         }
 
         setStatus(`${item.name}: generating all 5 views...`);
+        // Safety check: ensure active section still exists before generating views.
+        // If it was somehow removed (e.g., by a concurrent clear operation), recreate it.
+        if (!document.getElementById('active-section')) {
+          createActiveCard(item);
+        }
         const results = await Promise.all(VIEWS.map(view => generateView(view, apiKey, desc, imageUrl)));
         const images = {};
         VIEWS.forEach((v, idx) => { if (results[idx]) images[v.id] = results[idx]; });
