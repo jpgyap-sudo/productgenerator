@@ -964,13 +964,6 @@ const VIEWS = [
   { id:5, label:'Interior scene', prompt: d=>`Use the reference image as the product identity for this ${buildDesc(d)}. Place matching products in a refined modern dining interior with a round dark marble table, warm pendant light, light wood floor, large windows, and natural decor. Photorealistic interior product photography.` }
 ];
 
-function fallbackPrompt(view, desc) {
-  const d = buildDesc(desc);
-  if (view.id === 1) return `Create a clean studio product photo of this ${d} from the reference image on a white background.`;
-  if (view.id === 5) return `Create a photorealistic modern interior scene featuring this ${d} from the reference image.`;
-  return `Create a clean ${view.label.toLowerCase()} product photo of this ${d} from the reference image on a white background.`;
-}
-
 const STATUS = {
   WAIT:    'wait',
   ACTIVE:  'active',
@@ -1025,7 +1018,6 @@ const LOG_KEY = 'product_studio_failure_log';
 const QUEUE_LOG_KEY = 'product_studio_queue_log';
 const MAX_LOG_ENTRIES = 500;
 const MAX_QUEUE_LOG_ENTRIES = 200;
-const STOP_SIGNAL = '__STOPPED__';
 
 // ── SUPABASE CONFIG ────────────────────────────────────────────────
 const SUPA_URL = 'https://rbhfkwwnpmytmwueajje.supabase.co';
@@ -1055,18 +1047,16 @@ const HARDCODED_API_KEY = 'd266b8ac-4cf4-402a-a0bd-b06571960d91:29ebe710c15ec6e7
 let queue = [];
 let pendingItems = [];
 let nb2Res = '0.5K';
-let isStopped = false;
-let isRunning = false;
 let nextId = 1;
 let darkMode = false;
 let parallelism = 1;
 let savedApiKey = '';
-// Per-item skip signal — set to item id to skip that item
-let skipItemId = null;
-// Track retries per view without mutating VIEWS
-const retryMap = new Map();
 // Queue processing log — persistent history of what happened during queue runs
 let queueLog = [];
+// Polling state — server-side processing
+let pollInterval = null;
+let isPolling = false;
+let processingItemIds = []; // IDs currently being processed on the server
 
 function recoverInterruptedStatus(item) {
   if (item.status !== STATUS.ACTIVE) return item.status || STATUS.WAIT;
@@ -1145,28 +1135,6 @@ function formatError(value, fallback = 'Something went wrong') {
     try { return JSON.stringify(value).slice(0, 240); } catch (e) { return fallback; }
   }
   return String(value);
-}
-
-function isInvalidRequestError(error) {
-  const msg = formatError(error).toLowerCase();
-  return msg.includes('invalid_request') || msg.includes('given prompts and images');
-}
-
-async function callFalEdit(apiKey, request, signal) {
-  const res = await fetch(request.url, {
-    method: 'POST',
-    headers: { 'Authorization': `Key ${apiKey}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify(request.body),
-    signal
-  });
-
-  if (!res.ok) {
-    let em = `API error ${res.status}`;
-    try { em = await res.json(); } catch(e2){}
-    throw new Error(formatError(em, `API error ${res.status}`));
-  }
-
-  return res.json();
 }
 
 function blobToDataUrl(blob) {
@@ -1689,7 +1657,7 @@ async function saveState() {
         // Don't store dataUrl in localStorage — it's too large (multi-MB base64).
         // Instead, store a flag so we know to re-upload on next session.
         dataUrl: '',
-        hasLocalImage: (q.status === STATUS.WAIT || q.status === STATUS.ACTIVE) && !!q.dataUrl && q.dataUrl.startsWith('data:'),
+        hasLocalImage: q.status === STATUS.WAIT && !!q.dataUrl && q.dataUrl.startsWith('data:'),
         status: q.status,
         supabaseUrl: q.supabaseUrl || '',
         desc: q.desc || ''
@@ -1928,7 +1896,7 @@ function checkReady() {
   startBtn.disabled = !(
     getApiKey().length > 10 &&
     (hasQueueItems || hasPendingItems) &&
-    !isRunning
+    !isPolling
   );
   // Show/hide clear buttons
   const hasDone = queue.some(q => q.status === STATUS.DONE || q.status === STATUS.ERROR || q.status === STATUS.STOPPED);
@@ -2390,7 +2358,6 @@ function restoreInterruptedActiveCard() {
   const timerEl = document.getElementById('active-timer');
 
   if (title) title.textContent = `Resuming: ${item.name}`;
-  if (prog) prog.textContent = 'Page was reloaded — automatically re-generating the 5 views...';
   if (dot) { dot.className = 'pulse'; dot.style.animation = ''; dot.style.background = ''; }
   if (timerEl) timerEl.textContent = 'resuming...';
   if (skipBtn) {
@@ -2442,8 +2409,9 @@ function restoreInterruptedActiveCard() {
     }
     setStatus(`${item.name} needs the original image uploaded again.`);
   } else {
-    // Image is available (via supabaseUrl) — auto-resume immediately
+    // Image is available (via supabaseUrl) — auto-resume via server
     setStatus(`Auto-resuming ${item.name} after page reload...`);
+    if (prog) prog.textContent = 'Page was reloaded — automatically submitting to server for processing...';
     // Small delay to let the DOM settle, then auto-start the queue
     setTimeout(() => {
       startBtn.click();
@@ -2659,52 +2627,32 @@ async function downloadAllBatches() {
   toast(`Downloaded ${processed} images from ${batchCards.length} batch(es)`, 'success');
 }
 
-// ── RETRY FAILED VIEWS ────────────────────────────────────────────
+// ── RETRY FAILED VIEWS (SERVER-SIDE) ──────────────────────────────
 async function retryFailedViews(item, images) {
-  const apiKey = getApiKey();
-  const desc = item.desc || '';
-  if (!apiKey) { toast('API key required', 'error'); return; }
+  if (!item) { toast('Item not found', 'error'); return; }
 
-  const failedViews = VIEWS.filter(v => !images[v.id]);
-  if (!failedViews.length) { toast('No failed views to retry', 'info'); return; }
-
-  toast(`Retrying ${failedViews.length} failed view(s)...`, 'info');
-  setStatus(`${item.name}: retrying ${failedViews.length} view(s)...`);
-  addQueueLogEntry('info', item.name, `Retrying ${failedViews.length} failed view(s)`);
-
-  // Upload reference image if needed
-  let imageUrl;
-  try {
-    imageUrl = await uploadToFal(apiKey, item.dataUrl);
-  } catch (e) {
-    const msg = formatError(e);
-    toast(`Upload failed: ${msg}`, 'error');
-    logFailure(item.name, 0, 'Upload (retry)', msg, 0);
-    addQueueLogEntry('error', item.name, `Retry upload failed: ${msg}`);
-    return;
+  // Reset item status to WAIT so it gets picked up
+  item.status = STATUS.WAIT;
+  const badge = document.getElementById(`qbadge-${item.id}`);
+  const el = document.getElementById(`qi-${item.id}`);
+  if (badge && el) {
+    const sc = STATUS_CLASS[STATUS.WAIT];
+    const sl = STATUS_LABEL[STATUS.WAIT];
+    el.className = `q-item ${sc.item}`;
+    badge.className = `q-badge ${sc.badge}`;
+    badge.textContent = sl;
   }
 
-  // Re-create active card for visual feedback
-  createActiveCard(item);
-  setActiveProg(`Retrying ${failedViews.length} failed view(s)...`);
-
-  const results = await Promise.all(failedViews.map(view => generateView(view, apiKey, desc, imageUrl)));
-
-  failedViews.forEach((v, i) => {
-    if (results[i]) {
-      images[v.id] = results[i];
-    }
-  });
-
-  // Update the batch card
+  // Remove old batch card
   const oldCard = document.getElementById(`bc-${item.id}`);
   if (oldCard) oldCard.remove();
-  createBatchCard(item, images);
 
-  const doneCount = Object.keys(images).length;
-  await updateQueueItem(item.id, doneCount === 5 ? STATUS.DONE : STATUS.ERROR, `${doneCount}/5 done`);
-  addQueueLogEntry(doneCount === 5 ? 'done' : 'error', item.name, `Retry complete: ${doneCount}/5 views`);
-  toast(`Retry complete: ${doneCount}/5 views`, doneCount === 5 ? 'success' : 'error');
+  toast(`Re-submitting "${item.name}" to server...`, 'info');
+  addQueueLogEntry('info', item.name, 'Re-submitted for retry');
+  await saveState();
+
+  // Auto-start the queue
+  startBtn.click();
 }
 
 // ── RESTORE BATCH CARDS ON PAGE LOAD ───────────────────────────────
@@ -2784,301 +2732,191 @@ async function retryItemFromHistory(id) {
   startBtn.click();
 }
 
-// ── API: UPLOAD ────────────────────────────────────────────────────
-async function uploadToFal(apiKey, dataUrl) {
-  let tokenRes;
+// ── SERVER-SIDE PROCESSING ─────────────────────────────────────────
+// Submit queue items to the server for background processing.
+// The server handles fal.ai API calls, retries, and saves results to Supabase.
+// The frontend polls for status updates every 3 seconds.
+
+/**
+ * Submit WAIT items to the server for processing.
+ * Sends item IDs to /api/queue/submit, then starts polling for status.
+ */
+async function submitToServer(itemIds) {
   try {
-    tokenRes = await fetch('https://rest.alpha.fal.ai/storage/auth/token?storage_type=fal-cdn-v3', {
+    const res = await fetch('/api/queue/submit', {
       method: 'POST',
-      headers: { 'Authorization': `Key ${apiKey}`, 'Content-Type': 'application/json' },
-      body: '{}'
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ itemIds, resolution: nb2Res })
     });
-  } catch (e) {
-    throw new Error(`Could not reach fal storage auth (${formatError(e)})`);
-  }
-  if (!tokenRes.ok) throw new Error(`Storage auth failed: ${tokenRes.status} — check your fal.ai API key`);
-  const { token, base_url } = await tokenRes.json();
-
-  // If dataUrl is an HTTP URL (e.g. from Supabase storage), fetch it first
-  let blob;
-  if (dataUrl && (dataUrl.startsWith('http://') || dataUrl.startsWith('https://'))) {
-    try {
-      const imgRes = await fetch(dataUrl);
-      if (!imgRes.ok) throw new Error(`Fetch failed: ${imgRes.status}`);
-      blob = await imgRes.blob();
-    } catch (e) {
-      throw new Error(`Could not fetch image from URL (${formatError(e)})`);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || `Server error ${res.status}`);
     }
-  } else {
-    blob = dataUrlToBlob(dataUrl);
+    const data = await res.json();
+    addQueueLogEntry('start', '', `Submitted ${data.items.length} item(s) to server`);
+    return data;
+  } catch (e) {
+    const msg = formatError(e);
+    setStatus(`Server submission failed: ${msg}`);
+    addQueueLogEntry('error', '', `Server submission failed: ${msg}`);
+    toast(`Server error: ${msg}`, 'error');
+    throw e;
   }
+}
 
-  const form = new FormData();
-  form.append('file', blob, 'product.jpg');
-  let upRes;
+/**
+ * Poll /api/queue/status for current queue and render results.
+ * Updates the UI based on server-side processing state.
+ */
+async function pollStatus() {
   try {
-    upRes = await fetch(`${base_url}/files/upload`, {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${token}` },
-      body: form
+    const res = await fetch('/api/queue/status', {
+      method: 'GET',
+      headers: { 'Cache-Control': 'no-cache' }
     });
+    if (!res.ok) return;
+    const data = await res.json();
+
+    // Update queue items from server data
+    if (data.queue && data.queue.length > 0) {
+      // Merge server status into local queue
+      for (const serverItem of data.queue) {
+        const localItem = queue.find(q => q.id === serverItem.id);
+        if (localItem) {
+          const prevStatus = localItem.status;
+          localItem.status = serverItem.status;
+          localItem.supabaseUrl = serverItem.imageUrl || localItem.supabaseUrl;
+          if (serverItem.imageUrl && !localItem.dataUrl) {
+            localItem.dataUrl = serverItem.imageUrl;
+          }
+          // Update queue list badge if status changed
+          if (prevStatus !== serverItem.status) {
+            const badge = document.getElementById(`qbadge-${serverItem.id}`);
+            const el = document.getElementById(`qi-${serverItem.id}`);
+            if (badge && el) {
+              const sc = STATUS_CLASS[serverItem.status] || STATUS_CLASS[STATUS.WAIT];
+              const sl = STATUS_LABEL[serverItem.status] || STATUS_LABEL[STATUS.WAIT];
+              el.className = `q-item ${sc.item}`;
+              badge.className = `q-badge ${sc.badge}`;
+              badge.textContent = sl;
+            }
+          }
+        }
+      }
+    }
+
+    // Update active card with render results
+    if (data.hasActiveItems && data.renderResults) {
+      const activeItemId = data.queue.find(q => q.status === 'active' || q.status === 'generating')?.id;
+      if (activeItemId && data.renderResults[activeItemId]) {
+        const results = data.renderResults[activeItemId];
+        // Create active card if it doesn't exist
+        const activeItem = queue.find(q => q.id === activeItemId);
+        if (activeItem && !document.getElementById('active-section')) {
+          createActiveCard(activeItem);
+        }
+        // Update each view slot
+        for (const r of results) {
+          const badge = document.getElementById(`rb-${r.viewId}`);
+          const body = document.getElementById(`rbody-${r.viewId}`);
+          if (!badge || !body) continue;
+
+          if (r.status === 'generating') {
+            badge.textContent = 'generating...';
+            badge.className = 'rbadge rb-gen';
+            if (!body.querySelector('.spinner')) {
+              body.innerHTML = `<div class="spinner"></div>`;
+              body.className = 'rslot-body generating';
+            }
+          } else if (r.status === 'done' && r.imageUrl) {
+            badge.textContent = 'done';
+            badge.className = 'rbadge rb-ok';
+            body.innerHTML = `<img src="${r.imageUrl}" alt="View ${r.viewId}" onclick="openLightbox('${r.imageUrl}')"/>`;
+            body.className = 'rslot-body';
+          } else if (r.status === 'error') {
+            badge.textContent = 'error';
+            badge.className = 'rbadge rb-err';
+            body.innerHTML = `<span class="rerr">${escHtml(r.errorMessage || 'Error')}</span>`;
+            body.className = 'rslot-body';
+          }
+        }
+        updateActiveProgress();
+      }
+    }
+
+    // Check if all items are done
+    const activeOrWait = data.queue.filter(q => q.status === 'active' || q.status === 'wait' || q.status === 'generating');
+    if (activeOrWait.length === 0 && isPolling) {
+      // All done — stop polling
+      stopPolling();
+      const done = data.queue.filter(q => q.status === 'done').length;
+      const total = data.queue.length;
+      setStatus(`Complete — ${done}/${total} fully generated.`);
+      addQueueLogEntry('info', '', `Queue finished — ${done}/${total} fully generated`);
+      startBtn.disabled = false;
+      stopBtn.style.display = 'none';
+      checkReady();
+      await saveState();
+      // Restore batch cards for completed items
+      restoreBatchCards();
+    }
+
+    // Update processingItemIds
+    processingItemIds = data.queue
+      .filter(q => q.status === 'active' || q.status === 'generating')
+      .map(q => q.id);
+
   } catch (e) {
-    throw new Error(`Could not upload to fal CDN (${formatError(e)})`);
+    // Silently handle poll errors — will retry on next interval
+    console.warn('Poll error:', e);
   }
-  if (!upRes.ok) throw new Error(`CDN upload failed: ${upRes.status}`);
-  const upData = await upRes.json();
-  const url = upData.access_url || upData.url;
-  if (!url) throw new Error('No URL in upload response');
-  return url;
 }
 
-// ── API: GENERATE VIEW ─────────────────────────────────────────────
-// Per-view timer tracking
-const viewTimers = {};
-
-function startViewTimer(viewId) {
-  const start = Date.now();
-  viewTimers[viewId] = start;
-  const timerEl = document.getElementById(`rtimer-${viewId}`);
-  if (!timerEl) return;
-  
-  // Clear any existing interval for this view
-  if (viewTimers[`interval-${viewId}`]) {
-    clearInterval(viewTimers[`interval-${viewId}`]);
-  }
-  
-  viewTimers[`interval-${viewId}`] = setInterval(() => {
-    const el = document.getElementById(`rtimer-${viewId}`);
-    if (!el) { clearInterval(viewTimers[`interval-${viewId}`]); return; }
-    const elapsed = Math.floor((Date.now() - start) / 1000);
-    const mins = Math.floor(elapsed / 60);
-    const secs = elapsed % 60;
-    el.textContent = `⏱ ${mins > 0 ? mins + 'm ' : ''}${secs}s`;
-  }, 500);
+function startPolling() {
+  if (pollInterval) clearInterval(pollInterval);
+  isPolling = true;
+  pollInterval = setInterval(pollStatus, 3000);
+  // Also poll immediately
+  pollStatus();
 }
 
-function stopViewTimer(viewId) {
-  if (viewTimers[`interval-${viewId}`]) {
-    clearInterval(viewTimers[`interval-${viewId}`]);
-    delete viewTimers[`interval-${viewId}`];
+function stopPolling() {
+  if (pollInterval) {
+    clearInterval(pollInterval);
+    pollInterval = null;
   }
-  // Keep the final elapsed time displayed
-}
-
-async function generateView(view, apiKey, desc, imageUrl, attempt = 0) {
-  let badge = document.getElementById(`rb-${view.id}`);
-  let body  = document.getElementById(`rbody-${view.id}`);
-  if (!badge || !body) {
-    // Active card render slots missing — try to recreate the render grid
-    // This can happen if the active section was detached and recreated
-    const sec = document.getElementById('active-section');
-    const grid = document.getElementById('active-grid');
-    if (sec && grid) {
-      // Recreate the render slots in the existing active grid
-      VIEWS.forEach(v => {
-        if (!document.getElementById(`rb-${v.id}`)) {
-          const slot = document.createElement('div');
-          slot.className = 'rslot';
-          slot.innerHTML = `
-            <div class="rslot-head">
-              <span class="rslot-title">Img ${v.id} — ${v.label}</span>
-              <span class="rbadge rb-wait" id="rb-${v.id}">waiting</span>
-            </div>
-            <div class="rslot-body" id="rbody-${v.id}">
-              <span class="rph">${v.label}</span>
-              <div class="rslot-timer" id="rtimer-${v.id}"></div>
-            </div>`;
-          grid.appendChild(slot);
-        }
-      });
-      // Re-fetch badge and body after recreation
-      badge = document.getElementById(`rb-${view.id}`);
-      body  = document.getElementById(`rbody-${view.id}`);
-    }
-    if (!badge || !body) {
-      addQueueLogEntry('error', 'System', `Render slot missing for view ${view.id} — active card may have been removed`);
-      return null;
-    }
-  }
-
-  // Show generating state with attempt info
-  const attemptLabel = attempt > 0 ? `<span class="r-attempt">(attempt ${attempt + 1})</span>` : '';
-  badge.innerHTML = `generating...${attemptLabel}`;
-  badge.className = 'rbadge rb-gen';
-  body.innerHTML = `<div class="spinner"></div>`;
-  body.className = 'rslot-body generating';
-  // Start per-view timer
-  startViewTimer(view.id);
-
-  try {
-    if (isStopped) throw new Error(STOP_SIGNAL);
-
-    const controller = new AbortController();
-    const stopCheck = setInterval(() => { if (isStopped || skipItemId) controller.abort(); }, 500);
-
-    const attempts = [
-      {
-        label: 'Nano Banana 2',
-        url: 'https://fal.run/fal-ai/nano-banana-2/edit',
-        body: {
-          prompt: view.prompt(desc),
-          image_urls: [imageUrl],
-          resolution: nb2Res,
-          aspect_ratio: view.id === 5 ? '16:9' : '1:1',
-          output_format: 'jpeg',
-          num_images: 1,
-          limit_generations: true,
-          safety_tolerance: '5'
-        }
-      },
-      {
-        label: 'Nano Banana 2 simple',
-        url: 'https://fal.run/fal-ai/nano-banana-2/edit',
-        body: {
-          prompt: fallbackPrompt(view, desc),
-          image_urls: [imageUrl],
-          resolution: nb2Res,
-          aspect_ratio: 'auto',
-          output_format: 'jpeg',
-          num_images: 1,
-          limit_generations: true,
-          safety_tolerance: '5'
-        }
-      },
-      {
-        label: 'Nano Banana classic',
-        url: 'https://fal.run/fal-ai/nano-banana/edit',
-        body: {
-          prompt: fallbackPrompt(view, desc),
-          image_urls: [imageUrl],
-          aspect_ratio: view.id === 5 ? '16:9' : '1:1',
-          output_format: 'jpeg',
-          num_images: 1,
-          limit_generations: false,
-          safety_tolerance: '5'
-        }
-      },
-      {
-        label: 'GPT Image 2 medium',
-        url: 'https://fal.run/openai/gpt-image-2/edit',
-        body: {
-          prompt: fallbackPrompt(view, desc),
-          image_urls: [imageUrl],
-          image_size: view.id === 5 ? 'landscape_16_9' : 'square',
-          quality: 'medium',
-          num_images: 1,
-          output_format: 'jpeg'
-        }
-      }
-    ];
-    const request = attempts[Math.min(attempt, attempts.length - 1)];
-    let result;
-    try {
-      result = await callFalEdit(apiKey, request, controller.signal);
-    } catch (fetchErr) {
-      // Check if this was an abort (stop signal)
-      if (fetchErr.name === 'AbortError' || isStopped) {
-        throw new Error(STOP_SIGNAL);
-      }
-      throw fetchErr;
-    } finally {
-      clearInterval(stopCheck);
-    }
-
-    if (isStopped) throw new Error(STOP_SIGNAL);
-
-    const imgUrl = result.images?.[0]?.url || result.output?.images?.[0]?.url || result.data?.images?.[0]?.url;
-    if (!imgUrl) throw new Error('No image URL in response — ' + JSON.stringify(result).slice(0,200));
-
-    // Fetch image and convert to base64
-    const imgRes = await fetch(imgUrl);
-    if (!imgRes.ok) throw new Error(`Image fetch failed: ${imgRes.status}`);
-    const imgBlob = await imgRes.blob();
-    const b64 = (await blobToDataUrl(imgBlob)).split(',')[1];
-    const src = `data:image/jpeg;base64,${b64}`;
-
-    stopViewTimer(view.id);
-    body.innerHTML = `<img src="${src}" alt="${view.label}" onclick="openLightbox('${src}')"/>`;
-    body.className = 'rslot-body';
-    badge.textContent = 'done'; badge.className = 'rbadge rb-ok';
-    updateActiveProgress();
-    // Log view completion to queue log
-    const activeTitle = document.getElementById('active-title')?.textContent || '';
-    const pName = activeTitle.replace(/^(Generating:|✓ Done:|Partial:)\s*/, '').trim() || 'Unknown';
-    addQueueLogEntry('gen', pName, `View ${view.id} — ${view.label} done`);
-    return { b64, label: view.label };
-
-  } catch(e) {
-    stopViewTimer(view.id);
-    if (e.message === STOP_SIGNAL) {
-      body.innerHTML = `<span class="rph">Stopped</span>`;
-      body.className = 'rslot-body';
-      badge.textContent = 'stopped'; badge.className = 'rbadge rb-stop';
-    } else {
-      if (isInvalidRequestError(e) && attempt < attempts.length - 1) {
-        const nextAttempt = attempt + 1;
-        badge.innerHTML = `retrying...<span class="r-attempt">(attempt ${nextAttempt + 1})</span>`;
-        badge.className = 'rbadge rb-gen';
-        body.innerHTML = `<div class="spinner"></div>`;
-        body.className = 'rslot-body generating';
-        startViewTimer(view.id); // restart timer for retry
-        await sleep(1000);
-        return generateView(view, apiKey, desc, imageUrl, nextAttempt);
-      }
-      // Auto-retry with exponential backoff (max 1 retry per view per item)
-      // Use a stable key: view.id (since generateView is called per-item context)
-      const retryKey = `v${view.id}`;
-      if (!retryMap.get(retryKey)) {
-        retryMap.set(retryKey, true);
-        // Clean up old entries
-        if (retryMap.size > 100) retryMap.clear();
-
-        const delay = 3000 + Math.random() * 2000; // 3-5s jitter
-        badge.innerHTML = `retry in ${Math.round(delay/1000)}s...<span class="r-attempt">(retry 1)</span>`;
-        badge.className = 'rbadge rb-gen';
-        body.innerHTML = `<div class="spinner"></div>`;
-        body.className = 'rslot-body generating';
-        startViewTimer(view.id); // restart timer for retry
-        await sleep(delay);
-        return generateView(view, apiKey, desc, imageUrl, attempt);
-      }
-      // Log the failure for study
-      const activeTitle = document.getElementById('active-title')?.textContent || '';
-      const productName = activeTitle.replace(/^(Generating:|✓ Done:|Partial:)\s*/, '').trim() || 'Unknown';
-      logFailure(productName, view.id, view.label, e, attempt);
-      addQueueLogEntry('error', productName, `View ${view.id} — ${view.label} failed: ${formatError(e).slice(0, 80)}`);
-      body.innerHTML = `<span class="rerr">${escHtml(formatError(e))}</span>`;
-      body.className = 'rslot-body';
-      badge.textContent = 'error'; badge.className = 'rbadge rb-err';
-    }
-    return null;
-  }
+  isPolling = false;
 }
 
 // ── MAIN LOOP ──────────────────────────────────────────────────────
 stopBtn.addEventListener('click', () => {
-  isStopped = true;
-  stopBtn.disabled = true;
-  stopBtn.textContent = '⏹ Stopping...';
-  setStatus('Stopping after current image...');
-  addQueueLogEntry('stop', '', 'Stop requested — finishing current batch');
-});
-
-// Keyboard shortcut: Ctrl+Shift+S to skip current item
-document.addEventListener('keydown', (e) => {
-  if (e.ctrlKey && e.shiftKey && (e.key === 'S' || e.key === 's')) {
-    const skipBtn = document.getElementById('skipBtn');
-    if (skipBtn && !skipBtn.disabled) {
-      e.preventDefault();
-      skipBtn.click();
+  // For server-side processing, stopping means we stop polling and mark items as stopped
+  stopPolling();
+  startBtn.disabled = false;
+  stopBtn.style.display = 'none';
+  stopBtn.textContent = '⏹ Stop After Current';
+  setStatus('Processing stopped.');
+  addQueueLogEntry('stop', '', 'Processing stopped by user');
+  // Mark active items as stopped in local state
+  queue.forEach(q => {
+    if (q.status === STATUS.ACTIVE) {
+      q.status = STATUS.STOPPED;
+      const badge = document.getElementById(`qbadge-${q.id}`);
+      const el = document.getElementById(`qi-${q.id}`);
+      if (badge && el) {
+        const sc = STATUS_CLASS[STATUS.STOPPED];
+        const sl = STATUS_LABEL[STATUS.STOPPED];
+        el.className = `q-item ${sc.item}`;
+        badge.className = `q-badge ${sc.badge}`;
+        badge.textContent = sl;
+      }
     }
-  }
+  });
+  checkReady();
+  saveState();
 });
 
 startBtn.addEventListener('click', async () => {
-  const apiKey = getApiKey();
-  if (!apiKey) return;
-
   // Move all pending items to the queue first
   if (pendingItems.length > 0) {
     const itemsToAdd = [...pendingItems];
@@ -3090,148 +2928,55 @@ startBtn.addEventListener('click', async () => {
     renderPendingList();
     renderQueue();
     updateCost();
-    // saveState() now handles image upload to Supabase internally
     await saveState();
     toast(`Added ${itemsToAdd.length} item${itemsToAdd.length > 1 ? 's' : ''} to queue`, 'info');
   }
 
-  isStopped = false;
-  isRunning = true;
+  // Get items that need processing (WAIT status)
+  const itemsToProcess = queue.filter(q => q.status === STATUS.WAIT);
+  if (itemsToProcess.length === 0) {
+    toast('No items to process', 'info');
+    return;
+  }
+
   startBtn.disabled = true;
   stopBtn.style.display = 'block';
   stopBtn.disabled = false;
-  stopBtn.textContent = '⏹ Stop After Current';
+  stopBtn.textContent = '⏹ Stop';
 
-  const pending = queue.filter(q => q.status === STATUS.WAIT);
-  setStatus(`Processing ${pending.length} product${pending.length>1?'s':''}...`);
-  addQueueLogEntry('start', '', `Queue started — ${pending.length} item${pending.length > 1 ? 's' : ''} to process (parallelism: ${parallelism})`);
+  setStatus(`Submitting ${itemsToProcess.length} item(s) to server...`);
+  addQueueLogEntry('start', '', `Queue started — ${itemsToProcess.length} item(s) submitted to server`);
 
-  // Process items in parallel batches based on parallelism setting.
-  // Within each batch, items are processed SEQUENTIALLY for the active card
-  // (to avoid race conditions on shared render slot IDs), but the 5 API calls
-  // per item still run in parallel internally.
-  const items = queue.filter(q => q.status === STATUS.WAIT);
-  for (let i = 0; i < items.length; i += parallelism) {
-    const batch = items.slice(i, i + parallelism);
-    const batchResults = [];
-    for (const item of batch) {
-      const result = await (async () => {
-        if (isStopped) { await updateQueueItem(item.id, STATUS.STOPPED, 'skipped'); return null; }
+  // Create active card for the first item
+  const firstItem = itemsToProcess[0];
+  createActiveCard(firstItem);
+  setActiveProg('Submitted to server — waiting for processing to begin...');
 
-        // Use per-item description only — each image has its own description.
-        // Description is optional — the reference image is the primary source.
-        const desc = item.desc || '';
-
-        // Reset skip signal for this item
-        skipItemId = null;
-
-        await updateQueueItem(item.id, STATUS.ACTIVE, 'uploading...');
-        createActiveCard(item);
-        setActiveProg('Uploading reference image to fal.ai...');
-        addQueueLogEntry('start', item.name, 'Started processing');
-        
-        // Immediately save state to Supabase so the image is uploaded to the cloud.
-        // This ensures the image survives a page reload even during active generation.
-        await saveState();
-
-        // Wire up the Skip button
-        const skipBtn = document.getElementById('skipBtn');
-        if (skipBtn) {
-          skipBtn.onclick = () => {
-            skipItemId = item.id;
-            skipBtn.textContent = '⏭ Skipping...';
-            skipBtn.disabled = true;
-            skipBtn.className = 'btn-skip skipping';
-            setStatus(`Skipping ${item.name}...`);
-          };
-        }
-
-        let imageUrl;
-        try {
-          setStatus(`${item.name}: uploading image...`);
-          imageUrl = await uploadToFal(apiKey, item.dataUrl);
-          setActiveProg('Upload done! Generating 5 views...');
-          addQueueLogEntry('upload', item.name, 'Image uploaded, generating 5 views');
-        } catch(e) {
-          const msg = formatError(e);
-          setStatus(`Upload failed: ${msg}`);
-          setActiveProg('❌ Upload error: ' + msg);
-          await updateQueueItem(item.id, STATUS.ERROR, 'upload failed');
-          logFailure(item.name, 0, 'Upload', msg, 0);
-          addQueueLogEntry('error', item.name, `Upload failed: ${msg}`);
-          const dot = document.getElementById('active-dot');
-          if (dot) { dot.className = 'pulse error'; dot.style.animation = 'none'; dot.style.background = ''; }
-          return null;
-        }
-
-        // Check if user clicked Skip during upload
-        if (skipItemId === item.id) {
-          await updateQueueItem(item.id, STATUS.STOPPED, 'skipped');
-          setStatus(`Skipped ${item.name}`);
-          const dot = document.getElementById('active-dot');
-          if (dot) { dot.className = 'pulse skip'; dot.style.animation = 'none'; dot.style.background = ''; }
-          const title = document.getElementById('active-title');
-          if (title) title.textContent = '⏭ Skipped: ' + item.name;
-          setActiveProg('Skipped by user.');
-          addQueueLogEntry('skip', item.name, 'Skipped by user');
-          return null;
-        }
-
-        setStatus(`${item.name}: generating all 5 views...`);
-        // Safety check: ensure active section still exists before generating views.
-        // If it was somehow removed (e.g., by a concurrent clear operation), recreate it.
-        if (!document.getElementById('active-section')) {
-          createActiveCard(item);
-        }
-        const results = await Promise.all(VIEWS.map(view => generateView(view, apiKey, desc, imageUrl)));
-        const images = {};
-        VIEWS.forEach((v, idx) => { if (results[idx]) images[v.id] = results[idx]; });
-
-        const doneCount = Object.keys(images).length;
-        const finalStatus = isStopped && doneCount < 5 ? STATUS.STOPPED : doneCount === 5 ? STATUS.DONE : STATUS.ERROR;
-        await updateQueueItem(item.id, finalStatus, `${doneCount}/5 done`);
-
-        const dot = document.getElementById('active-dot');
-        const title = document.getElementById('active-title');
-        if (dot) {
-          dot.className = 'pulse';
-          dot.style.animation = 'none';
-          dot.style.background = '';
-          if (finalStatus === STATUS.DONE) dot.classList.add('done');
-          else if (finalStatus === STATUS.ERROR) dot.classList.add('error');
-        }
-        if (title) title.textContent = (finalStatus === STATUS.DONE ? '✓ Done: ' : 'Partial: ') + item.name;
-        setActiveProg(finalStatus === STATUS.DONE ? '✓ All 5 images generated!' : `${doneCount}/5 images generated.`);
-        if (finalStatus === STATUS.DONE) {
-          addQueueLogEntry('done', item.name, 'All 5 views generated ✓');
-        } else if (doneCount > 0) {
-          addQueueLogEntry('error', item.name, `${doneCount}/5 views generated — some failed`);
-        } else {
-          addQueueLogEntry('error', item.name, 'All views failed');
-        }
-
-        if (doneCount > 0) createBatchCard(item, images);
-        updateCost();
-        await saveState();
-        return { item, images };
-      })();
-      batchResults.push(result);
-      if (isStopped) break;
+  // Submit to server
+  const itemIds = itemsToProcess.map(i => i.id);
+  try {
+    await submitToServer(itemIds);
+    // Mark items as active locally
+    for (const item of itemsToProcess) {
+      item.status = STATUS.ACTIVE;
+      const badge = document.getElementById(`qbadge-${item.id}`);
+      const el = document.getElementById(`qi-${item.id}`);
+      if (badge && el) {
+        const sc = STATUS_CLASS[STATUS.ACTIVE];
+        const sl = STATUS_LABEL[STATUS.ACTIVE];
+        el.className = `q-item ${sc.item}`;
+        badge.className = `q-badge ${sc.badge}`;
+        badge.textContent = sl;
+      }
     }
-    if (isStopped) break;
+    setStatus(`Processing ${itemsToProcess.length} item(s) on server...`);
+    // Start polling for status updates
+    startPolling();
+  } catch (e) {
+    startBtn.disabled = false;
+    stopBtn.style.display = 'none';
+    checkReady();
   }
-
-  isRunning = false;
-  isStopped = false;
-  stopBtn.style.display = 'none';
-  stopBtn.textContent = '⏹ Stop After Current';
-  startBtn.disabled = false;
-  checkReady();
-  const done = queue.filter(q => q.status === STATUS.DONE).length;
-  const total = queue.filter(q => q.status !== STATUS.WAIT).length;
-  setStatus(total > 0 ? `Complete — ${done}/${total} fully generated.` : 'Ready.');
-  addQueueLogEntry('info', '', `Queue finished — ${done}/${total} fully generated`);
-  await saveState();
 });
 
 // ── BEFOREUNLOAD HANDLER ────────────────────────────────────────────
@@ -3252,7 +2997,7 @@ window.addEventListener('beforeunload', function(e) {
       queue: queue.map(q => ({
         id: q.id, name: q.name,
         dataUrl: '',
-        hasLocalImage: (q.status === STATUS.WAIT || q.status === STATUS.ACTIVE) && !!q.dataUrl && q.dataUrl.startsWith('data:'),
+        hasLocalImage: q.status === STATUS.WAIT && !!q.dataUrl && q.dataUrl.startsWith('data:'),
         status: q.status,
         supabaseUrl: q.supabaseUrl || '',
         desc: q.desc || ''

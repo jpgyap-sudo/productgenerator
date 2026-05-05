@@ -11,6 +11,7 @@ CREATE TABLE IF NOT EXISTS public.product_queue (
   image_url     TEXT DEFAULT '',
   status        TEXT DEFAULT 'wait',
   description   TEXT DEFAULT '',
+  sub_text      TEXT DEFAULT '',
   updated_at    TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -44,7 +45,37 @@ CREATE POLICY "Allow all on app_config"
   USING (true)
   WITH CHECK (true);
 
--- ── 3. STORAGE BUCKET ──────────────────────────────────────────────
+-- ── 3. RENDER RESULTS TABLE ────────────────────────────────────────
+-- Stores per-view generation results for each queue item.
+-- Used by the server-side processing architecture for polling-based status updates.
+CREATE TABLE IF NOT EXISTS public.render_results (
+  id              BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  queue_item_id   BIGINT NOT NULL REFERENCES public.product_queue(id) ON DELETE CASCADE,
+  view_id         INTEGER NOT NULL CHECK (view_id BETWEEN 1 AND 5),
+  status          TEXT DEFAULT 'waiting' CHECK (status IN ('waiting', 'generating', 'done', 'error')),
+  image_url       TEXT DEFAULT '',
+  error_message   TEXT DEFAULT '',
+  started_at      TIMESTAMPTZ,
+  completed_at    TIMESTAMPTZ,
+  created_at      TIMESTAMPTZ DEFAULT NOW(),
+  updated_at      TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE (queue_item_id, view_id)
+);
+
+-- Index for fast lookups by queue_item_id
+CREATE INDEX IF NOT EXISTS idx_render_results_queue_item_id ON public.render_results(queue_item_id);
+
+ALTER TABLE public.render_results ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Allow all on render_results" ON public.render_results;
+
+CREATE POLICY "Allow all on render_results"
+  ON public.render_results
+  FOR ALL
+  USING (true)
+  WITH CHECK (true);
+
+-- ── 4. STORAGE BUCKET ──────────────────────────────────────────────
 -- Creates a public bucket for product images.
 -- You can also create this manually: Storage → Create bucket → "product_images" → Public
 INSERT INTO storage.buckets (id, name, public)
@@ -72,3 +103,6 @@ CREATE POLICY "Allow public access to product_images"
 
 -- Check storage bucket:
 -- SELECT * FROM storage.buckets WHERE id = 'product_images';
+
+-- Check render_results table:
+-- SELECT column_name, data_type FROM information_schema.columns WHERE table_name = 'render_results';
