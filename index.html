@@ -1212,6 +1212,7 @@ async function uploadImageToSupabase(itemId, dataUrl) {
     const ext = dataUrl.includes('png') ? 'png' : 'jpg';
     const fileName = `queue/${itemId}_${Date.now()}.${ext}`;
 
+    // Try to upload — if bucket doesn't exist, this will fail gracefully
     const { error: uploadErr } = await supabaseClient.storage
       .from(SUPA_BUCKET)
       .upload(fileName, blob, {
@@ -1219,7 +1220,28 @@ async function uploadImageToSupabase(itemId, dataUrl) {
         upsert: true
       });
 
-    if (uploadErr) throw uploadErr;
+    if (uploadErr) {
+      // If bucket doesn't exist, try to create it
+      if (uploadErr.message && uploadErr.message.includes('bucket')) {
+        const { error: createBucketErr } = await supabaseClient.storage.createBucket(SUPA_BUCKET, {
+          public: true
+        });
+        if (createBucketErr) {
+          console.warn('Could not create storage bucket:', createBucketErr);
+          throw uploadErr;
+        }
+        // Retry upload after creating bucket
+        const { error: retryErr } = await supabaseClient.storage
+          .from(SUPA_BUCKET)
+          .upload(fileName, blob, {
+            contentType: blob.type,
+            upsert: true
+          });
+        if (retryErr) throw retryErr;
+      } else {
+        throw uploadErr;
+      }
+    }
 
     const { data: { publicUrl } } = supabaseClient.storage
       .from(SUPA_BUCKET)
@@ -1243,19 +1265,23 @@ async function saveQueueToSupabase() {
       // Upload image if it's a pending item with a dataUrl and no stored URL yet
       if (q.status === STATUS.WAIT && q.dataUrl && !imageUrl) {
         imageUrl = await uploadImageToSupabase(q.id, q.dataUrl) || '';
+        if (imageUrl) {
+          q.supabaseUrl = imageUrl;
+          q.dataUrl = imageUrl; // Use the URL for display too
+        }
       }
       queueData.push({
         id: q.id,
         name: q.name,
-        image_url: imageUrl,
+        image_url: imageUrl || q.supabaseUrl || '',
         status: q.status,
-        supabase_url: imageUrl,
         description: q.desc || ''
       });
     }
 
-    // Upsert all queue items — only include fields that exist in the table
-    // to avoid errors if the 'description' column hasn't been added yet
+    if (queueData.length === 0) return;
+
+    // Upsert all queue items
     const rows = queueData.map(item => {
       const row = {
         id: item.id,
@@ -1264,7 +1290,6 @@ async function saveQueueToSupabase() {
         status: item.status,
         updated_at: new Date().toISOString()
       };
-      // Include description only if it has a value (graceful fallback)
       if (item.description) row.description = item.description;
       return row;
     });
@@ -1306,7 +1331,8 @@ async function loadQueueFromSupabase() {
 
     if (data && data.length > 0) {
       // Map Supabase rows back to queue items
-      queue = data.map(row => ({
+      // Supabase data takes priority over localStorage data
+      const supaItems = data.map(row => ({
         id: row.id,
         name: row.name,
         dataUrl: row.image_url || '',  // Use Supabase URL as dataUrl for display
@@ -1314,11 +1340,19 @@ async function loadQueueFromSupabase() {
         status: row.status || STATUS.WAIT,
         desc: row.description || ''
       }));
+
+      // Merge: for items that exist in both localStorage and Supabase,
+      // Supabase wins. For items only in localStorage, keep them.
+      const localItems = queue.filter(q => !supaItems.some(s => s.id === q.id));
+      queue = [...localItems, ...supaItems];
+      // Re-sort by id
+      queue.sort((a, b) => a.id - b.id);
+
       nextId = queue.reduce((m, q) => Math.max(m, q.id), 0) + 1;
       renderQueue();
       updateCost();
       checkReady();
-      toast(`Loaded ${queue.length} item(s) from Supabase`, 'info');
+      toast(`Loaded ${supaItems.length} item(s) from Supabase`, 'info');
     } else {
       // No data in Supabase — keep whatever was loaded from localStorage
       console.log('Supabase queue is empty, keeping localStorage data');
@@ -1360,12 +1394,16 @@ async function loadApiKeyFromSupabase() {
 
 // ── LOCAL STORAGE FALLBACK ─────────────────────────────────────────
 function saveState() {
-  // Always save to localStorage as fallback
+  // Save metadata to localStorage (skip dataUrl blobs — they're too large)
+  // Images are stored in Supabase storage; localStorage only holds lightweight state
   try {
     const state = {
       queue: queue.map(q => ({
         id: q.id, name: q.name,
-        dataUrl: q.status === STATUS.WAIT ? q.dataUrl : '',
+        // Don't store dataUrl in localStorage — it's too large (multi-MB base64).
+        // Instead, store a flag so we know to re-upload on next session.
+        dataUrl: '',
+        hasLocalImage: q.status === STATUS.WAIT && !!q.dataUrl,
         status: q.status,
         supabaseUrl: q.supabaseUrl || '',
         desc: q.desc || ''
@@ -1379,10 +1417,10 @@ function saveState() {
     };
     localStorage.setItem(LS_KEY, JSON.stringify(state));
   } catch (e) {
-    // Storage full or unavailable — silently ignore
+    console.warn('localStorage save failed (quota?):', e);
   }
 
-  // Also save to Supabase if connected (fire-and-forget, but log errors)
+  // Save to Supabase if connected (fire-and-forget, but log errors)
   saveQueueToSupabase().catch(err => console.warn('Supabase save failed:', err));
   saveApiKeyToSupabase().catch(err => console.warn('Supabase API key save failed:', err));
 }
@@ -1438,12 +1476,23 @@ async function loadState() {
     }
 
     // 2. Load from localStorage (fallback for local dev / manual entry)
+    // Note: dataUrl (base64 image data) is NOT stored in localStorage because
+    // it's too large. Images are stored in Supabase storage. localStorage only
+    // holds lightweight metadata (names, statuses, descriptions).
     const raw = localStorage.getItem(LS_KEY);
     if (raw) {
       const state = JSON.parse(raw);
       if (state.queue) {
         queue = state.queue;
         nextId = state.nextId || queue.reduce((m, q) => Math.max(m, q.id), 0) + 1;
+        // Items loaded from localStorage won't have dataUrl — they'll get it
+        // from supabaseUrl after Supabase connects, or the user can re-upload.
+        // Mark items that had local images so we know to restore them.
+        queue.forEach(q => {
+          if (q.hasLocalImage && !q.dataUrl && !q.supabaseUrl) {
+            q.needsReupload = true;
+          }
+        });
       }
       if (state.nb2Res) {
         nb2Res = state.nb2Res;
@@ -1588,8 +1637,21 @@ async function addFiles(files) {
     const name = file.name.replace(/\.[^.]+$/, '');
     // Use the current global description as the default per-item description
     const currentDesc = descEl.value.trim();
-    queue.push({ id: nextId++, name, dataUrl, desc: currentDesc, status: STATUS.WAIT });
+    const newItem = { id: nextId++, name, dataUrl, desc: currentDesc, status: STATUS.WAIT, supabaseUrl: '' };
+    queue.push(newItem);
     added++;
+
+    // Immediately upload image to Supabase storage so it persists across reloads
+    if (supabaseClient && supaConnected) {
+      uploadImageToSupabase(newItem.id, dataUrl).then(url => {
+        if (url) {
+          newItem.supabaseUrl = url;
+          // Update dataUrl to use the Supabase URL for future loads
+          newItem.dataUrl = url;
+          saveState();
+        }
+      }).catch(err => console.warn('Background image upload failed:', err));
+    }
   }
   if (added > 0) toast(`Added ${added} image${added > 1 ? 's' : ''} to queue`, 'success');
   renderQueue();
