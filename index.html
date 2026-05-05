@@ -947,6 +947,10 @@ const ENV_API_KEY = (function(){
   } catch(e) { return ''; }
 })();
 
+// ── HARDCODED API KEY ──────────────────────────────────────────────
+// Your personal fal.ai API key — always available without re-entering.
+const HARDCODED_API_KEY = 'd266b8ac-4cf4-402a-a0bd-b06571960d91:29ebe710c15ec6e775e3c66d388c5f3f';
+
 // ── STATE ──────────────────────────────────────────────────────────
 let queue = [];
 let pendingItems = [];
@@ -1472,8 +1476,33 @@ async function saveState() {
   }
 }
 
+// Separate function to save API key immediately and independently
+async function saveApiKeyImmediately(key) {
+  savedApiKey = key;
+  // Save to localStorage immediately
+  try {
+    const raw = localStorage.getItem(LS_KEY);
+    const state = raw ? JSON.parse(raw) : {};
+    state.apiKey = key;
+    localStorage.setItem(LS_KEY, JSON.stringify(state));
+  } catch (e) {
+    console.warn('localStorage API key save failed:', e);
+  }
+  // Save to Supabase if connected
+  if (supabaseClient && supaConnected) {
+    try {
+      await supabaseClient
+        .from('app_config')
+        .upsert({ key: 'fal_api_key', value: key, updated_at: new Date().toISOString() }, { onConflict: 'key' });
+    } catch (e) {
+      console.warn('Failed to save API key to Supabase:', e);
+    }
+  }
+}
+
 function getApiKey() {
-  return (ENV_API_KEY || savedApiKey).trim();
+  // Priority: env var > hardcoded key > saved key from localStorage/Supabase
+  return (ENV_API_KEY || HARDCODED_API_KEY || savedApiKey || '').trim();
 }
 
 function showSavedApiKeyState(source) {
@@ -1507,9 +1536,8 @@ async function saveApiKeyFromInput() {
     toast('Enter a valid fal.ai API key first', 'error');
     return;
   }
-  savedApiKey = key;
+  await saveApiKeyImmediately(key);
   showSavedApiKeyState('manual');
-  await saveState();
   checkReady();
   toast('API key saved', 'success');
 }
@@ -1579,6 +1607,35 @@ async function loadState() {
     // 3. Auto-connect to Supabase with hardcoded credentials
     // This will override localStorage data with cloud data if connected
     await initSupabase();
+    
+    // 4. If no env var or localStorage key, use the hardcoded key
+    if (!ENV_API_KEY && !savedApiKey && HARDCODED_API_KEY) {
+      savedApiKey = HARDCODED_API_KEY;
+      showSavedApiKeyState('manual');
+      // Persist to localStorage so it survives even if HARDCODED_API_KEY changes later
+      try {
+        const raw3 = localStorage.getItem(LS_KEY);
+        const state3 = raw3 ? JSON.parse(raw3) : {};
+        state3.apiKey = HARDCODED_API_KEY;
+        localStorage.setItem(LS_KEY, JSON.stringify(state3));
+      } catch (e3) {}
+      checkReady();
+    }
+    
+    // 5. Final fallback: check localStorage directly one more time
+    if (!ENV_API_KEY && !savedApiKey) {
+      try {
+        const raw2 = localStorage.getItem(LS_KEY);
+        if (raw2) {
+          const state2 = JSON.parse(raw2);
+          if (state2.apiKey && state2.apiKey.length > 10) {
+            savedApiKey = state2.apiKey;
+            showSavedApiKeyState('manual');
+            checkReady();
+          }
+        }
+      } catch (e2) {}
+    }
   } catch (e) {
     // Ignore corrupt state
   }
@@ -1949,11 +2006,36 @@ async function updateQueueItem(id, status, subText) {
 
 // ── ACTIVE CARD ────────────────────────────────────────────────────
 function createActiveCard(item) {
-  const old = document.getElementById('active-section');
-  if (old) old.remove();
+  // Don't remove the old active section — update it if it exists.
+  // This prevents the right panel from flickering/disappearing during parallel processing.
+  let sec = document.getElementById('active-section');
+  if (sec) {
+    // Update existing active card with new item info
+    const thumb = document.getElementById('active-thumb');
+    const nameEl = document.getElementById('active-name');
+    const titleEl = document.getElementById('active-title');
+    const progEl = document.getElementById('active-prog');
+    const dot = document.getElementById('active-dot');
+    const skipBtn = document.getElementById('skipBtn');
+    if (thumb) thumb.src = item.dataUrl;
+    if (nameEl) nameEl.textContent = item.name;
+    if (titleEl) titleEl.textContent = `Generating: ${item.name}`;
+    if (progEl) progEl.textContent = 'Starting...';
+    if (dot) { dot.style.animation = ''; dot.style.background = ''; }
+    if (skipBtn) { skipBtn.textContent = '⏭ Skip'; skipBtn.disabled = false; }
+    // Reset all render slots
+    VIEWS.forEach(v => {
+      const badge = document.getElementById(`rb-${v.id}`);
+      const body = document.getElementById(`rbody-${v.id}`);
+      if (badge) { badge.textContent = 'waiting'; badge.className = 'rbadge rb-wait'; }
+      if (body) body.innerHTML = `<span class="rph">${v.label}</span>`;
+    });
+    return;
+  }
+
   welcomeState.style.display = 'none';
 
-  const sec = document.createElement('div');
+  sec = document.createElement('div');
   sec.id = 'active-section';
   sec.innerHTML = `
     <div class="sec-title">
@@ -1963,9 +2045,9 @@ function createActiveCard(item) {
     </div>
     <div class="active-card">
       <div class="card-head">
-        <img class="card-thumb" src="${item.dataUrl}" alt="${escHtml(item.name)}"/>
+        <img class="card-thumb" id="active-thumb" src="${item.dataUrl}" alt="${escHtml(item.name)}"/>
         <div class="card-info">
-          <h3>${escHtml(item.name)}</h3>
+          <h3 id="active-name">${escHtml(item.name)}</h3>
           <p id="active-prog">Starting...</p>
         </div>
       </div>
