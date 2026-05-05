@@ -1635,7 +1635,7 @@ async function saveApiKeyToSupabase() {
       .from('app_config')
       .upsert({ key: 'fal_api_key', value: savedApiKey, updated_at: new Date().toISOString() }, { onConflict: 'key' });
   } catch (e) {
-    console.warn('Failed to save API key to Supabase:', e);
+    // Silently ignore — the hardcoded key and localStorage fallback handle persistence
   }
 }
 
@@ -1653,7 +1653,7 @@ async function loadApiKeyFromSupabase() {
       checkReady();
     }
   } catch (e) {
-    console.warn('Failed to load API key from Supabase:', e);
+    // Table may not exist yet — hardcoded key + localStorage handle persistence
   }
 }
 
@@ -1719,14 +1719,14 @@ async function saveApiKeyImmediately(key) {
   } catch (e) {
     console.warn('localStorage API key save failed:', e);
   }
-  // Save to Supabase if connected
+  // Save to Supabase if connected (silently ignore if table doesn't exist yet)
   if (supabaseClient && supaConnected) {
     try {
       await supabaseClient
         .from('app_config')
         .upsert({ key: 'fal_api_key', value: key, updated_at: new Date().toISOString() }, { onConflict: 'key' });
     } catch (e) {
-      console.warn('Failed to save API key to Supabase:', e);
+      // Table may not exist yet — hardcoded key + localStorage handle persistence
     }
   }
 }
