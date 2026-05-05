@@ -663,6 +663,53 @@ textarea:focus { outline: none; border-color: var(--text-secondary); }
   font-size: 9px;
   color: var(--text-muted);
 }
+/* ── QUEUE LOG ENTRY TYPES ──────────────────────────────────────── */
+.ql-entry {
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-light);
+  background: var(--surface-2);
+  margin-bottom: 4px;
+  font-size: 11px;
+  line-height: 1.5;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+.ql-entry:last-child { margin-bottom: 0; }
+.ql-icon {
+  flex-shrink: 0;
+  font-size: 13px;
+  width: 20px;
+  text-align: center;
+  margin-top: 1px;
+}
+.ql-body { flex: 1; min-width: 0; }
+.ql-time {
+  font-size: 9px;
+  color: var(--text-muted);
+  font-family: monospace;
+}
+.ql-msg {
+  color: var(--text);
+  word-break: break-word;
+}
+.ql-msg .ql-product {
+  font-weight: 600;
+}
+.ql-msg .ql-detail {
+  color: var(--text-secondary);
+  font-size: 10px;
+}
+.ql-entry.ql-start { border-left: 3px solid var(--accent); }
+.ql-entry.ql-upload { border-left: 3px solid #6c757d; }
+.ql-entry.ql-gen { border-left: 3px solid var(--warning-text); }
+.ql-entry.ql-done { border-left: 3px solid var(--success); }
+.ql-entry.ql-error { border-left: 3px solid var(--error); }
+.ql-entry.ql-skip { border-left: 3px solid var(--text-dim); }
+.ql-entry.ql-stop { border-left: 3px solid var(--text-muted); }
+.ql-entry.ql-info { border-left: 3px solid var(--accent); }
+
 .btn-log-toggle {
   width: 100%;
   padding: 8px 10px;
@@ -801,7 +848,13 @@ textarea:focus { outline: none; border-color: var(--text-secondary); }
         <div class="q-empty">No items yet.<br/>Add product images above.</div>
       </div>
 
-      <!-- ── LOGS TAB ──────────────────────────────────────────── -->
+      <!-- ── QUEUE LOG TOGGLE ──────────────────────────────────── -->
+      <div class="block" style="border-bottom:none;">
+        <span class="lbl">Queue Log</span>
+        <button class="btn-log-toggle" id="queueLogToggle">📜 View Log (<span id="queueLogBadge">0</span>)</button>
+      </div>
+
+      <!-- ── FAILURE LOGS TAB ──────────────────────────────────── -->
       <div class="block" style="border-bottom:none;">
         <span class="lbl">Failure Logs</span>
         <button class="btn-log-toggle" id="logToggle">📋 View Log (<span id="logBadge">0</span>)</button>
@@ -826,7 +879,18 @@ textarea:focus { outline: none; border-color: var(--text-secondary); }
       <p>Add product images on the left. Each generates 5 separate views — front, side, isometric, back, and luxury interior. Finished batches appear here to download.</p>
     </div>
 
-    <!-- ── LOG PANEL ──────────────────────────────────────────── -->
+    <!-- ── QUEUE LOG PANEL ────────────────────────────────────── -->
+    <div class="log-panel" id="queueLogPanel" style="display:none;">
+      <div class="sec-title">
+        <span>📜 Queue Processing Log</span>
+        <span style="font-size:11px;font-weight:400;color:var(--text-secondary);margin-left:auto;" id="queueLogCount">0 entries</span>
+      </div>
+      <div class="log-list" id="queueLogList">
+        <div class="log-empty">No queue activity yet.<br/>Start the queue to see processing history here.</div>
+      </div>
+    </div>
+
+    <!-- ── FAILURE LOG PANEL ──────────────────────────────────── -->
     <div class="log-panel" id="logPanel" style="display:none;">
       <div class="sec-title">
         <span>📋 Failure Log</span>
@@ -924,7 +988,9 @@ const NB2_NOTES  = {
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
 const LS_KEY = 'product_studio_state';
 const LOG_KEY = 'product_studio_failure_log';
+const QUEUE_LOG_KEY = 'product_studio_queue_log';
 const MAX_LOG_ENTRIES = 500;
+const MAX_QUEUE_LOG_ENTRIES = 200;
 const STOP_SIGNAL = '__STOPPED__';
 
 // ── SUPABASE CONFIG ────────────────────────────────────────────────
@@ -965,6 +1031,8 @@ let savedApiKey = '';
 let skipItemId = null;
 // Track retries per view without mutating VIEWS
 const retryMap = new Map();
+// Queue processing log — persistent history of what happened during queue runs
+let queueLog = [];
 
 // ── SUPABASE STATE ──────────────────────────────────────────────────
 let supabaseClient = null;
@@ -998,6 +1066,10 @@ const logPanel   = document.getElementById('logPanel');
 const logList    = document.getElementById('logList');
 const logBadge   = document.getElementById('logBadge');
 const logCount   = document.getElementById('logCount');
+const queueLogPanel = document.getElementById('queueLogPanel');
+const queueLogList  = document.getElementById('queueLogList');
+const queueLogToggle = document.getElementById('queueLogToggle');
+const queueLogBadge  = document.getElementById('queueLogBadge');
 
 // ── PENDING ELEMENTS ────────────────────────────────────────────────
 const pendingArea = document.getElementById('pendingArea');
@@ -1174,6 +1246,95 @@ function updateLogPanelIfVisible() {
     renderLogPanel();
   }
 }
+
+// ── QUEUE PROCESSING LOG ────────────────────────────────────────────
+function getQueueLog() {
+  try {
+    const raw = localStorage.getItem(QUEUE_LOG_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch(e) { return []; }
+}
+
+function saveQueueLog(log) {
+  try {
+    localStorage.setItem(QUEUE_LOG_KEY, JSON.stringify(log));
+  } catch(e) {
+    try {
+      const trimmed = log.slice(-50);
+      localStorage.setItem(QUEUE_LOG_KEY, JSON.stringify(trimmed));
+    } catch(e2) {}
+  }
+}
+
+function addQueueLogEntry(type, productName, detail) {
+  const now = new Date();
+  const time = now.toLocaleString('en-SG', {
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+    hour12: false
+  });
+  queueLog.push({ type, productName, detail, time, ts: now.getTime() });
+  // Keep only the latest entries
+  if (queueLog.length > MAX_QUEUE_LOG_ENTRIES) {
+    queueLog.splice(0, queueLog.length - MAX_QUEUE_LOG_ENTRIES);
+  }
+  saveQueueLog(queueLog);
+  updateQueueLogBadge();
+  renderQueueLogIfVisible();
+}
+
+function updateQueueLogBadge() {
+  queueLogBadge.textContent = queueLog.length;
+}
+
+function renderQueueLog() {
+  queueLogList.innerHTML = '';
+  if (!queueLog.length) {
+    queueLogList.innerHTML = '<div class="log-empty">No queue activity yet.<br/>Start the queue to see processing history here.</div>';
+    return;
+  }
+  // Show newest first
+  const entries = queueLog.slice().reverse();
+  const iconMap = {
+    start:  '▶️',
+    upload: '📤',
+    gen:    '🎨',
+    done:   '✅',
+    error:  '❌',
+    skip:   '⏭️',
+    stop:   '⏹️',
+    info:   'ℹ️'
+  };
+  entries.forEach(entry => {
+    const div = document.createElement('div');
+    div.className = `ql-entry ql-${entry.type}`;
+    div.innerHTML = `
+      <span class="ql-icon">${iconMap[entry.type] || 'ℹ️'}</span>
+      <div class="ql-body">
+        <div class="ql-time">${escHtml(entry.time)}</div>
+        <div class="ql-msg">
+          ${entry.productName ? `<span class="ql-product">${escHtml(entry.productName)}</span>` : ''}
+          ${entry.detail ? `<span class="ql-detail"> — ${escHtml(entry.detail)}</span>` : ''}
+        </div>
+      </div>`;
+    queueLogList.appendChild(div);
+  });
+  // Auto-scroll to top (newest)
+  queueLogList.scrollTop = 0;
+}
+
+function renderQueueLogIfVisible() {
+  if (queueLogPanel.style.display !== 'none') {
+    renderQueueLog();
+  }
+}
+
+queueLogToggle.addEventListener('click', () => {
+  const isHidden = queueLogPanel.style.display === 'none';
+  queueLogPanel.style.display = isHidden ? 'block' : 'none';
+  welcomeState.style.display = isHidden ? 'none' : 'flex';
+  queueLogToggle.textContent = isHidden ? '📜 Hide Log' : '📜 View Log (' + queueLogBadge.textContent + ')';
+  if (isHidden) renderQueueLog();
+});
 
 logToggle.addEventListener('click', () => {
   const isHidden = logPanel.style.display === 'none';
@@ -2181,6 +2342,7 @@ async function retryFailedViews(item, images) {
 
   toast(`Retrying ${failedViews.length} failed view(s)...`, 'info');
   setStatus(`${item.name}: retrying ${failedViews.length} view(s)...`);
+  addQueueLogEntry('info', item.name, `Retrying ${failedViews.length} failed view(s)`);
 
   // Upload reference image if needed
   let imageUrl;
@@ -2190,6 +2352,7 @@ async function retryFailedViews(item, images) {
     const msg = formatError(e);
     toast(`Upload failed: ${msg}`, 'error');
     logFailure(item.name, 0, 'Upload (retry)', msg, 0);
+    addQueueLogEntry('error', item.name, `Retry upload failed: ${msg}`);
     return;
   }
 
@@ -2212,6 +2375,7 @@ async function retryFailedViews(item, images) {
 
   const doneCount = Object.keys(images).length;
   await updateQueueItem(item.id, doneCount === 5 ? STATUS.DONE : STATUS.ERROR, `${doneCount}/5 done`);
+  addQueueLogEntry(doneCount === 5 ? 'done' : 'error', item.name, `Retry complete: ${doneCount}/5 views`);
   toast(`Retry complete: ${doneCount}/5 views`, doneCount === 5 ? 'success' : 'error');
 }
 
@@ -2254,7 +2418,11 @@ async function uploadToFal(apiKey, dataUrl) {
 async function generateView(view, apiKey, desc, imageUrl, attempt = 0) {
   const badge = document.getElementById(`rb-${view.id}`);
   const body  = document.getElementById(`rbody-${view.id}`);
-  if (!badge || !body) return null;
+  if (!badge || !body) {
+    // Active card render slots missing — log to queue log for debugging
+    addQueueLogEntry('error', 'System', `Render slot missing for view ${view.id} — active card may have been removed`);
+    return null;
+  }
 
   badge.textContent = 'generating...'; badge.className = 'rbadge rb-gen';
   body.innerHTML = `<div class="spinner"></div>`;
@@ -2348,6 +2516,10 @@ async function generateView(view, apiKey, desc, imageUrl, attempt = 0) {
 
     body.innerHTML = `<img src="${src}" alt="${view.label}" onclick="openLightbox('${src}')"/>`;
     badge.textContent = 'done'; badge.className = 'rbadge rb-ok';
+    // Log view completion to queue log
+    const activeTitle = document.getElementById('active-title')?.textContent || '';
+    const pName = activeTitle.replace(/^(Generating:|✓ Done:|Partial:)\s*/, '').trim() || 'Unknown';
+    addQueueLogEntry('gen', pName, `View ${view.id} — ${view.label} done`);
     return { b64, label: view.label };
 
   } catch(e) {
@@ -2381,6 +2553,7 @@ async function generateView(view, apiKey, desc, imageUrl, attempt = 0) {
       const activeTitle = document.getElementById('active-title')?.textContent || '';
       const productName = activeTitle.replace(/^(Generating:|✓ Done:|Partial:)\s*/, '').trim() || 'Unknown';
       logFailure(productName, view.id, view.label, e, attempt);
+      addQueueLogEntry('error', productName, `View ${view.id} — ${view.label} failed: ${formatError(e).slice(0, 80)}`);
       body.innerHTML = `<span class="rerr">${escHtml(formatError(e))}</span>`;
       badge.textContent = 'error'; badge.className = 'rbadge rb-err';
     }
@@ -2394,6 +2567,7 @@ stopBtn.addEventListener('click', () => {
   stopBtn.disabled = true;
   stopBtn.textContent = '⏹ Stopping...';
   setStatus('Stopping after current image...');
+  addQueueLogEntry('stop', '', 'Stop requested — finishing current batch');
 });
 
 startBtn.addEventListener('click', async () => {
@@ -2425,6 +2599,7 @@ startBtn.addEventListener('click', async () => {
 
   const pending = queue.filter(q => q.status === STATUS.WAIT);
   setStatus(`Processing ${pending.length} product${pending.length>1?'s':''}...`);
+  addQueueLogEntry('start', '', `Queue started — ${pending.length} item${pending.length > 1 ? 's' : ''} to process (parallelism: ${parallelism})`);
 
   // Process items in parallel batches based on parallelism setting
   const items = queue.filter(q => q.status === STATUS.WAIT);
@@ -2443,6 +2618,7 @@ startBtn.addEventListener('click', async () => {
       await updateQueueItem(item.id, STATUS.ACTIVE, 'uploading...');
       createActiveCard(item);
       setActiveProg('Uploading reference image to fal.ai...');
+      addQueueLogEntry('start', item.name, 'Started processing');
 
       // Wire up the Skip button
       const skipBtn = document.getElementById('skipBtn');
@@ -2460,12 +2636,14 @@ startBtn.addEventListener('click', async () => {
         setStatus(`${item.name}: uploading image...`);
         imageUrl = await uploadToFal(apiKey, item.dataUrl);
         setActiveProg('Upload done! Generating 5 views...');
+        addQueueLogEntry('upload', item.name, 'Image uploaded, generating 5 views');
       } catch(e) {
         const msg = formatError(e);
         setStatus(`Upload failed: ${msg}`);
         setActiveProg('❌ Upload error: ' + msg);
         await updateQueueItem(item.id, STATUS.ERROR, 'upload failed');
         logFailure(item.name, 0, 'Upload', msg, 0);
+        addQueueLogEntry('error', item.name, `Upload failed: ${msg}`);
         const dot = document.getElementById('active-dot');
         if (dot) { dot.style.animation = 'none'; dot.style.background = 'var(--error)'; }
         return null;
@@ -2480,6 +2658,7 @@ startBtn.addEventListener('click', async () => {
         const title = document.getElementById('active-title');
         if (title) title.textContent = '⏭ Skipped: ' + item.name;
         setActiveProg('Skipped by user.');
+        addQueueLogEntry('skip', item.name, 'Skipped by user');
         return null;
       }
 
@@ -2497,6 +2676,13 @@ startBtn.addEventListener('click', async () => {
       if (dot) { dot.style.animation = 'none'; dot.style.background = finalStatus === STATUS.DONE ? 'var(--success)' : 'var(--error)'; }
       if (title) title.textContent = (finalStatus === STATUS.DONE ? '✓ Done: ' : 'Partial: ') + item.name;
       setActiveProg(finalStatus === STATUS.DONE ? '✓ All 5 images generated!' : `${doneCount}/5 images generated.`);
+      if (finalStatus === STATUS.DONE) {
+        addQueueLogEntry('done', item.name, 'All 5 views generated ✓');
+      } else if (doneCount > 0) {
+        addQueueLogEntry('error', item.name, `${doneCount}/5 views generated — some failed`);
+      } else {
+        addQueueLogEntry('error', item.name, 'All views failed');
+      }
 
       if (doneCount > 0) createBatchCard(item, images);
       updateCost();
@@ -2516,6 +2702,7 @@ startBtn.addEventListener('click', async () => {
   const done = queue.filter(q => q.status === STATUS.DONE).length;
   const total = queue.filter(q => q.status !== STATUS.WAIT).length;
   setStatus(total > 0 ? `Complete — ${done}/${total} fully generated.` : 'Ready.');
+  addQueueLogEntry('info', '', `Queue finished — ${done}/${total} fully generated`);
   await saveState();
 });
 
@@ -2628,6 +2815,9 @@ window.addEventListener('beforeunload', function(e) {
 // ── INIT ───────────────────────────────────────────────────────────
 (async function init() {
   await loadState();
+  // Load queue processing log from localStorage
+  queueLog = getQueueLog();
+  updateQueueLogBadge();
   renderQueue();
   renderPendingList();
   updateCost();
