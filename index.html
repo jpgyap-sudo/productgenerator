@@ -680,12 +680,18 @@ textarea:focus { outline: none; border-color: var(--text-secondary); }
 // ══════════════════════════════════════════════════════════════════
 
 const VIEWS = [
-  { id:1, label:'Front view',     prompt: d=>`Product photo of a product: ${d}. Keep the EXACT same product — same color, texture, material, shape. Change ONLY the background to pure solid white (#FFFFFF). Product front-facing, perfectly centered, soft even studio lighting. Commercial product photography. Do not alter the product in any way.` },
-  { id:2, label:'Side view',      prompt: d=>`Product photo of a product: ${d}. Keep the EXACT same product. Rotate to pure side profile (90-degree, left side to camera). Pure white background (#FFFFFF), centered, soft studio lighting. Commercial catalog photography.` },
-  { id:3, label:'Isometric view', prompt: d=>`Product photo of a product: ${d}. Keep the EXACT same product. Show from 45-degree isometric angle (front-right corner, elevated). Pure white background (#FFFFFF), centered, diffused lighting. High-end catalog. Preserve all details exactly.` },
-  { id:4, label:'Back view',      prompt: d=>`Product photo of a product: ${d}. Keep the EXACT same product. Show direct rear/back view. Pure white background (#FFFFFF), centered, even lighting. Show back panel, detail, configuration. Commercial product photography.` },
-  { id:5, label:'Interior scene', prompt: d=>`Product photo of a product: ${d}. Place FOUR of these EXACT products around a round dark marble dining table with fluted pedestal base. Luxury modern condo, floor-to-ceiling windows, city skyline. Warm pendant light, light oak floor, textured walls, green plant centerpiece. Photorealistic, Architectural Digest quality. Products must match the reference exactly.` }
+  { id:1, label:'Front view',     prompt: d=>`Use the reference image as the product identity for this ${d}. Create a clean front-facing studio catalog photo on a solid white background. Preserve the visible color, material, silhouette, and important details as closely as possible. Soft even lighting, centered composition.` },
+  { id:2, label:'Side view',      prompt: d=>`Use the reference image as the product identity for this ${d}. Create a clean side-profile studio catalog photo on a solid white background. Preserve the visible color, material, silhouette, and important details as closely as possible. Soft even lighting, centered composition.` },
+  { id:3, label:'Isometric view', prompt: d=>`Use the reference image as the product identity for this ${d}. Create a clean 45-degree isometric studio catalog photo on a solid white background. Preserve the visible color, material, silhouette, and important details as closely as possible. Soft even lighting, centered composition.` },
+  { id:4, label:'Back view',      prompt: d=>`Use the reference image as the product identity for this ${d}. Create a clean rear-view studio catalog photo on a solid white background. Infer hidden rear details naturally from the visible design. Soft even lighting, centered composition.` },
+  { id:5, label:'Interior scene', prompt: d=>`Use the reference image as the product identity for this ${d}. Place matching products in a refined modern dining interior with a round dark marble table, warm pendant light, light wood floor, large windows, and natural decor. Photorealistic interior product photography.` }
 ];
+
+function fallbackPrompt(view, desc) {
+  if (view.id === 1) return `Create a clean studio product photo of this ${desc} from the reference image on a white background.`;
+  if (view.id === 5) return `Create a photorealistic modern interior scene featuring this ${desc} from the reference image.`;
+  return `Create a clean ${view.label.toLowerCase()} product photo of this ${desc} from the reference image on a white background.`;
+}
 
 const STATUS = {
   WAIT:    'wait',
@@ -805,6 +811,11 @@ function formatError(value, fallback = 'Something went wrong') {
     try { return JSON.stringify(value).slice(0, 240); } catch (e) { return fallback; }
   }
   return String(value);
+}
+
+function isInvalidRequestError(error) {
+  const msg = formatError(error).toLowerCase();
+  return msg.includes('invalid_request') || msg.includes('given prompts and images');
 }
 
 function blobToDataUrl(blob) {
@@ -1404,7 +1415,7 @@ async function uploadToFal(apiKey, dataUrl) {
 }
 
 // ── API: GENERATE VIEW ─────────────────────────────────────────────
-async function generateView(view, apiKey, desc, imageUrl) {
+async function generateView(view, apiKey, desc, imageUrl, useFallbackPrompt = false) {
   const badge = document.getElementById(`rb-${view.id}`);
   const body  = document.getElementById(`rbody-${view.id}`);
   if (!badge || !body) return null;
@@ -1424,10 +1435,10 @@ async function generateView(view, apiKey, desc, imageUrl) {
         method: 'POST',
         headers: { 'Authorization': `Key ${apiKey}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          prompt: view.prompt(desc),
+          prompt: useFallbackPrompt ? fallbackPrompt(view, desc) : view.prompt(desc),
           image_urls: [imageUrl],
           resolution: nb2Res,
-          aspect_ratio: view.id === 5 ? '16:9' : '1:1',
+          aspect_ratio: useFallbackPrompt ? 'auto' : (view.id === 5 ? '16:9' : '1:1'),
           output_format: 'jpeg',
           num_images: 1,
           limit_generations: true
@@ -1472,6 +1483,13 @@ async function generateView(view, apiKey, desc, imageUrl) {
       body.innerHTML = `<span class="rph">Stopped</span>`;
       badge.textContent = 'stopped'; badge.className = 'rbadge rb-stop';
     } else {
+      if (!useFallbackPrompt && isInvalidRequestError(e)) {
+        badge.textContent = 'retrying...';
+        badge.className = 'rbadge rb-gen';
+        body.innerHTML = `<div class="spinner"></div>`;
+        await sleep(1000);
+        return generateView(view, apiKey, desc, imageUrl, true);
+      }
       // Auto-retry with exponential backoff (max 1 retry per view per item)
       // Use a stable key: view.id (since generateView is called per-item context)
       const retryKey = `v${view.id}`;
@@ -1485,7 +1503,7 @@ async function generateView(view, apiKey, desc, imageUrl) {
         badge.className = 'rbadge rb-gen';
         body.innerHTML = `<div class="spinner"></div>`;
         await sleep(delay);
-        return generateView(view, apiKey, desc, imageUrl);
+        return generateView(view, apiKey, desc, imageUrl, useFallbackPrompt);
       }
       body.innerHTML = `<span class="rerr">${escHtml(formatError(e))}</span>`;
       badge.textContent = 'error'; badge.className = 'rbadge rb-err';
