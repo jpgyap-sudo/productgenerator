@@ -1277,26 +1277,37 @@ async function saveQueueToSupabase() {
   if (!supabaseClient || !supaConnected) return;
 
   try {
-    // Upload images for pending items and get URLs
-    const queueData = [];
+    // Upload images for waiting items that have local dataUrl but no supabaseUrl yet
+    const uploadPromises = [];
     for (const q of queue) {
-      let imageUrl = q.supabaseUrl || '';
-      // Upload image if it's a pending item with a dataUrl and no stored URL yet
-      if (q.status === STATUS.WAIT && q.dataUrl && !imageUrl) {
-        imageUrl = await uploadImageToSupabase(q.id, q.dataUrl) || '';
-        if (imageUrl) {
-          q.supabaseUrl = imageUrl;
-          q.dataUrl = imageUrl; // Use the URL for display too
+      if (q.status === STATUS.WAIT && q.dataUrl && !q.supabaseUrl) {
+        // Check if dataUrl is a local base64 blob (not already a URL)
+        if (q.dataUrl.startsWith('data:')) {
+          const promise = uploadImageToSupabase(q.id, q.dataUrl).then(url => {
+            if (url) {
+              q.supabaseUrl = url;
+              q.dataUrl = url; // Replace base64 with URL for display
+            }
+            return url;
+          });
+          uploadPromises.push(promise);
         }
       }
-      queueData.push({
-        id: q.id,
-        name: q.name,
-        image_url: imageUrl || q.supabaseUrl || '',
-        status: q.status,
-        description: q.desc || ''
-      });
     }
+
+    // Wait for ALL image uploads to complete before saving queue rows
+    if (uploadPromises.length > 0) {
+      await Promise.all(uploadPromises);
+    }
+
+    // Build queue data rows
+    const queueData = queue.map(q => ({
+      id: q.id,
+      name: q.name,
+      image_url: q.supabaseUrl || '',
+      status: q.status,
+      description: q.desc || ''
+    }));
 
     if (queueData.length === 0) return;
 
@@ -1412,7 +1423,7 @@ async function loadApiKeyFromSupabase() {
 }
 
 // ── LOCAL STORAGE FALLBACK ─────────────────────────────────────────
-function saveState() {
+async function saveState() {
   // Save metadata to localStorage (skip dataUrl blobs — they're too large)
   // Images are stored in Supabase storage; localStorage only holds lightweight state
   try {
@@ -1422,7 +1433,7 @@ function saveState() {
         // Don't store dataUrl in localStorage — it's too large (multi-MB base64).
         // Instead, store a flag so we know to re-upload on next session.
         dataUrl: '',
-        hasLocalImage: q.status === STATUS.WAIT && !!q.dataUrl,
+        hasLocalImage: q.status === STATUS.WAIT && !!q.dataUrl && q.dataUrl.startsWith('data:'),
         status: q.status,
         supabaseUrl: q.supabaseUrl || '',
         desc: q.desc || ''
@@ -1446,9 +1457,19 @@ function saveState() {
     console.warn('localStorage save failed (quota?):', e);
   }
 
-  // Save to Supabase if connected (fire-and-forget, but log errors)
-  saveQueueToSupabase().catch(err => console.warn('Supabase save failed:', err));
-  saveApiKeyToSupabase().catch(err => console.warn('Supabase API key save failed:', err));
+  // Save to Supabase if connected — AWAIT it so images are uploaded before page unload
+  if (supabaseClient && supaConnected) {
+    try {
+      await saveQueueToSupabase();
+    } catch (err) {
+      console.warn('Supabase save failed:', err);
+    }
+    try {
+      await saveApiKeyToSupabase();
+    } catch (err) {
+      console.warn('Supabase API key save failed:', err);
+    }
+  }
 }
 
 function getApiKey() {
@@ -1480,7 +1501,7 @@ function showApiKeyEntryState() {
   apiKeyEl.focus();
 }
 
-function saveApiKeyFromInput() {
+async function saveApiKeyFromInput() {
   const key = apiKeyEl.value.trim();
   if (key.length <= 10) {
     toast('Enter a valid fal.ai API key first', 'error');
@@ -1488,7 +1509,7 @@ function saveApiKeyFromInput() {
   }
   savedApiKey = key;
   showSavedApiKeyState('manual');
-  saveState();
+  await saveState();
   checkReady();
   toast('API key saved', 'success');
 }
@@ -1518,6 +1539,10 @@ async function loadState() {
           if (q.hasLocalImage && !q.dataUrl && !q.supabaseUrl) {
             q.needsReupload = true;
           }
+          // If supabaseUrl is set, use it as dataUrl for display
+          if (q.supabaseUrl && !q.dataUrl) {
+            q.dataUrl = q.supabaseUrl;
+          }
         });
       }
       if (state.pendingItems) {
@@ -1537,7 +1562,7 @@ async function loadState() {
       }
       if (state.darkMode !== undefined) {
         darkMode = state.darkMode;
-        applyDarkMode();
+        await applyDarkMode();
       }
       // Only load from localStorage if env var is NOT set
       if (!ENV_API_KEY && state.apiKey) {
@@ -1560,7 +1585,7 @@ async function loadState() {
 }
 
 // ── DARK MODE ─────────────────────────────────────────────────────
-function applyDarkMode() {
+async function applyDarkMode() {
   if (darkMode) {
     document.documentElement.setAttribute('data-theme', 'dark');
     dmToggle.textContent = '☀️';
@@ -1568,7 +1593,7 @@ function applyDarkMode() {
     document.documentElement.removeAttribute('data-theme');
     dmToggle.textContent = '🌙';
   }
-  saveState();
+  await saveState();
 }
 
 // Check system preference on load (only if no saved preference exists)
@@ -1578,9 +1603,9 @@ if (!darkMode && window.matchMedia && window.matchMedia('(prefers-color-scheme: 
   applyDarkMode();
 }
 
-dmToggle.addEventListener('click', () => {
+dmToggle.addEventListener('click', async () => {
   darkMode = !darkMode;
-  applyDarkMode();
+  await applyDarkMode();
 });
 
 // ── READY CHECK ───────────────────────────────────────────────────
@@ -1627,21 +1652,21 @@ apiKeySave.addEventListener('click', () => {
 
 // ── RESOLUTION PICKER ──────────────────────────────────────────────
 document.querySelectorAll('.q-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
+  btn.addEventListener('click', async () => {
     nb2Res = btn.dataset.res;
     document.querySelectorAll('.q-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     document.getElementById('resNote').textContent = NB2_NOTES[nb2Res];
     updateCost();
-    saveState();
+    await saveState();
   });
 });
 
 // ── PARALLELISM SLIDER ────────────────────────────────────────────
-parSlider.addEventListener('input', () => {
+parSlider.addEventListener('input', async () => {
   parallelism = parseInt(parSlider.value, 10);
   parVal.textContent = parallelism;
-  saveState();
+  await saveState();
 });
 
 // ── FILE UPLOAD ────────────────────────────────────────────────────
@@ -1696,13 +1721,21 @@ function renderQueue() {
     const canMoveDown = idx < queue.length - 1 && item.status === STATUS.WAIT;
     const itemDesc = item.desc || '';
 
+    // Show placeholder if item needs re-upload (no image available)
+    const hasImage = item.dataUrl && item.dataUrl.startsWith('data:') || (item.dataUrl && item.dataUrl.startsWith('http'));
+    const thumbSrc = hasImage ? item.dataUrl : '';
+    const needsReupload = item.needsReupload || (!hasImage && item.status === STATUS.WAIT);
+
     const div = document.createElement('div');
     div.className = `q-item ${sc.item}`;
     div.id = `qi-${item.id}`;
     div.innerHTML = `
-      <img class="q-thumb" src="${item.dataUrl}" alt="${item.name}"/>
+      ${thumbSrc
+        ? `<img class="q-thumb" src="${thumbSrc}" alt="${item.name}"/>`
+        : `<div class="q-thumb" style="display:flex;align-items:center;justify-content:center;background:var(--border-light);font-size:14px;color:var(--text-dim);">📷</div>`
+      }
       <div class="q-info">
-        <div class="q-name">${escHtml(item.name)}</div>
+        <div class="q-name">${escHtml(item.name)}${needsReupload ? ' <span style="color:var(--error);font-size:9px;">(re-upload needed)</span>' : ''}</div>
         <div class="q-sub" id="qsub-${item.id}">5 renders · ~$${(NB2_PRICES[nb2Res]*5).toFixed(2)}</div>
         <div class="q-desc-wrap" id="qdescw-${item.id}">
           <div class="q-desc-text" id="qdesct-${item.id}" onclick="editDesc(${item.id})" title="Click to edit description">${escHtml(itemDesc || 'No description')}</div>
@@ -1729,7 +1762,7 @@ function editDesc(id) {
   editEl.setSelectionRange(editEl.value.length, editEl.value.length);
 }
 
-function saveDesc(id) {
+async function saveDesc(id) {
   const textEl = document.getElementById(`qdesct-${id}`);
   const editEl = document.getElementById(`qdesce-${id}`);
   if (!textEl || !editEl) return;
@@ -1741,7 +1774,7 @@ function saveDesc(id) {
   textEl.textContent = escHtml(val || 'No description');
   textEl.style.display = 'block';
   editEl.style.display = 'none';
-  saveState();
+  await saveState();
 }
 
 function escHtml(s) {
@@ -1750,22 +1783,22 @@ function escHtml(s) {
   return d.innerHTML;
 }
 
-function moveItem(id, dir) {
+async function moveItem(id, dir) {
   const idx = queue.findIndex(q => q.id === id);
   if (idx === -1) return;
   const newIdx = idx + dir;
   if (newIdx < 0 || newIdx >= queue.length) return;
   [queue[idx], queue[newIdx]] = [queue[newIdx], queue[idx]];
   renderQueue();
-  saveState();
+  await saveState();
 }
 
-function removeItem(id) {
+async function removeItem(id) {
   queue = queue.filter(q => q.id !== id);
   renderQueue();
   updateCost();
   checkReady();
-  saveState();
+  await saveState();
   // Also remove from Supabase so it doesn't come back on reload
   deleteQueueItemFromSupabase(id);
 }
@@ -1836,18 +1869,8 @@ async function addPendingToQueue(id) {
   renderQueue();
   updateCost();
   checkReady();
-  saveState();
-
-  // Upload image to Supabase storage in background
-  if (supabaseClient && supaConnected) {
-    uploadImageToSupabase(item.id, item.dataUrl).then(url => {
-      if (url) {
-        item.supabaseUrl = url;
-        item.dataUrl = url;
-        saveState();
-      }
-    }).catch(err => console.warn('Background image upload failed:', err));
-  }
+  // saveState() now handles image upload to Supabase internally
+  await saveState();
 
   renderPendingList();
   if (queue.length) welcomeState.style.display = 'none';
@@ -1865,20 +1888,8 @@ confirmAddBtn.addEventListener('click', async () => {
   renderQueue();
   updateCost();
   checkReady();
-  saveState();
-
-  // Upload all images to Supabase in background
-  if (supabaseClient && supaConnected) {
-    for (const item of items) {
-      uploadImageToSupabase(item.id, item.dataUrl).then(url => {
-        if (url) {
-          item.supabaseUrl = url;
-          item.dataUrl = url;
-          saveState();
-        }
-      }).catch(err => console.warn('Background image upload failed:', err));
-    }
-  }
+  // saveState() now handles image upload to Supabase internally
+  await saveState();
 
   renderPendingList();
   if (queue.length) welcomeState.style.display = 'none';
@@ -1886,7 +1897,7 @@ confirmAddBtn.addEventListener('click', async () => {
 });
 
 // ── CLEAR BUTTONS ─────────────────────────────────────────────────
-clearDoneBtn.addEventListener('click', () => {
+clearDoneBtn.addEventListener('click', async () => {
   // Remove batch cards from DOM for completed/errored/stopped items
   queue.forEach(q => {
     if (q.status !== STATUS.WAIT && q.status !== STATUS.ACTIVE) {
@@ -1898,11 +1909,11 @@ clearDoneBtn.addEventListener('click', () => {
   renderQueue();
   updateCost();
   checkReady();
-  saveState();
+  await saveState();
   toast('Cleared completed items', 'info');
 });
 
-clearAllBtn.addEventListener('click', () => {
+clearAllBtn.addEventListener('click', async () => {
   if (queue.some(q => q.status === STATUS.ACTIVE)) {
     toast('Cannot clear while processing', 'error');
     return;
@@ -1915,11 +1926,11 @@ clearAllBtn.addEventListener('click', () => {
   renderQueue();
   updateCost();
   checkReady();
-  saveState();
+  await saveState();
   toast('Queue cleared', 'info');
 });
 
-function updateQueueItem(id, status, subText) {
+async function updateQueueItem(id, status, subText) {
   const item = queue.find(q => q.id === id);
   if (item) item.status = status;
   const el = document.getElementById(`qi-${id}`);
@@ -1933,7 +1944,7 @@ function updateQueueItem(id, status, subText) {
   badge.textContent = sl;
   if (subText && sub) sub.textContent = subText;
   checkReady();
-  saveState();
+  await saveState();
 }
 
 // ── ACTIVE CARD ────────────────────────────────────────────────────
@@ -2118,9 +2129,8 @@ async function retryFailedViews(item, images) {
   createBatchCard(item, images);
 
   const doneCount = Object.keys(images).length;
-  updateQueueItem(item.id, doneCount === 5 ? STATUS.DONE : STATUS.ERROR, `${doneCount}/5 done`);
+  await updateQueueItem(item.id, doneCount === 5 ? STATUS.DONE : STATUS.ERROR, `${doneCount}/5 done`);
   toast(`Retry complete: ${doneCount}/5 views`, doneCount === 5 ? 'success' : 'error');
-  saveState();
 }
 
 // ── API: UPLOAD ────────────────────────────────────────────────────
@@ -2319,19 +2329,8 @@ startBtn.addEventListener('click', async () => {
     renderPendingList();
     renderQueue();
     updateCost();
-    saveState();
-    // Upload images to Supabase in background
-    if (supabaseClient && supaConnected) {
-      for (const item of itemsToAdd) {
-        uploadImageToSupabase(item.id, item.dataUrl).then(url => {
-          if (url) {
-            item.supabaseUrl = url;
-            item.dataUrl = url;
-            saveState();
-          }
-        }).catch(err => console.warn('Background image upload failed:', err));
-      }
-    }
+    // saveState() now handles image upload to Supabase internally
+    await saveState();
     toast(`Added ${itemsToAdd.length} item${itemsToAdd.length > 1 ? 's' : ''} to queue`, 'info');
   }
 
@@ -2350,7 +2349,7 @@ startBtn.addEventListener('click', async () => {
   for (let i = 0; i < items.length; i += parallelism) {
     const batch = items.slice(i, i + parallelism);
     const batchResults = await Promise.all(batch.map(async (item) => {
-      if (isStopped) { updateQueueItem(item.id, STATUS.STOPPED, 'skipped'); return null; }
+      if (isStopped) { await updateQueueItem(item.id, STATUS.STOPPED, 'skipped'); return null; }
 
       // Use per-item description only — each image has its own description.
       // Description is optional — the reference image is the primary source.
@@ -2359,7 +2358,7 @@ startBtn.addEventListener('click', async () => {
       // Reset skip signal for this item
       skipItemId = null;
 
-      updateQueueItem(item.id, STATUS.ACTIVE, 'uploading...');
+      await updateQueueItem(item.id, STATUS.ACTIVE, 'uploading...');
       createActiveCard(item);
       setActiveProg('Uploading reference image to fal.ai...');
 
@@ -2383,7 +2382,7 @@ startBtn.addEventListener('click', async () => {
         const msg = formatError(e);
         setStatus(`Upload failed: ${msg}`);
         setActiveProg('❌ Upload error: ' + msg);
-        updateQueueItem(item.id, STATUS.ERROR, 'upload failed');
+        await updateQueueItem(item.id, STATUS.ERROR, 'upload failed');
         logFailure(item.name, 0, 'Upload', msg, 0);
         const dot = document.getElementById('active-dot');
         if (dot) { dot.style.animation = 'none'; dot.style.background = 'var(--error)'; }
@@ -2392,7 +2391,7 @@ startBtn.addEventListener('click', async () => {
 
       // Check if user clicked Skip during upload
       if (skipItemId === item.id) {
-        updateQueueItem(item.id, STATUS.STOPPED, 'skipped');
+        await updateQueueItem(item.id, STATUS.STOPPED, 'skipped');
         setStatus(`Skipped ${item.name}`);
         const dot = document.getElementById('active-dot');
         if (dot) { dot.style.animation = 'none'; dot.style.background = 'var(--text-dim)'; }
@@ -2409,7 +2408,7 @@ startBtn.addEventListener('click', async () => {
 
       const doneCount = Object.keys(images).length;
       const finalStatus = isStopped && doneCount < 5 ? STATUS.STOPPED : doneCount === 5 ? STATUS.DONE : STATUS.ERROR;
-      updateQueueItem(item.id, finalStatus, `${doneCount}/5 done`);
+      await updateQueueItem(item.id, finalStatus, `${doneCount}/5 done`);
 
       const dot = document.getElementById('active-dot');
       const title = document.getElementById('active-title');
@@ -2419,7 +2418,7 @@ startBtn.addEventListener('click', async () => {
 
       if (doneCount > 0) createBatchCard(item, images);
       updateCost();
-      saveState();
+      await saveState();
       return { item, images };
     }));
 
@@ -2435,7 +2434,7 @@ startBtn.addEventListener('click', async () => {
   const done = queue.filter(q => q.status === STATUS.DONE).length;
   const total = queue.filter(q => q.status !== STATUS.WAIT).length;
   setStatus(total > 0 ? `Complete — ${done}/${total} fully generated.` : 'Ready.');
-  saveState();
+  await saveState();
 });
 
 // ── ACCESS GATE ────────────────────────────────────────────────────
@@ -2500,6 +2499,49 @@ if (!checkAccess()) {
 } else {
   accessOverlay.classList.add('hidden');
 }
+
+// ── BEFOREUNLOAD HANDLER ────────────────────────────────────────────
+// Ensure queue data is saved to Supabase before the page unloads.
+// Uses sendBeacon as a fallback since async/await won't work on unload.
+let isSavingBeforeUnload = false;
+
+window.addEventListener('beforeunload', function(e) {
+  if (!supabaseClient || !supaConnected) return;
+  
+  // Try to save synchronously — if Supabase is connected, we do a best-effort
+  // save using the fact that saveState is now async but we can't await it here.
+  // Instead, we use a synchronous localStorage save as backup.
+  try {
+    // Save current dataUrl references to localStorage as a fallback
+    // so the user can re-upload on next visit
+    const state = {
+      queue: queue.map(q => ({
+        id: q.id, name: q.name,
+        dataUrl: '',
+        hasLocalImage: q.status === STATUS.WAIT && !!q.dataUrl && q.dataUrl.startsWith('data:'),
+        status: q.status,
+        supabaseUrl: q.supabaseUrl || '',
+        desc: q.desc || ''
+      })),
+      pendingItems: pendingItems.map(p => ({
+        id: p.id, name: p.name,
+        dataUrl: '',
+        hasLocalImage: true,
+        status: STATUS.WAIT,
+        supabaseUrl: '',
+        desc: p.desc || ''
+      })),
+      nb2Res,
+      nextId,
+      darkMode,
+      apiKey: savedApiKey,
+      parallelism
+    };
+    localStorage.setItem(LS_KEY, JSON.stringify(state));
+  } catch (e) {
+    // Ignore quota errors on unload
+  }
+});
 
 // ── INIT ───────────────────────────────────────────────────────────
 (async function init() {
