@@ -818,6 +818,23 @@ function isInvalidRequestError(error) {
   return msg.includes('invalid_request') || msg.includes('given prompts and images');
 }
 
+async function callFalEdit(apiKey, request, signal) {
+  const res = await fetch(request.url, {
+    method: 'POST',
+    headers: { 'Authorization': `Key ${apiKey}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(request.body),
+    signal
+  });
+
+  if (!res.ok) {
+    let em = `API error ${res.status}`;
+    try { em = await res.json(); } catch(e2){}
+    throw new Error(formatError(em, `API error ${res.status}`));
+  }
+
+  return res.json();
+}
+
 function blobToDataUrl(blob) {
   return new Promise(res => {
     const r = new FileReader();
@@ -1415,7 +1432,7 @@ async function uploadToFal(apiKey, dataUrl) {
 }
 
 // ── API: GENERATE VIEW ─────────────────────────────────────────────
-async function generateView(view, apiKey, desc, imageUrl, useFallbackPrompt = false) {
+async function generateView(view, apiKey, desc, imageUrl, attempt = 0) {
   const badge = document.getElementById(`rb-${view.id}`);
   const body  = document.getElementById(`rbody-${view.id}`);
   if (!badge || !body) return null;
@@ -1429,22 +1446,53 @@ async function generateView(view, apiKey, desc, imageUrl, useFallbackPrompt = fa
     const controller = new AbortController();
     const stopCheck = setInterval(() => { if (isStopped) controller.abort(); }, 500);
 
-    let res;
-    try {
-      res = await fetch('https://fal.run/fal-ai/nano-banana-2/edit', {
-        method: 'POST',
-        headers: { 'Authorization': `Key ${apiKey}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          prompt: useFallbackPrompt ? fallbackPrompt(view, desc) : view.prompt(desc),
+    const attempts = [
+      {
+        label: 'Nano Banana 2',
+        url: 'https://fal.run/fal-ai/nano-banana-2/edit',
+        body: {
+          prompt: view.prompt(desc),
           image_urls: [imageUrl],
           resolution: nb2Res,
-          aspect_ratio: useFallbackPrompt ? 'auto' : (view.id === 5 ? '16:9' : '1:1'),
+          aspect_ratio: view.id === 5 ? '16:9' : '1:1',
           output_format: 'jpeg',
           num_images: 1,
-          limit_generations: true
-        }),
-        signal: controller.signal
-      });
+          limit_generations: true,
+          safety_tolerance: '5'
+        }
+      },
+      {
+        label: 'Nano Banana 2 simple',
+        url: 'https://fal.run/fal-ai/nano-banana-2/edit',
+        body: {
+          prompt: fallbackPrompt(view, desc),
+          image_urls: [imageUrl],
+          resolution: nb2Res,
+          aspect_ratio: 'auto',
+          output_format: 'jpeg',
+          num_images: 1,
+          limit_generations: true,
+          safety_tolerance: '5'
+        }
+      },
+      {
+        label: 'Nano Banana classic',
+        url: 'https://fal.run/fal-ai/nano-banana/edit',
+        body: {
+          prompt: fallbackPrompt(view, desc),
+          image_urls: [imageUrl],
+          aspect_ratio: view.id === 5 ? '16:9' : '1:1',
+          output_format: 'jpeg',
+          num_images: 1,
+          limit_generations: false,
+          safety_tolerance: '5'
+        }
+      }
+    ];
+    const request = attempts[Math.min(attempt, attempts.length - 1)];
+    let result;
+    try {
+      result = await callFalEdit(apiKey, request, controller.signal);
     } catch (fetchErr) {
       // Check if this was an abort (stop signal)
       if (fetchErr.name === 'AbortError' || isStopped) {
@@ -1457,13 +1505,6 @@ async function generateView(view, apiKey, desc, imageUrl, useFallbackPrompt = fa
 
     if (isStopped) throw new Error(STOP_SIGNAL);
 
-    if (!res.ok) {
-      let em = `API error ${res.status}`;
-      try { em = await res.json(); } catch(e2){}
-      throw new Error(formatError(em, `API error ${res.status}`));
-    }
-
-    const result = await res.json();
     const imgUrl = result.images?.[0]?.url || result.output?.images?.[0]?.url || result.data?.images?.[0]?.url;
     if (!imgUrl) throw new Error('No image URL in response — ' + JSON.stringify(result).slice(0,200));
 
@@ -1483,12 +1524,12 @@ async function generateView(view, apiKey, desc, imageUrl, useFallbackPrompt = fa
       body.innerHTML = `<span class="rph">Stopped</span>`;
       badge.textContent = 'stopped'; badge.className = 'rbadge rb-stop';
     } else {
-      if (!useFallbackPrompt && isInvalidRequestError(e)) {
+      if (isInvalidRequestError(e) && attempt < 2) {
         badge.textContent = 'retrying...';
         badge.className = 'rbadge rb-gen';
         body.innerHTML = `<div class="spinner"></div>`;
         await sleep(1000);
-        return generateView(view, apiKey, desc, imageUrl, true);
+        return generateView(view, apiKey, desc, imageUrl, attempt + 1);
       }
       // Auto-retry with exponential backoff (max 1 retry per view per item)
       // Use a stable key: view.id (since generateView is called per-item context)
@@ -1503,7 +1544,7 @@ async function generateView(view, apiKey, desc, imageUrl, useFallbackPrompt = fa
         badge.className = 'rbadge rb-gen';
         body.innerHTML = `<div class="spinner"></div>`;
         await sleep(delay);
-        return generateView(view, apiKey, desc, imageUrl, useFallbackPrompt);
+        return generateView(view, apiKey, desc, imageUrl, attempt);
       }
       body.innerHTML = `<span class="rerr">${escHtml(formatError(e))}</span>`;
       badge.textContent = 'error'; badge.className = 'rbadge rb-err';
