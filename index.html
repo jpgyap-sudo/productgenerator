@@ -1179,12 +1179,23 @@ function blobToDataUrl(blob) {
 }
 
 function dataUrlToBlob(dataUrl) {
-  const [meta, b64] = dataUrl.split(',');
-  const mime = meta.match(/:(.*?);/)[1];
-  const bin = atob(b64);
-  const buf = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
-  return new Blob([buf], { type: mime });
+  if (!dataUrl || !dataUrl.includes(',')) {
+    // Not a data URL — return a generic blob
+    return new Blob([], { type: 'image/jpeg' });
+  }
+  const parts = dataUrl.split(',');
+  if (parts.length < 2) return new Blob([], { type: 'image/jpeg' });
+  const [meta, b64] = parts;
+  const mimeMatch = meta.match(/:(.*?);/);
+  const mime = mimeMatch ? mimeMatch[1] : 'image/jpeg';
+  try {
+    const bin = atob(b64);
+    const buf = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
+    return new Blob([buf], { type: mime });
+  } catch (e) {
+    return new Blob([], { type: 'image/jpeg' });
+  }
 }
 
 function toast(msg, type = 'info') {
@@ -2660,7 +2671,20 @@ async function uploadToFal(apiKey, dataUrl) {
   if (!tokenRes.ok) throw new Error(`Storage auth failed: ${tokenRes.status} — check your fal.ai API key`);
   const { token, base_url } = await tokenRes.json();
 
-  const blob = dataUrlToBlob(dataUrl);
+  // If dataUrl is an HTTP URL (e.g. from Supabase storage), fetch it first
+  let blob;
+  if (dataUrl && (dataUrl.startsWith('http://') || dataUrl.startsWith('https://'))) {
+    try {
+      const imgRes = await fetch(dataUrl);
+      if (!imgRes.ok) throw new Error(`Fetch failed: ${imgRes.status}`);
+      blob = await imgRes.blob();
+    } catch (e) {
+      throw new Error(`Could not fetch image from URL (${formatError(e)})`);
+    }
+  } else {
+    blob = dataUrlToBlob(dataUrl);
+  }
+
   const form = new FormData();
   form.append('file', blob, 'product.jpg');
   let upRes;
