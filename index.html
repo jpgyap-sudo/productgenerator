@@ -1,0 +1,1419 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Product Image Studio</title>
+<meta name="description" content="AI-powered product photography studio — generate 5 professional views from a single product image using fal.ai"/>
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; connect-src 'self' https://fal.run https://rest.alpha.fal.ai https://*.fal.ai https://*.fal-cdn.com https://*.fal-cdn.net; font-src 'self' data:;"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+/* ── RESET & BASE ─────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #f0efe9;
+  --surface: #fff;
+  --surface-2: #fafafa;
+  --border: #ddd;
+  --border-light: #f0f0f0;
+  --text: #1a1a1a;
+  --text-secondary: #888;
+  --text-muted: #aaa;
+  --text-dim: #ccc;
+  --accent: #c9a84c;
+  --accent-bg: #fffdf5;
+  --accent-border: #c9a84c;
+  --success: #28a745;
+  --success-bg: #f0faf0;
+  --success-border: #b5ddb5;
+  --error: #e05555;
+  --error-bg: #fff5f5;
+  --error-border: #f5c0c0;
+  --warning-bg: #fff3cd;
+  --warning-text: #856404;
+  --topbar-bg: #1a1a1a;
+  --topbar-text: #fff;
+  --topbar-input-bg: #2a2a2a;
+  --topbar-input-border: #3a3a3a;
+  --shadow: 0 1px 3px rgba(0,0,0,0.08);
+  --radius: 8px;
+  --radius-sm: 6px;
+  --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --sidebar-w: 300px;
+  --transition: 0.2s ease;
+}
+[data-theme="dark"] {
+    --bg: #121212;
+    --surface: #1e1e1e;
+    --surface-2: #252525;
+    --border: #333;
+    --border-light: #2a2a2a;
+    --text: #e0e0e0;
+    --text-secondary: #999;
+    --text-muted: #777;
+    --text-dim: #555;
+    --accent-bg: #2a2410;
+    --success-bg: #0a1f0a;
+    --success-border: #1a4a1a;
+    --error-bg: #1f0a0a;
+    --error-border: #4a1a1a;
+    --warning-bg: #2a2410;
+    --warning-text: #c9a84c;
+    --topbar-bg: #0d0d0d;
+    --topbar-input-bg: #1a1a1a;
+    --topbar-input-border: #333;
+    --shadow: 0 1px 3px rgba(0,0,0,0.3);
+  }
+body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text);
+  transition: background var(--transition), color var(--transition);
+}
+
+/* ── TOP BAR ─────────────────────────────────────────────────── */
+.topbar {
+  background: var(--topbar-bg);
+  color: var(--topbar-text);
+  height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 1rem;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  gap: 8px;
+}
+.topbar-left { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.topbar h1 { font-size: 14px; font-weight: 600; white-space: nowrap; }
+.pill {
+  font-size: 10px; padding: 3px 9px; border-radius: 99px;
+  background: var(--accent); color: #000; font-weight: 700;
+  white-space: nowrap; flex-shrink: 0;
+}
+.topbar-right {
+  display: flex; align-items: center; gap: 8px; flex-shrink: 0;
+}
+.topbar-right label {
+  font-size: 10px; color: #555; white-space: nowrap; display: none;
+}
+@media (min-width: 600px) {
+  .topbar-right label { display: inline; }
+}
+.topbar input[type="password"] {
+  background: var(--topbar-input-bg);
+  border: 1px solid var(--topbar-input-border);
+  color: var(--topbar-text);
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  width: 180px;
+  font-family: monospace;
+}
+@media (min-width: 500px) {
+  .topbar input[type="password"] { width: 230px; }
+}
+.topbar input:focus { outline: none; border-color: var(--accent); }
+.topbar input::placeholder { color: #555; }
+
+/* Dark mode toggle */
+.dm-toggle {
+  background: none; border: 1px solid #3a3a3a; color: #888;
+  cursor: pointer; font-size: 16px; padding: 4px 7px;
+  border-radius: var(--radius-sm); line-height: 1;
+  flex-shrink: 0;
+}
+.dm-toggle:hover { border-color: var(--accent); color: var(--accent); }
+
+/* ── LAYOUT ──────────────────────────────────────────────────── */
+.layout {
+  display: grid;
+  grid-template-columns: var(--sidebar-w) 1fr;
+  height: calc(100vh - 52px);
+}
+@media (max-width: 768px) {
+  .layout {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 1fr;
+    height: auto;
+    min-height: calc(100vh - 52px);
+  }
+  .sidebar {
+    height: auto;
+    max-height: 50vh;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+  }
+}
+
+/* ── SIDEBAR ─────────────────────────────────────────────────── */
+.sidebar {
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  transition: background var(--transition);
+}
+.sidebar-scroll { flex: 1; overflow-y: auto; }
+.block { padding: 0.85rem 1rem; border-bottom: 1px solid var(--border-light); }
+.lbl {
+  display: block; font-size: 10px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.08em;
+  color: var(--text-secondary); margin-bottom: 6px;
+}
+textarea {
+  width: 100%; padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 12px; font-family: inherit; line-height: 1.6;
+  resize: vertical; min-height: 60px;
+  background: var(--surface-2); color: var(--text);
+  transition: border-color var(--transition), background var(--transition);
+}
+textarea:focus { outline: none; border-color: var(--text-secondary); }
+
+/* ── QUALITY BUTTONS ─────────────────────────────────────────── */
+.q-btns { display: flex; gap: 4px; flex-wrap: wrap; }
+.q-btn {
+  flex: 1; min-width: 60px; padding: 6px 4px; font-size: 11px;
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  background: var(--surface); cursor: pointer; font-family: inherit;
+  text-align: center; color: var(--text-secondary); line-height: 1.3;
+  transition: all var(--transition);
+}
+.q-btn:hover { border-color: var(--accent); }
+.q-btn.active { background: var(--topbar-bg); color: var(--topbar-text); border-color: var(--topbar-bg); }
+.q-btn .price { font-size: 9px; color: inherit; opacity: 0.7; }
+.res-note { font-size: 10px; color: var(--text-muted); margin-top: 6px; line-height: 1.5; }
+
+/* ── UPLOAD ──────────────────────────────────────────────────── */
+.upload-wrap { position: relative; }
+.upload-box {
+  display: flex; flex-direction: column; align-items: center;
+  justify-content: center; gap: 6px;
+  border: 2px dashed var(--border);
+  border-radius: var(--radius);
+  padding: 1.25rem 1rem; cursor: pointer;
+  background: var(--surface-2); text-align: center;
+  min-height: 100px; transition: all var(--transition);
+}
+.upload-box:hover { border-color: var(--text-secondary); background: var(--surface); }
+.upload-box.drag { border-color: var(--accent); background: var(--accent-bg); }
+.upload-box .icon { font-size: 24px; }
+.upload-box .txt { font-size: 12px; color: var(--text-secondary); }
+.upload-box .sub { font-size: 11px; color: var(--text-muted); }
+
+/* ── QUEUE LIST ──────────────────────────────────────────────── */
+.q-list { padding: 0.5rem; }
+.q-empty {
+  text-align: center; padding: 1.25rem 1rem;
+  color: var(--text-dim); font-size: 12px; line-height: 1.6;
+}
+.q-item {
+  display: flex; align-items: center; gap: 6px;
+  padding: 6px 8px; border-radius: 7px;
+  border: 1px solid var(--border-light);
+  background: var(--surface-2); margin-bottom: 5px;
+  transition: background var(--transition), border-color var(--transition);
+}
+.q-item.is-active { background: var(--accent-bg); border-color: var(--accent-border); }
+.q-item.is-done { background: var(--success-bg); border-color: var(--success-border); }
+.q-item.is-error { background: var(--error-bg); border-color: var(--error-border); }
+.q-thumb {
+  width: 34px; height: 34px; border-radius: 5px;
+  object-fit: cover; flex-shrink: 0; border: 1px solid var(--border-light);
+}
+.q-info { flex: 1; min-width: 0; }
+.q-name { font-size: 11px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.q-sub { font-size: 10px; color: var(--text-muted); margin-top: 1px; }
+.q-badge {
+  font-size: 9px; padding: 2px 7px; border-radius: 99px;
+  font-weight: 600; flex-shrink: 0; white-space: nowrap;
+}
+.b-wait { background: var(--border-light); color: var(--text-secondary); }
+.b-active { background: var(--warning-bg); color: var(--warning-text); }
+.b-done { background: var(--success-bg); color: var(--success); }
+.b-error { background: var(--error-bg); color: var(--error); }
+.b-stopped { background: var(--border-light); color: var(--text-secondary); }
+.q-actions { display: flex; gap: 2px; flex-shrink: 0; }
+.q-btn-sm {
+  background: none; border: none; color: var(--text-dim);
+  cursor: pointer; font-size: 12px; padding: 0 3px; line-height: 1;
+}
+.q-btn-sm:hover { color: var(--text); }
+.q-btn-sm.danger:hover { color: var(--error); }
+
+/* ── BOTTOM CONTROLS ─────────────────────────────────────────── */
+.sidebar-foot {
+  padding: 0.85rem 1rem;
+  border-top: 1px solid var(--border-light);
+  flex-shrink: 0;
+}
+.btn-start {
+  width: 100%; padding: 10px; font-size: 13px; font-weight: 600;
+  border-radius: 7px; border: none;
+  background: var(--topbar-bg); color: var(--topbar-text);
+  cursor: pointer; margin-bottom: 6px;
+  transition: opacity var(--transition);
+}
+.btn-start:hover { opacity: 0.85; }
+.btn-start:disabled { opacity: 0.35; cursor: not-allowed; }
+.btn-stop {
+  width: 100%; padding: 8px; font-size: 12px; font-weight: 600;
+  border-radius: 7px; border: 1.5px solid var(--error);
+  background: var(--surface); color: var(--error);
+  cursor: pointer; display: none; margin-bottom: 6px;
+  transition: opacity var(--transition);
+}
+.btn-stop:hover { opacity: 0.8; }
+.btn-stop:disabled { opacity: 0.4; cursor: not-allowed; }
+.status { font-size: 11px; color: var(--text-secondary); text-align: center; min-height: 16px; margin-bottom: 3px; }
+.cost { font-size: 11px; color: var(--text-muted); text-align: center; }
+
+/* Parallelism slider */
+.par-block { display: flex; align-items: center; gap: 8px; padding: 0.5rem 1rem; border-bottom: 1px solid var(--border-light); }
+.par-block label { font-size: 10px; color: var(--text-secondary); white-space: nowrap; }
+.par-block input[type="range"] { flex: 1; accent-color: var(--accent); height: 4px; }
+.par-block .par-val { font-size: 11px; font-weight: 600; color: var(--text); min-width: 20px; text-align: center; }
+
+/* ── MAIN ────────────────────────────────────────────────────── */
+.main { overflow-y: auto; padding: 1.25rem; transition: background var(--transition); }
+.welcome {
+  display: flex; flex-direction: column; align-items: center;
+  justify-content: center; min-height: 55vh; gap: 0.75rem; text-align: center;
+}
+.welcome .wi { font-size: 48px; opacity: 0.2; }
+.welcome h2 { font-size: 18px; font-weight: 500; color: var(--text-dim); }
+.welcome p { font-size: 13px; color: var(--text-dim); max-width: 320px; line-height: 1.7; }
+
+/* ── ACTIVE SECTION ──────────────────────────────────────────── */
+.sec-title {
+  font-size: 13px; font-weight: 700; margin-bottom: 0.75rem;
+  display: flex; align-items: center; gap: 8px;
+}
+.pulse {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--accent); animation: pulse 1s infinite; flex-shrink: 0;
+}
+.pulse.done { background: var(--success); animation: none; }
+@keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:0.3;} }
+@keyframes spin { to { transform: rotate(360deg); } }
+.spinner {
+  width: 18px; height: 18px;
+  border: 2px solid var(--border-light);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+/* ── ACTIVE CARD ─────────────────────────────────────────────── */
+.active-card {
+  background: var(--surface);
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  overflow: hidden;
+  margin-bottom: 1.25rem;
+  transition: background var(--transition), border-color var(--transition);
+}
+.card-head {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border-light);
+  display: flex; align-items: center; gap: 10px;
+}
+.card-thumb {
+  width: 42px; height: 42px; border-radius: var(--radius-sm);
+  object-fit: cover; border: 1px solid var(--border-light); flex-shrink: 0;
+}
+.card-info h3 { font-size: 13px; font-weight: 600; }
+.card-info p { font-size: 11px; color: var(--text-secondary); margin-top: 2px; }
+.renders-grid {
+  padding: 12px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(145px, 1fr));
+  gap: 8px;
+}
+.rslot {
+  background: var(--surface-2);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius);
+  overflow: hidden;
+  transition: background var(--transition);
+}
+.rslot-head {
+  padding: 6px 8px;
+  display: flex; justify-content: space-between; align-items: center;
+  border-bottom: 1px solid var(--border-light);
+}
+.rslot-title { font-size: 10px; font-weight: 600; color: var(--text-secondary); }
+.rbadge { font-size: 9px; padding: 2px 6px; border-radius: 99px; }
+.rb-wait { background: var(--border-light); color: var(--text-secondary); }
+.rb-gen { background: var(--warning-bg); color: var(--warning-text); }
+.rb-ok { background: var(--success-bg); color: var(--success); }
+.rb-err { background: var(--error-bg); color: var(--error); }
+.rb-stop { background: var(--border-light); color: var(--text-secondary); }
+.rslot-body {
+  padding: 6px; min-height: 100px;
+  display: flex; align-items: center; justify-content: center; flex-direction: column;
+}
+.rslot-body img { width: 100%; border-radius: 4px; display: block; cursor: pointer; }
+.rph { font-size: 10px; color: var(--text-dim); text-align: center; }
+.rerr { font-size: 10px; color: var(--error); text-align: center; padding: 4px; }
+
+/* ── BATCH CARDS ─────────────────────────────────────────────── */
+.batch-card {
+  background: var(--surface);
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  overflow: hidden;
+  margin-bottom: 0.85rem;
+  transition: background var(--transition), border-color var(--transition);
+}
+.batch-head {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border-light);
+  display: flex; align-items: center; gap: 10px;
+}
+.batch-thumb {
+  width: 42px; height: 42px; border-radius: var(--radius-sm);
+  object-fit: cover; border: 1px solid var(--border-light); flex-shrink: 0;
+}
+.batch-info { flex: 1; }
+.batch-info h3 { font-size: 13px; font-weight: 600; }
+.batch-info p { font-size: 11px; color: var(--text-secondary); margin-top: 1px; }
+.batch-actions { display: flex; gap: 6px; flex-shrink: 0; flex-wrap: wrap; }
+.btn-zip, .btn-retry-batch {
+  padding: 6px 12px; font-size: 11px; font-weight: 600;
+  border-radius: var(--radius-sm); border: none; cursor: pointer;
+  transition: opacity var(--transition);
+  white-space: nowrap;
+}
+.btn-zip { background: var(--topbar-bg); color: var(--topbar-text); }
+.btn-zip:hover { opacity: 0.8; }
+.btn-zip:disabled { opacity: 0.4; cursor: not-allowed; }
+.btn-retry-batch { background: var(--warning-bg); color: var(--warning-text); }
+.btn-retry-batch:hover { opacity: 0.8; }
+.batch-grid {
+  padding: 10px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 6px;
+}
+.bslot {
+  border-radius: 7px; overflow: hidden;
+  background: var(--surface-2); border: 1px solid var(--border-light);
+}
+.bslot img { width: 100%; display: block; cursor: pointer; }
+.bslot-label {
+  font-size: 9px; color: var(--text-secondary);
+  padding: 3px 6px; background: var(--surface-2);
+  border-top: 1px solid var(--border-light); text-align: center;
+}
+.btn-dl1 {
+  display: block; font-size: 10px; padding: 4px 8px;
+  background: var(--surface-2); border-top: 1px solid var(--border-light);
+  text-align: center; color: var(--text-secondary); cursor: pointer;
+  border: none; width: 100%; font-family: inherit;
+  transition: background var(--transition);
+}
+.btn-dl1:hover { background: var(--border-light); }
+
+/* ── LIGHTBOX ────────────────────────────────────────────────── */
+.lightbox {
+  display: none; position: fixed; z-index: 1000;
+  left: 0; top: 0; width: 100%; height: 100%;
+  background: rgba(0,0,0,0.85);
+  align-items: center; justify-content: center;
+  padding: 20px;
+}
+.lightbox.open { display: flex; }
+.lightbox img {
+  max-width: 90vw; max-height: 90vh;
+  border-radius: 8px; box-shadow: 0 8px 40px rgba(0,0,0,0.5);
+  object-fit: contain;
+}
+.lightbox-close {
+  position: absolute; top: 16px; right: 24px;
+  color: #fff; font-size: 32px; cursor: pointer;
+  background: none; border: none; opacity: 0.7;
+}
+.lightbox-close:hover { opacity: 1; }
+
+/* ── TOAST ───────────────────────────────────────────────────── */
+.toast-container {
+  position: fixed; bottom: 20px; right: 20px; z-index: 999;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.toast {
+  padding: 10px 16px; border-radius: var(--radius);
+  font-size: 12px; font-weight: 500;
+  box-shadow: var(--shadow);
+  animation: toast-in 0.3s ease;
+  max-width: 320px;
+}
+.toast.info { background: var(--topbar-bg); color: var(--topbar-text); }
+.toast.error { background: var(--error); color: #fff; }
+.toast.success { background: var(--success); color: #fff; }
+@keyframes toast-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+/* ── ZIP PROGRESS ────────────────────────────────────────────── */
+.zip-progress {
+  display: none; align-items: center; gap: 8px;
+  padding: 4px 0; font-size: 11px; color: var(--text-secondary);
+}
+.zip-progress.visible { display: flex; }
+.zip-bar {
+  flex: 1; height: 4px; background: var(--border-light);
+  border-radius: 2px; overflow: hidden;
+}
+.zip-bar-fill {
+  height: 100%; background: var(--accent);
+  width: 0%; transition: width 0.3s ease;
+}
+
+/* ── CLEAR BUTTONS ───────────────────────────────────────────── */
+.clear-actions {
+  display: flex; gap: 4px; padding: 0.4rem 0.75rem;
+  border-bottom: 1px solid var(--border-light);
+}
+.btn-clear {
+  font-size: 10px; padding: 4px 10px; border-radius: 99px;
+  border: 1px solid var(--border); background: var(--surface);
+  color: var(--text-secondary); cursor: pointer;
+  font-family: inherit; transition: all var(--transition);
+}
+.btn-clear:hover { border-color: var(--error); color: var(--error); }
+
+/* ── RESPONSIVE TWEAKS ───────────────────────────────────────── */
+@media (max-width: 480px) {
+  .topbar { flex-wrap: wrap; height: auto; padding: 8px; gap: 6px; }
+  .topbar input[type="password"] { width: 140px; }
+  .renders-grid { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
+  .batch-grid { grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); }
+  .main { padding: 0.75rem; }
+}
+</style>
+</head>
+<body>
+
+<!-- ── TOP BAR ────────────────────────────────────────────────── -->
+<div class="topbar">
+  <div class="topbar-left">
+    <h1>Product Image Studio</h1>
+    <span class="pill">⚡ Nano Banana 2</span>
+  </div>
+  <div class="topbar-right">
+    <label for="apiKey">fal.ai Key</label>
+    <input type="password" id="apiKey" placeholder="Paste your fal.ai key..." autocomplete="off"/>
+    <button class="dm-toggle" id="dmToggle" title="Toggle dark mode" aria-label="Toggle dark mode">🌙</button>
+  </div>
+</div>
+
+<div class="layout">
+
+  <!-- ── SIDEBAR ──────────────────────────────────────────────── -->
+  <aside class="sidebar">
+    <div class="sidebar-scroll">
+
+      <div class="block">
+        <span class="lbl">Product Description</span>
+        <textarea id="desc" placeholder="Describe color, material, legs, style. English or Chinese OK.&#10;&#10;Example: tan leather dining chair, curved back, dark smoked ash wood legs"></textarea>
+      </div>
+
+      <div class="block">
+        <span class="lbl">Resolution — Nano Banana 2</span>
+        <div class="q-btns">
+          <button class="q-btn active" data-res="0.5K">0.5K<br><span class="price">$0.06/img</span></button>
+          <button class="q-btn" data-res="1K">1K<br><span class="price">$0.08/img</span></button>
+          <button class="q-btn" data-res="2K">2K<br><span class="price">$0.12/img</span></button>
+          <button class="q-btn" data-res="4K">4K<br><span class="price">$0.16/img</span></button>
+        </div>
+        <div class="res-note" id="resNote">0.5K (512px) — fastest & cheapest, good for drafts and previews.</div>
+      </div>
+
+      <div class="block">
+        <span class="lbl">Add to Queue</span>
+        <label for="fileInput" class="upload-box" id="dropZone">
+          <span class="icon">📷</span>
+          <span class="txt">Click here to add images</span>
+          <span class="sub">PNG · JPG · WEBP · multiple OK · max 10MB each</span>
+        </label>
+        <input type="file" id="fileInput" accept="image/*" multiple style="position:absolute;left:-9999px;top:-9999px;"/>
+      </div>
+
+      <div class="par-block">
+        <label for="parSlider">Parallel:</label>
+        <input type="range" id="parSlider" min="1" max="4" value="1" step="1"/>
+        <span class="par-val" id="parVal">1</span>
+      </div>
+
+      <div class="block" style="padding-bottom:0.3rem;display:flex;justify-content:space-between;align-items:center;">
+        <span class="lbl" style="margin-bottom:0;">Queue (<span id="qCount">0</span> items)</span>
+        <span style="display:flex;gap:4px;" id="clearBtns">
+          <button class="btn-clear" id="clearDoneBtn" style="display:none;" title="Remove completed items">✓ Clear done</button>
+          <button class="btn-clear" id="clearAllBtn" style="display:none;" title="Remove all items">✕ Clear all</button>
+        </span>
+      </div>
+      <div class="q-list" id="queueList">
+        <div class="q-empty">No items yet.<br/>Add product images above.</div>
+      </div>
+
+    </div>
+
+    <div class="sidebar-foot">
+      <button class="btn-start" id="startBtn" disabled>▶ Start Queue</button>
+      <button class="btn-stop" id="stopBtn">⏹ Stop After Current</button>
+      <div class="status" id="statusLine">Add images and a description to begin.</div>
+      <div class="cost" id="costEst"></div>
+    </div>
+  </aside>
+
+  <!-- ── MAIN ─────────────────────────────────────────────────── -->
+  <main class="main" id="mainPanel">
+    <div class="welcome" id="welcomeState">
+      <span class="wi">🪑</span>
+      <h2>Queue up your products</h2>
+      <p>Add product images on the left. Each generates 5 separate views — front, side, isometric, back, and luxury interior. Finished batches appear here to download.</p>
+    </div>
+  </main>
+
+</div>
+
+<!-- ── LIGHTBOX ───────────────────────────────────────────────── -->
+<div class="lightbox" id="lightbox">
+  <button class="lightbox-close" id="lbClose">&times;</button>
+  <img id="lbImg" src="" alt="Preview"/>
+</div>
+
+<!-- ── TOAST CONTAINER ────────────────────────────────────────── -->
+<div class="toast-container" id="toastContainer"></div>
+
+<script>
+// ══════════════════════════════════════════════════════════════════
+//  CONSTANTS
+// ══════════════════════════════════════════════════════════════════
+
+const VIEWS = [
+  { id:1, label:'Front view',     prompt: d=>`Product photo of a product: ${d}. Keep the EXACT same product — same color, texture, material, shape. Change ONLY the background to pure solid white (#FFFFFF). Product front-facing, perfectly centered, soft even studio lighting. Commercial product photography. Do not alter the product in any way.` },
+  { id:2, label:'Side view',      prompt: d=>`Product photo of a product: ${d}. Keep the EXACT same product. Rotate to pure side profile (90-degree, left side to camera). Pure white background (#FFFFFF), centered, soft studio lighting. Commercial catalog photography.` },
+  { id:3, label:'Isometric view', prompt: d=>`Product photo of a product: ${d}. Keep the EXACT same product. Show from 45-degree isometric angle (front-right corner, elevated). Pure white background (#FFFFFF), centered, diffused lighting. High-end catalog. Preserve all details exactly.` },
+  { id:4, label:'Back view',      prompt: d=>`Product photo of a product: ${d}. Keep the EXACT same product. Show direct rear/back view. Pure white background (#FFFFFF), centered, even lighting. Show back panel, detail, configuration. Commercial product photography.` },
+  { id:5, label:'Interior scene', prompt: d=>`Product photo of a product: ${d}. Place FOUR of these EXACT products around a round dark marble dining table with fluted pedestal base. Luxury modern condo, floor-to-ceiling windows, city skyline. Warm pendant light, light oak floor, textured walls, green plant centerpiece. Photorealistic, Architectural Digest quality. Products must match the reference exactly.` }
+];
+
+const STATUS = {
+  WAIT:    'wait',
+  ACTIVE:  'active',
+  DONE:    'done',
+  ERROR:   'error',
+  STOPPED: 'stopped'
+};
+
+const STATUS_CLASS = {
+  [STATUS.WAIT]:    { item: '',              badge: 'b-wait' },
+  [STATUS.ACTIVE]:  { item: 'is-active',     badge: 'b-active' },
+  [STATUS.DONE]:    { item: 'is-done',       badge: 'b-done' },
+  [STATUS.ERROR]:   { item: 'is-error',      badge: 'b-error' },
+  [STATUS.STOPPED]: { item: '',              badge: 'b-stopped' }
+};
+
+const STATUS_LABEL = {
+  [STATUS.WAIT]:    'queued',
+  [STATUS.ACTIVE]:  'generating',
+  [STATUS.DONE]:    'done ✓',
+  [STATUS.ERROR]:   'error',
+  [STATUS.STOPPED]: 'stopped'
+};
+
+const RBADGE_CLASS = {
+  [STATUS.WAIT]:    'rb-wait',
+  [STATUS.ACTIVE]:  'rb-gen',
+  [STATUS.DONE]:    'rb-ok',
+  [STATUS.ERROR]:   'rb-err',
+  [STATUS.STOPPED]: 'rb-stop'
+};
+
+const RBADGE_LABEL = {
+  [STATUS.WAIT]:    'waiting',
+  [STATUS.ACTIVE]:  'generating...',
+  [STATUS.DONE]:    'done',
+  [STATUS.ERROR]:   'error',
+  [STATUS.STOPPED]: 'stopped'
+};
+
+const NB2_PRICES = { '0.5K':0.06, '1K':0.08, '2K':0.12, '4K':0.16 };
+const NB2_NOTES  = {
+  '0.5K': '0.5K (512px) — fastest & cheapest, good for drafts and previews.',
+  '1K':   '1K (1024px) — best balance of speed and quality.',
+  '2K':   '2K (2048px) — high quality, slightly slower.',
+  '4K':   '4K (4096px) — premium quality for final hero images.'
+};
+
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
+const LS_KEY = 'product_studio_state';
+const STOP_SIGNAL = '__STOPPED__';
+
+// ── ENVIRONMENT CONFIG ─────────────────────────────────────────────
+// Vercel injects FAL_API_KEY at build time via environment variables.
+// Set it in Vercel Dashboard: Settings → Environment Variables → FAL_API_KEY
+// The value is replaced at deploy time by Vercel's build system.
+// For local dev, the input field + localStorage fallback is used.
+const ENV_API_KEY = (function(){
+  try {
+    // Vercel replaces __FAL_API_KEY__ at build time with the actual env var value.
+    // If not set, the placeholder remains and we fall back to localStorage.
+    const val = '__FAL_API_KEY__';
+    return val.startsWith('__FAL') ? '' : val;
+  } catch(e) { return ''; }
+})();
+
+// ── STATE ──────────────────────────────────────────────────────────
+let queue = [];
+let nb2Res = '0.5K';
+let isStopped = false;
+let isRunning = false;
+let nextId = 1;
+let darkMode = false;
+let parallelism = 1;
+// Track retries per view without mutating VIEWS
+const retryMap = new Map();
+
+// ── ELEMENTS ──────────────────────────────────────────────────────
+const apiKeyEl   = document.getElementById('apiKey');
+const descEl     = document.getElementById('desc');
+const fileInput  = document.getElementById('fileInput');
+const dropZone   = document.getElementById('dropZone');
+const startBtn   = document.getElementById('startBtn');
+const stopBtn    = document.getElementById('stopBtn');
+const statusLine = document.getElementById('statusLine');
+const costEst    = document.getElementById('costEst');
+const queueList  = document.getElementById('queueList');
+const qCount     = document.getElementById('qCount');
+const mainPanel  = document.getElementById('mainPanel');
+const welcomeState = document.getElementById('welcomeState');
+const dmToggle   = document.getElementById('dmToggle');
+const parSlider  = document.getElementById('parSlider');
+const parVal     = document.getElementById('parVal');
+const clearDoneBtn = document.getElementById('clearDoneBtn');
+const clearAllBtn  = document.getElementById('clearAllBtn');
+const lightbox   = document.getElementById('lightbox');
+const lbImg      = document.getElementById('lbImg');
+const lbClose    = document.getElementById('lbClose');
+
+// ── HELPERS ────────────────────────────────────────────────────────
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const setStatus = msg => statusLine.textContent = msg;
+
+function blobToDataUrl(blob) {
+  return new Promise(res => {
+    const r = new FileReader();
+    r.onload = () => res(r.result);
+    r.readAsDataURL(blob);
+  });
+}
+
+function dataUrlToBlob(dataUrl) {
+  const [meta, b64] = dataUrl.split(',');
+  const mime = meta.match(/:(.*?);/)[1];
+  const bin = atob(b64);
+  const buf = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
+  return new Blob([buf], { type: mime });
+}
+
+function toast(msg, type = 'info') {
+  const container = document.getElementById('toastContainer');
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+  el.textContent = msg;
+  container.appendChild(el);
+  setTimeout(() => { el.style.opacity = '0'; el.style.transition = 'opacity 0.3s'; setTimeout(() => el.remove(), 300); }, 3500);
+}
+
+function openLightbox(src) {
+  lbImg.src = src;
+  lightbox.classList.add('open');
+}
+
+function closeLightbox() {
+  lightbox.classList.remove('open');
+  lbImg.src = '';
+}
+
+lbClose.addEventListener('click', closeLightbox);
+lightbox.addEventListener('click', e => { if (e.target === lightbox) closeLightbox(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeLightbox(); });
+
+// ── LOCAL STORAGE ─────────────────────────────────────────────────
+function saveState() {
+  try {
+    const state = {
+      // Only persist dataUrl for pending items to avoid localStorage quota overflow
+      queue: queue.map(q => ({
+        id: q.id, name: q.name,
+        dataUrl: q.status === STATUS.WAIT ? q.dataUrl : '',
+        status: q.status
+      })),
+      nb2Res,
+      nextId,
+      darkMode,
+      apiKey: apiKeyEl.value,
+      desc: descEl.value,
+      parallelism
+    };
+    localStorage.setItem(LS_KEY, JSON.stringify(state));
+  } catch (e) {
+    // Storage full or unavailable — silently ignore
+  }
+}
+
+function loadState() {
+  try {
+    // 1. Environment variable takes priority (Vercel deployment)
+    if (ENV_API_KEY) {
+      apiKeyEl.value = ENV_API_KEY;
+      apiKeyEl.disabled = true;
+      apiKeyEl.title = 'API key is set via Vercel environment variable (FAL_API_KEY)';
+      apiKeyEl.style.borderColor = 'var(--accent)';
+      apiKeyEl.placeholder = '✓ Using env var FAL_API_KEY';
+    }
+
+    // 2. Load from localStorage (fallback for local dev / manual entry)
+    const raw = localStorage.getItem(LS_KEY);
+    if (!raw) return;
+    const state = JSON.parse(raw);
+    if (state.queue) {
+      queue = state.queue;
+      nextId = state.nextId || queue.reduce((m, q) => Math.max(m, q.id), 0) + 1;
+    }
+    if (state.nb2Res) {
+      nb2Res = state.nb2Res;
+      document.querySelectorAll('.q-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.res === nb2Res);
+      });
+      document.getElementById('resNote').textContent = NB2_NOTES[nb2Res] || '';
+    }
+    if (state.darkMode !== undefined) {
+      darkMode = state.darkMode;
+      applyDarkMode();
+    }
+    // Only load from localStorage if env var is NOT set
+    if (!ENV_API_KEY && state.apiKey) apiKeyEl.value = state.apiKey;
+    if (state.desc) descEl.value = state.desc;
+    if (state.parallelism) {
+      parallelism = state.parallelism;
+      parSlider.value = parallelism;
+      parVal.textContent = parallelism;
+    }
+  } catch (e) {
+    // Ignore corrupt state
+  }
+}
+
+// ── DARK MODE ─────────────────────────────────────────────────────
+function applyDarkMode() {
+  if (darkMode) {
+    document.documentElement.setAttribute('data-theme', 'dark');
+    dmToggle.textContent = '☀️';
+  } else {
+    document.documentElement.removeAttribute('data-theme');
+    dmToggle.textContent = '🌙';
+  }
+  saveState();
+}
+
+// Check system preference on load (only if no saved preference exists)
+// loadState() sets darkMode from localStorage if previously saved
+if (!darkMode && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+  darkMode = true;
+  applyDarkMode();
+}
+
+dmToggle.addEventListener('click', () => {
+  darkMode = !darkMode;
+  applyDarkMode();
+});
+
+// ── READY CHECK ───────────────────────────────────────────────────
+function checkReady() {
+  const hasPending = queue.some(q => q.status === STATUS.WAIT);
+  startBtn.disabled = !(
+    apiKeyEl.value.trim().length > 10 &&
+    descEl.value.trim().length > 0 &&
+    hasPending &&
+    !isRunning
+  );
+  // Show/hide clear buttons
+  const hasDone = queue.some(q => q.status === STATUS.DONE || q.status === STATUS.ERROR || q.status === STATUS.STOPPED);
+  clearDoneBtn.style.display = hasDone ? 'inline-block' : 'none';
+  clearAllBtn.style.display = queue.length > 0 ? 'inline-block' : 'none';
+}
+
+function updateCost() {
+  const n = queue.filter(q => q.status === STATUS.WAIT).length;
+  if (!n) { costEst.textContent = ''; return; }
+  const price = NB2_PRICES[nb2Res] * 5;
+  costEst.textContent = `~$${(n * price).toFixed(2)} for ${n} product${n>1?'s':''} · ${nb2Res} resolution`;
+}
+
+apiKeyEl.addEventListener('input', () => { checkReady(); saveState(); });
+descEl.addEventListener('input', () => { checkReady(); saveState(); });
+
+// ── RESOLUTION PICKER ──────────────────────────────────────────────
+document.querySelectorAll('.q-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    nb2Res = btn.dataset.res;
+    document.querySelectorAll('.q-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('resNote').textContent = NB2_NOTES[nb2Res];
+    updateCost();
+    saveState();
+  });
+});
+
+// ── PARALLELISM SLIDER ────────────────────────────────────────────
+parSlider.addEventListener('input', () => {
+  parallelism = parseInt(parSlider.value, 10);
+  parVal.textContent = parallelism;
+  saveState();
+});
+
+// ── FILE UPLOAD ────────────────────────────────────────────────────
+fileInput.addEventListener('change', e => {
+  addFiles([...e.target.files]);
+  fileInput.value = '';
+});
+
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropZone.classList.remove('drag');
+  addFiles([...e.dataTransfer.files].filter(f => f.type.startsWith('image/')));
+});
+
+async function addFiles(files) {
+  let added = 0;
+  for (const file of files) {
+    if (!file.type.startsWith('image/')) continue;
+    if (file.size > MAX_FILE_SIZE) {
+      toast(`${file.name} exceeds 10MB limit — skipped`, 'error');
+      continue;
+    }
+    const dataUrl = await blobToDataUrl(file);
+    const name = file.name.replace(/\.[^.]+$/, '');
+    queue.push({ id: nextId++, name, dataUrl, status: STATUS.WAIT });
+    added++;
+  }
+  if (added > 0) toast(`Added ${added} image${added > 1 ? 's' : ''} to queue`, 'success');
+  renderQueue();
+  updateCost();
+  checkReady();
+  saveState();
+  if (queue.length) welcomeState.style.display = 'none';
+}
+
+// ── QUEUE RENDER ───────────────────────────────────────────────────
+function renderQueue() {
+  qCount.textContent = queue.length;
+  if (!queue.length) {
+    queueList.innerHTML = '<div class="q-empty">No items yet.<br/>Add product images above.</div>';
+    welcomeState.style.display = 'block';
+    return;
+  }
+  queueList.innerHTML = '';
+  queue.forEach((item, idx) => {
+    const sc = STATUS_CLASS[item.status] || STATUS_CLASS[STATUS.WAIT];
+    const sl = STATUS_LABEL[item.status] || STATUS_LABEL[STATUS.WAIT];
+    const canRemove = item.status === STATUS.WAIT;
+    const canMoveUp = idx > 0 && item.status === STATUS.WAIT;
+    const canMoveDown = idx < queue.length - 1 && item.status === STATUS.WAIT;
+
+    const div = document.createElement('div');
+    div.className = `q-item ${sc.item}`;
+    div.id = `qi-${item.id}`;
+    div.innerHTML = `
+      <img class="q-thumb" src="${item.dataUrl}" alt="${item.name}"/>
+      <div class="q-info">
+        <div class="q-name">${escHtml(item.name)}</div>
+        <div class="q-sub" id="qsub-${item.id}">5 renders · ~$${(NB2_PRICES[nb2Res]*5).toFixed(2)}</div>
+      </div>
+      <span class="q-badge ${sc.badge}" id="qbadge-${item.id}">${sl}</span>
+      <div class="q-actions">
+        ${canMoveUp ? `<button class="q-btn-sm" onclick="moveItem(${item.id},-1)" title="Move up">↑</button>` : ''}
+        ${canMoveDown ? `<button class="q-btn-sm" onclick="moveItem(${item.id},1)" title="Move down">↓</button>` : ''}
+        ${canRemove ? `<button class="q-btn-sm danger" onclick="removeItem(${item.id})" title="Remove">✕</button>` : ''}
+      </div>`;
+    queueList.appendChild(div);
+  });
+}
+
+function escHtml(s) {
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+function moveItem(id, dir) {
+  const idx = queue.findIndex(q => q.id === id);
+  if (idx === -1) return;
+  const newIdx = idx + dir;
+  if (newIdx < 0 || newIdx >= queue.length) return;
+  [queue[idx], queue[newIdx]] = [queue[newIdx], queue[idx]];
+  renderQueue();
+  saveState();
+}
+
+function removeItem(id) {
+  queue = queue.filter(q => q.id !== id);
+  renderQueue();
+  updateCost();
+  checkReady();
+  saveState();
+}
+
+// ── CLEAR BUTTONS ─────────────────────────────────────────────────
+clearDoneBtn.addEventListener('click', () => {
+  // Remove batch cards from DOM for completed/errored/stopped items
+  queue.forEach(q => {
+    if (q.status !== STATUS.WAIT && q.status !== STATUS.ACTIVE) {
+      const card = document.getElementById(`bc-${q.id}`);
+      if (card) card.remove();
+    }
+  });
+  queue = queue.filter(q => q.status === STATUS.WAIT || q.status === STATUS.ACTIVE);
+  renderQueue();
+  updateCost();
+  checkReady();
+  saveState();
+  toast('Cleared completed items', 'info');
+});
+
+clearAllBtn.addEventListener('click', () => {
+  if (queue.some(q => q.status === STATUS.ACTIVE)) {
+    toast('Cannot clear while processing', 'error');
+    return;
+  }
+  // Remove all batch cards from DOM
+  document.querySelectorAll('[id^="bc-"]').forEach(el => el.remove());
+  const batchSection = document.getElementById('batch-section');
+  if (batchSection) batchSection.remove();
+  queue = [];
+  renderQueue();
+  updateCost();
+  checkReady();
+  saveState();
+  toast('Queue cleared', 'info');
+});
+
+function updateQueueItem(id, status, subText) {
+  const item = queue.find(q => q.id === id);
+  if (item) item.status = status;
+  const el = document.getElementById(`qi-${id}`);
+  const badge = document.getElementById(`qbadge-${id}`);
+  const sub = document.getElementById(`qsub-${id}`);
+  if (!el || !badge) return;
+  const sc = STATUS_CLASS[status] || STATUS_CLASS[STATUS.WAIT];
+  const sl = STATUS_LABEL[status] || STATUS_LABEL[STATUS.WAIT];
+  el.className = `q-item ${sc.item}`;
+  badge.className = `q-badge ${sc.badge}`;
+  badge.textContent = sl;
+  if (subText && sub) sub.textContent = subText;
+  checkReady();
+  saveState();
+}
+
+// ── ACTIVE CARD ────────────────────────────────────────────────────
+function createActiveCard(item) {
+  const old = document.getElementById('active-section');
+  if (old) old.remove();
+  welcomeState.style.display = 'none';
+
+  const sec = document.createElement('div');
+  sec.id = 'active-section';
+  sec.innerHTML = `
+    <div class="sec-title">
+      <span class="pulse" id="active-dot"></span>
+      <span id="active-title">Generating: ${escHtml(item.name)}</span>
+    </div>
+    <div class="active-card">
+      <div class="card-head">
+        <img class="card-thumb" src="${item.dataUrl}" alt="${escHtml(item.name)}"/>
+        <div class="card-info">
+          <h3>${escHtml(item.name)}</h3>
+          <p id="active-prog">Starting...</p>
+        </div>
+      </div>
+      <div class="renders-grid" id="active-grid"></div>
+    </div>`;
+  mainPanel.insertBefore(sec, mainPanel.firstChild);
+
+  const grid = document.getElementById('active-grid');
+  VIEWS.forEach(v => {
+    const slot = document.createElement('div');
+    slot.className = 'rslot';
+    slot.innerHTML = `
+      <div class="rslot-head">
+        <span class="rslot-title">Img ${v.id} — ${v.label}</span>
+        <span class="rbadge rb-wait" id="rb-${v.id}">waiting</span>
+      </div>
+      <div class="rslot-body" id="rbody-${v.id}">
+        <span class="rph">${v.label}</span>
+      </div>`;
+    grid.appendChild(slot);
+  });
+}
+
+const setActiveProg = msg => { const el = document.getElementById('active-prog'); if (el) el.textContent = msg; };
+
+// ── BATCH CARD ─────────────────────────────────────────────────────
+function createBatchCard(item, images) {
+  let batchSec = document.getElementById('batch-section');
+  if (!batchSec) {
+    batchSec = document.createElement('div');
+    batchSec.id = 'batch-section';
+    batchSec.innerHTML = `<div class="sec-title" style="margin-top:1rem;"><span class="pulse done"></span><span>Completed Batches</span></div>`;
+    mainPanel.appendChild(batchSec);
+  }
+
+  const count = Object.keys(images).length;
+  const card = document.createElement('div');
+  card.className = 'batch-card';
+  card.id = `bc-${item.id}`;
+  card.innerHTML = `
+    <div class="batch-head">
+      <img class="batch-thumb" src="${item.dataUrl}" alt="${escHtml(item.name)}"/>
+      <div class="batch-info">
+        <h3>${escHtml(item.name)}</h3>
+        <p>${count} of 5 renders completed</p>
+      </div>
+      <div class="batch-actions">
+        <button class="btn-retry-batch" id="bretry-${item.id}" ${count === 5 ? 'style="display:none"' : ''}>↻ Retry failed</button>
+        <button class="btn-zip" id="bzip-${item.id}">⬇ ZIP</button>
+      </div>
+    </div>
+    <div class="batch-grid" id="bgrid-${item.id}"></div>
+    <div class="zip-progress" id="zprog-${item.id}">
+      <span>Zipping...</span>
+      <div class="zip-bar"><div class="zip-bar-fill" id="zfill-${item.id}"></div></div>
+      <span id="zpct-${item.id}">0%</span>
+    </div>`;
+  batchSec.appendChild(card);
+
+  const grid = document.getElementById(`bgrid-${item.id}`);
+  VIEWS.forEach(v => {
+    const img = images[v.id];
+    const slot = document.createElement('div');
+    slot.className = 'bslot';
+    if (img) {
+      const src = `data:image/jpeg;base64,${img.b64}`;
+      slot.innerHTML = `
+        <img src="${src}" alt="${v.label}" onclick="openLightbox('${src}')"/>
+        <div class="bslot-label">Img ${v.id} — ${v.label}</div>
+        <button class="btn-dl1" onclick="dlOne('${src}','${item.name}_img${v.id}')">⬇ Download</button>`;
+    } else {
+      slot.innerHTML = `
+        <div style="min-height:90px;display:flex;align-items:center;justify-content:center;"><span style="font-size:10px;color:var(--text-dim);">Not generated</span></div>
+        <div class="bslot-label">Img ${v.id} — ${v.label}</div>`;
+    }
+    grid.appendChild(slot);
+  });
+
+  document.getElementById(`bzip-${item.id}`).addEventListener('click', () => dlZip(item.id, item.name, images));
+  const retryBtn = document.getElementById(`bretry-${item.id}`);
+  if (retryBtn) {
+    retryBtn.addEventListener('click', () => retryFailedViews(item, images));
+  }
+}
+
+function dlOne(src, filename) {
+  const a = document.createElement('a');
+  a.href = src; a.download = filename + '.jpg'; a.click();
+}
+
+async function dlZip(itemId, name, images) {
+  const btn = document.getElementById(`bzip-${itemId}`);
+  const prog = document.getElementById(`zprog-${itemId}`);
+  const fill = document.getElementById(`zfill-${itemId}`);
+  const pct  = document.getElementById(`zpct-${itemId}`);
+  btn.textContent = 'Zipping...'; btn.disabled = true;
+  prog.classList.add('visible');
+
+  const zip = new JSZip();
+  const entries = Object.entries(images);
+  let completed = 0;
+
+  for (const [id, {b64, label}] of entries) {
+    zip.file(`${name}_img${id}_${label.replace(/ /g,'_')}.jpg`, b64, { base64: true });
+    completed++;
+    const p = Math.round((completed / entries.length) * 100);
+    fill.style.width = p + '%';
+    pct.textContent = p + '%';
+    // Yield to let UI update
+    await sleep(50);
+  }
+
+  const blob = await zip.generateAsync({ type: 'blob' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = `${name}_renders.zip`; a.click();
+  URL.revokeObjectURL(url);
+  btn.textContent = '⬇ ZIP'; btn.disabled = false;
+  prog.classList.remove('visible');
+  fill.style.width = '0%';
+  pct.textContent = '0%';
+}
+
+// ── RETRY FAILED VIEWS ────────────────────────────────────────────
+async function retryFailedViews(item, images) {
+  const apiKey = apiKeyEl.value.trim();
+  const desc = descEl.value.trim();
+  if (!apiKey || !desc) { toast('API key and description required', 'error'); return; }
+
+  const failedViews = VIEWS.filter(v => !images[v.id]);
+  if (!failedViews.length) { toast('No failed views to retry', 'info'); return; }
+
+  toast(`Retrying ${failedViews.length} failed view(s)...`, 'info');
+  setStatus(`${item.name}: retrying ${failedViews.length} view(s)...`);
+
+  // Upload reference image if needed
+  let imageUrl;
+  try {
+    imageUrl = await uploadToFal(apiKey, item.dataUrl);
+  } catch (e) {
+    toast(`Upload failed: ${e.message}`, 'error');
+    return;
+  }
+
+  // Re-create active card for visual feedback
+  createActiveCard(item);
+  setActiveProg(`Retrying ${failedViews.length} failed view(s)...`);
+
+  const results = await Promise.all(failedViews.map(view => generateView(view, apiKey, desc, imageUrl)));
+
+  failedViews.forEach((v, i) => {
+    if (results[i]) {
+      images[v.id] = results[i];
+    }
+  });
+
+  // Update the batch card
+  const oldCard = document.getElementById(`bc-${item.id}`);
+  if (oldCard) oldCard.remove();
+  createBatchCard(item, images);
+
+  const doneCount = Object.keys(images).length;
+  updateQueueItem(item.id, doneCount === 5 ? STATUS.DONE : STATUS.ERROR, `${doneCount}/5 done`);
+  toast(`Retry complete: ${doneCount}/5 views`, doneCount === 5 ? 'success' : 'error');
+  saveState();
+}
+
+// ── API: UPLOAD ────────────────────────────────────────────────────
+async function uploadToFal(apiKey, dataUrl) {
+  const tokenRes = await fetch('https://rest.alpha.fal.ai/storage/auth/token?storage_type=fal-cdn-v3', {
+    method: 'POST',
+    headers: { 'Authorization': `Key ${apiKey}`, 'Content-Type': 'application/json' },
+    body: '{}'
+  });
+  if (!tokenRes.ok) throw new Error(`Storage auth failed: ${tokenRes.status} — check your fal.ai API key`);
+  const { token, base_url } = await tokenRes.json();
+
+  const blob = dataUrlToBlob(dataUrl);
+  const form = new FormData();
+  form.append('file', blob, 'product.jpg');
+  const upRes = await fetch(`${base_url}/files/upload`, {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${token}` },
+    body: form
+  });
+  if (!upRes.ok) throw new Error(`CDN upload failed: ${upRes.status}`);
+  const upData = await upRes.json();
+  const url = upData.access_url || upData.url;
+  if (!url) throw new Error('No URL in upload response');
+  return url;
+}
+
+// ── API: GENERATE VIEW ─────────────────────────────────────────────
+async function generateView(view, apiKey, desc, imageUrl) {
+  const badge = document.getElementById(`rb-${view.id}`);
+  const body  = document.getElementById(`rbody-${view.id}`);
+  if (!badge || !body) return null;
+
+  badge.textContent = 'generating...'; badge.className = 'rbadge rb-gen';
+  body.innerHTML = `<div class="spinner"></div>`;
+
+  try {
+    if (isStopped) throw new Error(STOP_SIGNAL);
+
+    const controller = new AbortController();
+    const stopCheck = setInterval(() => { if (isStopped) controller.abort(); }, 500);
+
+    let res;
+    try {
+      res = await fetch('https://fal.run/fal-ai/nano-banana-2/edit', {
+        method: 'POST',
+        headers: { 'Authorization': `Key ${apiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prompt: view.prompt(desc),
+          image_urls: [imageUrl],
+          resolution: nb2Res,
+          aspect_ratio: view.id === 5 ? '16:9' : '1:1',
+          output_format: 'jpeg',
+          num_images: 1,
+          limit_generations: true
+        }),
+        signal: controller.signal
+      });
+    } catch (fetchErr) {
+      // Check if this was an abort (stop signal)
+      if (fetchErr.name === 'AbortError' || isStopped) {
+        throw new Error(STOP_SIGNAL);
+      }
+      throw fetchErr;
+    } finally {
+      clearInterval(stopCheck);
+    }
+
+    if (isStopped) throw new Error(STOP_SIGNAL);
+
+    if (!res.ok) {
+      let em = `API error ${res.status}`;
+      try { const ej = await res.json(); em = ej.detail || ej.message || em; } catch(e2){}
+      throw new Error(em);
+    }
+
+    const result = await res.json();
+    const imgUrl = result.images?.[0]?.url || result.output?.images?.[0]?.url || result.data?.images?.[0]?.url;
+    if (!imgUrl) throw new Error('No image URL in response — ' + JSON.stringify(result).slice(0,200));
+
+    // Fetch image and convert to base64
+    const imgRes = await fetch(imgUrl);
+    if (!imgRes.ok) throw new Error(`Image fetch failed: ${imgRes.status}`);
+    const imgBlob = await imgRes.blob();
+    const b64 = (await blobToDataUrl(imgBlob)).split(',')[1];
+    const src = `data:image/jpeg;base64,${b64}`;
+
+    body.innerHTML = `<img src="${src}" alt="${view.label}" onclick="openLightbox('${src}')"/>`;
+    badge.textContent = 'done'; badge.className = 'rbadge rb-ok';
+    return { b64, label: view.label };
+
+  } catch(e) {
+    if (e.message === STOP_SIGNAL) {
+      body.innerHTML = `<span class="rph">Stopped</span>`;
+      badge.textContent = 'stopped'; badge.className = 'rbadge rb-stop';
+    } else {
+      // Auto-retry with exponential backoff (max 1 retry per view per item)
+      // Use a stable key: view.id (since generateView is called per-item context)
+      const retryKey = `v${view.id}`;
+      if (!retryMap.get(retryKey)) {
+        retryMap.set(retryKey, true);
+        // Clean up old entries
+        if (retryMap.size > 100) retryMap.clear();
+
+        const delay = 3000 + Math.random() * 2000; // 3-5s jitter
+        badge.textContent = `retry in ${Math.round(delay/1000)}s...`;
+        badge.className = 'rbadge rb-gen';
+        body.innerHTML = `<div class="spinner"></div>`;
+        await sleep(delay);
+        return generateView(view, apiKey, desc, imageUrl);
+      }
+      body.innerHTML = `<span class="rerr">${escHtml(e.message)}</span>`;
+      badge.textContent = 'error'; badge.className = 'rbadge rb-err';
+    }
+    return null;
+  }
+}
+
+// ── MAIN LOOP ──────────────────────────────────────────────────────
+stopBtn.addEventListener('click', () => {
+  isStopped = true;
+  stopBtn.disabled = true;
+  stopBtn.textContent = '⏹ Stopping...';
+  setStatus('Stopping after current image...');
+});
+
+startBtn.addEventListener('click', async () => {
+  const apiKey = apiKeyEl.value.trim();
+  const desc   = descEl.value.trim();
+  if (!apiKey || !desc) return;
+
+  isStopped = false;
+  isRunning = true;
+  startBtn.disabled = true;
+  stopBtn.style.display = 'block';
+  stopBtn.disabled = false;
+  stopBtn.textContent = '⏹ Stop After Current';
+
+  const pending = queue.filter(q => q.status === STATUS.WAIT);
+  setStatus(`Processing ${pending.length} product${pending.length>1?'s':''}...`);
+
+  // Process items in parallel batches based on parallelism setting
+  const items = queue.filter(q => q.status === STATUS.WAIT);
+  for (let i = 0; i < items.length; i += parallelism) {
+    const batch = items.slice(i, i + parallelism);
+    const batchResults = await Promise.all(batch.map(async (item) => {
+      if (isStopped) { updateQueueItem(item.id, STATUS.STOPPED, 'skipped'); return null; }
+
+      updateQueueItem(item.id, STATUS.ACTIVE, 'uploading...');
+      createActiveCard(item);
+      setActiveProg('Uploading reference image to fal.ai...');
+
+      let imageUrl;
+      try {
+        setStatus(`${item.name}: uploading image...`);
+        imageUrl = await uploadToFal(apiKey, item.dataUrl);
+        setActiveProg('Upload done! Generating 5 views...');
+      } catch(e) {
+        setStatus(`Upload failed: ${e.message}`);
+        setActiveProg('❌ Upload error: ' + e.message);
+        updateQueueItem(item.id, STATUS.ERROR, 'upload failed');
+        const dot = document.getElementById('active-dot');
+        if (dot) { dot.style.animation = 'none'; dot.style.background = 'var(--error)'; }
+        return null;
+      }
+
+      setStatus(`${item.name}: generating all 5 views...`);
+      const results = await Promise.all(VIEWS.map(view => generateView(view, apiKey, desc, imageUrl)));
+      const images = {};
+      VIEWS.forEach((v, idx) => { if (results[idx]) images[v.id] = results[idx]; });
+
+      const doneCount = Object.keys(images).length;
+      const finalStatus = isStopped && doneCount < 5 ? STATUS.STOPPED : doneCount === 5 ? STATUS.DONE : STATUS.ERROR;
+      updateQueueItem(item.id, finalStatus, `${doneCount}/5 done`);
+
+      const dot = document.getElementById('active-dot');
+      const title = document.getElementById('active-title');
+      if (dot) { dot.style.animation = 'none'; dot.style.background = finalStatus === STATUS.DONE ? 'var(--success)' : 'var(--error)'; }
+      if (title) title.textContent = (finalStatus === STATUS.DONE ? '✓ Done: ' : 'Partial: ') + item.name;
+      setActiveProg(finalStatus === STATUS.DONE ? '✓ All 5 images generated!' : `${doneCount}/5 images generated.`);
+
+      if (doneCount > 0) createBatchCard(item, images);
+      updateCost();
+      saveState();
+      return { item, images };
+    }));
+
+    if (isStopped) break;
+  }
+
+  isRunning = false;
+  isStopped = false;
+  stopBtn.style.display = 'none';
+  stopBtn.textContent = '⏹ Stop After Current';
+  startBtn.disabled = false;
+  checkReady();
+  const done = queue.filter(q => q.status === STATUS.DONE).length;
+  const total = queue.filter(q => q.status !== STATUS.WAIT).length;
+  setStatus(total > 0 ? `Complete — ${done}/${total} fully generated.` : 'Ready.');
+  saveState();
+});
+
+// ── INIT ───────────────────────────────────────────────────────────
+loadState();
+renderQueue();
+updateCost();
+checkReady();
+</script>
+</body>
+</html>

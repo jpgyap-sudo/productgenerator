@@ -1,0 +1,10 @@
+{
+  "name": "product-image-studio",
+  "version": "2.0.0",
+  "description": "Product Image Studio — AI-powered product photography using fal.ai Nano Banana 2",
+  "private": true,
+  "scripts": {
+    "dev": "npx serve .",
+    "build": "node -e \"const fs=require('fs');let h=fs.readFileSync('index.html','utf8');h=h.replace(/__FAL_API_KEY__/g,process.env.FAL_API_KEY||'__FAL_API_KEY__');fs.writeFileSync('index.html',h);console.log('Build complete: FAL_API_KEY injected');\""
+  }
+}
