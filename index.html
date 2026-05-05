@@ -372,6 +372,8 @@ textarea:focus { outline: none; border-color: var(--text-secondary); }
   background: var(--accent); animation: pulse 1s infinite; flex-shrink: 0;
 }
 .pulse.done { background: var(--success); animation: none; }
+.pulse.error { background: var(--error); animation: none; }
+.pulse.skip { background: var(--text-dim); animation: none; }
 @keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:0.3;} }
 @keyframes spin { to { transform: rotate(360deg); } }
 .spinner {
@@ -381,6 +383,48 @@ textarea:focus { outline: none; border-color: var(--text-secondary); }
   border-radius: 50%;
   animation: spin 0.7s linear infinite;
 }
+/* Per-view elapsed timer */
+.rslot-timer {
+  font-size: 9px;
+  color: var(--text-muted);
+  font-family: monospace;
+  margin-top: 4px;
+  text-align: center;
+}
+/* View attempt badge */
+.r-attempt {
+  font-size: 8px;
+  color: var(--text-muted);
+  margin-left: 4px;
+}
+/* Generating pulse border for active view slot */
+.rslot-body.generating {
+  position: relative;
+}
+.rslot-body.generating::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 4px;
+  border: 2px solid var(--accent);
+  animation: gen-pulse 1.2s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes gen-pulse {
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 1; }
+}
+/* Skip button consistent styling */
+.btn-skip {
+  font-size: 11px; padding: 4px 10px; border-radius: 6px;
+  border: 1px solid var(--border); background: var(--surface);
+  color: var(--text-secondary); cursor: pointer;
+  font-family: inherit; transition: all var(--transition);
+  white-space: nowrap;
+}
+.btn-skip:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-bg); }
+.btn-skip:disabled { opacity: 0.4; cursor: not-allowed; }
+.btn-skip.skipping { border-color: var(--text-dim); color: var(--text-dim); }
 
 /* ── ACTIVE CARD ─────────────────────────────────────────────── */
 .active-card {
@@ -1083,6 +1127,12 @@ const retryMap = new Map();
 // Queue processing log — persistent history of what happened during queue runs
 let queueLog = [];
 
+function recoverInterruptedStatus(item) {
+  if (item.status !== STATUS.ACTIVE) return item.status || STATUS.WAIT;
+  item.interruptedOnLoad = true;
+  return STATUS.WAIT;
+}
+
 // ── SUPABASE STATE ──────────────────────────────────────────────────
 let supabaseClient = null;
 let supaConnected = false;
@@ -1606,19 +1656,24 @@ async function loadQueueFromSupabase() {
     if (error) throw error;
 
     if (data && data.length > 0) {
+      const interruptedIds = new Set(queue.filter(q => q.interruptedOnLoad).map(q => q.id));
       // Map Supabase rows back to queue items
       // Supabase data takes priority over localStorage data
       const supaItems = data.map(row => {
         // Reset ACTIVE → WAIT on load: in-flight fal.ai requests can't survive a page refresh
-        const status = (row.status === STATUS.ACTIVE) ? STATUS.WAIT : (row.status || STATUS.WAIT);
-        return {
+        const item = {
           id: row.id,
           name: row.name,
           dataUrl: row.image_url || '',
           supabaseUrl: row.image_url || '',
-          status,
+          status: row.status || STATUS.WAIT,
           desc: row.description || ''
         };
+        item.status = recoverInterruptedStatus(item);
+        return item;
+      });
+      supaItems.forEach(item => {
+        if (interruptedIds.has(item.id)) item.interruptedOnLoad = true;
       });
 
       // Merge: for items that exist in both localStorage and Supabase,
@@ -1810,8 +1865,8 @@ async function loadState() {
         // from supabaseUrl after Supabase connects, or the user can re-upload.
         // Mark items that had local images so we know to restore them.
         queue.forEach(q => {
-          // Reset ACTIVE → WAIT on load: in-flight fal.ai requests can't survive a page refresh
-          if (q.status === STATUS.ACTIVE) q.status = STATUS.WAIT;
+          // Browser reloads abort the live fal.ai requests, so the item must be queued again.
+          q.status = recoverInterruptedStatus(q);
           if (q.hasLocalImage && !q.dataUrl && !q.supabaseUrl) {
             q.needsReupload = true;
           }
@@ -2293,14 +2348,16 @@ function createActiveCard(item) {
     if (nameEl) nameEl.textContent = item.name;
     if (titleEl) titleEl.textContent = `Generating: ${item.name}`;
     if (progEl) progEl.textContent = 'Starting...';
-    if (dot) { dot.style.animation = ''; dot.style.background = ''; }
-    if (skipBtn) { skipBtn.textContent = '⏭ Skip'; skipBtn.disabled = false; }
+    if (dot) { dot.className = 'pulse'; dot.style.animation = ''; dot.style.background = ''; }
+    if (skipBtn) { skipBtn.textContent = '⏭ Skip'; skipBtn.disabled = false; skipBtn.className = 'btn-skip'; }
     // Reset all render slots
     VIEWS.forEach(v => {
       const badge = document.getElementById(`rb-${v.id}`);
       const body = document.getElementById(`rbody-${v.id}`);
+      const timer = document.getElementById(`rtimer-${v.id}`);
       if (badge) { badge.textContent = 'waiting'; badge.className = 'rbadge rb-wait'; }
-      if (body) body.innerHTML = `<span class="rph">${v.label}</span>`;
+      if (body) { body.innerHTML = `<span class="rph">${v.label}</span>`; body.className = 'rslot-body'; }
+      if (timer) timer.textContent = '';
     });
     // Reset progress bar
     const barFill = document.getElementById('active-bar-fill');
@@ -2325,7 +2382,7 @@ function createActiveCard(item) {
     <div class="sec-title">
       <span class="pulse" id="active-dot"></span>
       <span id="active-title">Generating: ${escHtml(item.name)}</span>
-      <button class="btn-skip" id="skipBtn" title="Skip this item and proceed to next" style="margin-left:auto;font-size:11px;padding:4px 10px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text);cursor:pointer;">⏭ Skip</button>
+      <button class="btn-skip" id="skipBtn" title="Skip this item and proceed to next (Ctrl+Shift+S)">⏭ Skip</button>
     </div>
     <div class="active-card">
       <div class="card-head">
@@ -2361,12 +2418,47 @@ function createActiveCard(item) {
       </div>
       <div class="rslot-body" id="rbody-${v.id}">
         <span class="rph">${v.label}</span>
+        <div class="rslot-timer" id="rtimer-${v.id}"></div>
       </div>`;
     grid.appendChild(slot);
   });
 }
 
 const setActiveProg = msg => { const el = document.getElementById('active-prog'); if (el) el.textContent = msg; };
+
+function restoreInterruptedActiveCard() {
+  const item = queue.find(q => q.interruptedOnLoad);
+  if (!item) return;
+
+  createActiveCard(item);
+
+  const title = document.getElementById('active-title');
+  const prog = document.getElementById('active-prog');
+  const dot = document.getElementById('active-dot');
+  const skipBtn = document.getElementById('skipBtn');
+  const timerEl = document.getElementById('active-timer');
+
+  if (title) title.textContent = `Ready to resume: ${item.name}`;
+  if (prog) {
+    prog.textContent = item.needsReupload
+      ? 'The page reloaded while this was generating. Re-upload the image, then start the queue again.'
+      : 'The page reloaded while this was generating. Click Start Queue to generate the 5 views again.';
+  }
+  if (dot) { dot.className = 'pulse'; dot.style.animation = 'none'; dot.style.background = ''; }
+  if (timerEl) timerEl.textContent = 'paused';
+  if (skipBtn) {
+    skipBtn.textContent = 'Resume';
+    skipBtn.disabled = !!item.needsReupload;
+    skipBtn.onclick = () => startBtn.click();
+  }
+  VIEWS.forEach(v => {
+    const badge = document.getElementById(`rb-${v.id}`);
+    const body = document.getElementById(`rbody-${v.id}`);
+    if (badge) { badge.textContent = 'queued'; badge.className = 'rbadge rb-wait'; }
+    if (body) body.innerHTML = `<span class="rph">${v.label}</span>`;
+  });
+  setStatus(item.needsReupload ? `${item.name} needs the original image uploaded again.` : `${item.name} is queued again after reload.`);
+}
 
 // ── ACTIVE CARD PROGRESS BAR & TIMER ───────────────────────────────
 let activeTimerInterval = null;
@@ -2750,6 +2842,38 @@ async function uploadToFal(apiKey, dataUrl) {
 }
 
 // ── API: GENERATE VIEW ─────────────────────────────────────────────
+// Per-view timer tracking
+const viewTimers = {};
+
+function startViewTimer(viewId) {
+  const start = Date.now();
+  viewTimers[viewId] = start;
+  const timerEl = document.getElementById(`rtimer-${viewId}`);
+  if (!timerEl) return;
+  
+  // Clear any existing interval for this view
+  if (viewTimers[`interval-${viewId}`]) {
+    clearInterval(viewTimers[`interval-${viewId}`]);
+  }
+  
+  viewTimers[`interval-${viewId}`] = setInterval(() => {
+    const el = document.getElementById(`rtimer-${viewId}`);
+    if (!el) { clearInterval(viewTimers[`interval-${viewId}`]); return; }
+    const elapsed = Math.floor((Date.now() - start) / 1000);
+    const mins = Math.floor(elapsed / 60);
+    const secs = elapsed % 60;
+    el.textContent = `⏱ ${mins > 0 ? mins + 'm ' : ''}${secs}s`;
+  }, 500);
+}
+
+function stopViewTimer(viewId) {
+  if (viewTimers[`interval-${viewId}`]) {
+    clearInterval(viewTimers[`interval-${viewId}`]);
+    delete viewTimers[`interval-${viewId}`];
+  }
+  // Keep the final elapsed time displayed
+}
+
 async function generateView(view, apiKey, desc, imageUrl, attempt = 0) {
   let badge = document.getElementById(`rb-${view.id}`);
   let body  = document.getElementById(`rbody-${view.id}`);
@@ -2771,6 +2895,7 @@ async function generateView(view, apiKey, desc, imageUrl, attempt = 0) {
             </div>
             <div class="rslot-body" id="rbody-${v.id}">
               <span class="rph">${v.label}</span>
+              <div class="rslot-timer" id="rtimer-${v.id}"></div>
             </div>`;
           grid.appendChild(slot);
         }
@@ -2785,8 +2910,14 @@ async function generateView(view, apiKey, desc, imageUrl, attempt = 0) {
     }
   }
 
-  badge.textContent = 'generating...'; badge.className = 'rbadge rb-gen';
+  // Show generating state with attempt info
+  const attemptLabel = attempt > 0 ? `<span class="r-attempt">(attempt ${attempt + 1})</span>` : '';
+  badge.innerHTML = `generating...${attemptLabel}`;
+  badge.className = 'rbadge rb-gen';
   body.innerHTML = `<div class="spinner"></div>`;
+  body.className = 'rslot-body generating';
+  // Start per-view timer
+  startViewTimer(view.id);
 
   try {
     if (isStopped) throw new Error(STOP_SIGNAL);
@@ -2875,7 +3006,9 @@ async function generateView(view, apiKey, desc, imageUrl, attempt = 0) {
     const b64 = (await blobToDataUrl(imgBlob)).split(',')[1];
     const src = `data:image/jpeg;base64,${b64}`;
 
+    stopViewTimer(view.id);
     body.innerHTML = `<img src="${src}" alt="${view.label}" onclick="openLightbox('${src}')"/>`;
+    body.className = 'rslot-body';
     badge.textContent = 'done'; badge.className = 'rbadge rb-ok';
     updateActiveProgress();
     // Log view completion to queue log
@@ -2885,16 +3018,21 @@ async function generateView(view, apiKey, desc, imageUrl, attempt = 0) {
     return { b64, label: view.label };
 
   } catch(e) {
+    stopViewTimer(view.id);
     if (e.message === STOP_SIGNAL) {
       body.innerHTML = `<span class="rph">Stopped</span>`;
+      body.className = 'rslot-body';
       badge.textContent = 'stopped'; badge.className = 'rbadge rb-stop';
     } else {
       if (isInvalidRequestError(e) && attempt < attempts.length - 1) {
-        badge.textContent = 'retrying...';
+        const nextAttempt = attempt + 1;
+        badge.innerHTML = `retrying...<span class="r-attempt">(attempt ${nextAttempt + 1})</span>`;
         badge.className = 'rbadge rb-gen';
         body.innerHTML = `<div class="spinner"></div>`;
+        body.className = 'rslot-body generating';
+        startViewTimer(view.id); // restart timer for retry
         await sleep(1000);
-        return generateView(view, apiKey, desc, imageUrl, attempt + 1);
+        return generateView(view, apiKey, desc, imageUrl, nextAttempt);
       }
       // Auto-retry with exponential backoff (max 1 retry per view per item)
       // Use a stable key: view.id (since generateView is called per-item context)
@@ -2905,9 +3043,11 @@ async function generateView(view, apiKey, desc, imageUrl, attempt = 0) {
         if (retryMap.size > 100) retryMap.clear();
 
         const delay = 3000 + Math.random() * 2000; // 3-5s jitter
-        badge.textContent = `retry in ${Math.round(delay/1000)}s...`;
+        badge.innerHTML = `retry in ${Math.round(delay/1000)}s...<span class="r-attempt">(retry 1)</span>`;
         badge.className = 'rbadge rb-gen';
         body.innerHTML = `<div class="spinner"></div>`;
+        body.className = 'rslot-body generating';
+        startViewTimer(view.id); // restart timer for retry
         await sleep(delay);
         return generateView(view, apiKey, desc, imageUrl, attempt);
       }
@@ -2917,6 +3057,7 @@ async function generateView(view, apiKey, desc, imageUrl, attempt = 0) {
       logFailure(productName, view.id, view.label, e, attempt);
       addQueueLogEntry('error', productName, `View ${view.id} — ${view.label} failed: ${formatError(e).slice(0, 80)}`);
       body.innerHTML = `<span class="rerr">${escHtml(formatError(e))}</span>`;
+      body.className = 'rslot-body';
       badge.textContent = 'error'; badge.className = 'rbadge rb-err';
     }
     return null;
@@ -2930,6 +3071,17 @@ stopBtn.addEventListener('click', () => {
   stopBtn.textContent = '⏹ Stopping...';
   setStatus('Stopping after current image...');
   addQueueLogEntry('stop', '', 'Stop requested — finishing current batch');
+});
+
+// Keyboard shortcut: Ctrl+Shift+S to skip current item
+document.addEventListener('keydown', (e) => {
+  if (e.ctrlKey && e.shiftKey && (e.key === 'S' || e.key === 's')) {
+    const skipBtn = document.getElementById('skipBtn');
+    if (skipBtn && !skipBtn.disabled) {
+      e.preventDefault();
+      skipBtn.click();
+    }
+  }
 });
 
 startBtn.addEventListener('click', async () => {
@@ -2994,6 +3146,7 @@ startBtn.addEventListener('click', async () => {
             skipItemId = item.id;
             skipBtn.textContent = '⏭ Skipping...';
             skipBtn.disabled = true;
+            skipBtn.className = 'btn-skip skipping';
             setStatus(`Skipping ${item.name}...`);
           };
         }
@@ -3012,7 +3165,7 @@ startBtn.addEventListener('click', async () => {
           logFailure(item.name, 0, 'Upload', msg, 0);
           addQueueLogEntry('error', item.name, `Upload failed: ${msg}`);
           const dot = document.getElementById('active-dot');
-          if (dot) { dot.style.animation = 'none'; dot.style.background = 'var(--error)'; }
+          if (dot) { dot.className = 'pulse error'; dot.style.animation = 'none'; dot.style.background = ''; }
           return null;
         }
 
@@ -3021,7 +3174,7 @@ startBtn.addEventListener('click', async () => {
           await updateQueueItem(item.id, STATUS.STOPPED, 'skipped');
           setStatus(`Skipped ${item.name}`);
           const dot = document.getElementById('active-dot');
-          if (dot) { dot.style.animation = 'none'; dot.style.background = 'var(--text-dim)'; }
+          if (dot) { dot.className = 'pulse skip'; dot.style.animation = 'none'; dot.style.background = ''; }
           const title = document.getElementById('active-title');
           if (title) title.textContent = '⏭ Skipped: ' + item.name;
           setActiveProg('Skipped by user.');
@@ -3045,7 +3198,13 @@ startBtn.addEventListener('click', async () => {
 
         const dot = document.getElementById('active-dot');
         const title = document.getElementById('active-title');
-        if (dot) { dot.style.animation = 'none'; dot.style.background = finalStatus === STATUS.DONE ? 'var(--success)' : 'var(--error)'; }
+        if (dot) {
+          dot.className = 'pulse';
+          dot.style.animation = 'none';
+          dot.style.background = '';
+          if (finalStatus === STATUS.DONE) dot.classList.add('done');
+          else if (finalStatus === STATUS.ERROR) dot.classList.add('error');
+        }
         if (title) title.textContent = (finalStatus === STATUS.DONE ? '✓ Done: ' : 'Partial: ') + item.name;
         setActiveProg(finalStatus === STATUS.DONE ? '✓ All 5 images generated!' : `${doneCount}/5 images generated.`);
         if (finalStatus === STATUS.DONE) {
@@ -3197,6 +3356,7 @@ window.addEventListener('beforeunload', function(e) {
   updateCost();
   checkReady();
   updateLogBadge();
+  restoreInterruptedActiveCard();
   // Restore batch cards for completed items (they don't survive page reload)
   restoreBatchCards();
 })();
