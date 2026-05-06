@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Product Image Studio</title>
 <meta name="description" content="AI-powered product photography studio — generate 5 professional views from a single product image using fal.ai"/>
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://unpkg.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; connect-src 'self' https://fal.run https://api.fal.ai https://*.fal.ai https://v3.fal.media https://fal.media https://*.fal.media https://*.supabase.co wss://*.supabase.co; font-src 'self' data:;"/>
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://unpkg.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; connect-src 'self' https://fal.run https://queue.fal.run https://api.fal.ai https://*.fal.ai https://v3.fal.media https://fal.media https://*.fal.media https://*.supabase.co wss://*.supabase.co; font-src 'self' data:;"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 <style>
@@ -449,6 +449,82 @@ textarea:focus { outline: none; border-color: var(--text-secondary); }
 .btn-skip:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-bg); }
 .btn-skip:disabled { opacity: 0.4; cursor: not-allowed; }
 .btn-skip.skipping { border-color: var(--text-dim); color: var(--text-dim); }
+
+/* ── TOPBAR TAB BUTTON ───────────────────────────────────────── */
+.tb-btn {
+  background: none; border: 1px solid #3a3a3a; color: #888;
+  cursor: pointer; font-size: 11px; padding: 4px 10px;
+  border-radius: var(--radius-sm); line-height: 1;
+  flex-shrink: 0; font-weight: 500; white-space: nowrap;
+  transition: all var(--transition);
+}
+.tb-btn:hover { border-color: var(--accent); color: var(--accent); }
+.tb-btn.active { background: var(--accent); color: #000; border-color: var(--accent); font-weight: 700; }
+
+/* ── PRODUCT FEATURE PANEL ───────────────────────────────────── */
+.feature-panel {
+  max-width: 800px; margin: 0 auto;
+}
+.feature-grid {
+  display: flex; flex-direction: column; gap: 12px;
+}
+.feature-card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  overflow: hidden;
+  transition: border-color var(--transition);
+}
+.feature-card:hover { border-color: var(--text-secondary); }
+.feature-card-header {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 14px;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border-light);
+  cursor: pointer;
+  user-select: none;
+}
+.feature-card-header .fc-num {
+  width: 24px; height: 24px; border-radius: 50%;
+  background: var(--topbar-bg); color: var(--topbar-text);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 700; flex-shrink: 0;
+}
+.feature-card-header .fc-label {
+  font-size: 12px; font-weight: 600; flex: 1;
+}
+.feature-card-header .fc-arrow {
+  font-size: 10px; color: var(--text-muted);
+  transition: transform 0.2s ease;
+}
+.feature-card-header .fc-arrow.open { transform: rotate(180deg); }
+.feature-card-body {
+  padding: 12px 14px;
+  display: none;
+}
+.feature-card-body.open { display: block; }
+.feature-card-body textarea {
+  width: 100%; min-height: 80px;
+  padding: 10px; font-size: 12px; line-height: 1.6;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2); color: var(--text);
+  font-family: inherit; resize: vertical;
+  transition: border-color var(--transition);
+}
+.feature-card-body textarea:focus { outline: none; border-color: var(--accent); }
+.feature-card-body .fc-hint {
+  font-size: 10px; color: var(--text-muted);
+  margin-top: 6px; line-height: 1.5;
+}
+.feature-foot {
+  display: flex; align-items: center; gap: 16px;
+  margin-top: 16px; flex-wrap: wrap;
+}
+.feature-hint {
+  font-size: 11px; color: var(--text-secondary);
+  line-height: 1.5; flex: 1;
+}
 
 /* ── ACTIVE CARD ─────────────────────────────────────────────── */
 .active-card {
@@ -898,6 +974,7 @@ textarea:focus { outline: none; border-color: var(--text-secondary); }
     <label for="apiKey">fal.ai Key</label>
     <input type="password" id="apiKey" placeholder="Paste your fal.ai key..." autocomplete="off"/>
     <button class="api-save-btn" id="apiKeySave" type="button" disabled>Save</button>
+    <button class="tb-btn" id="featureToggle" title="View & edit product feature prompts" aria-label="Product Features">📋 Features</button>
     <button class="sidebar-toggle" id="sidebarToggle" title="Toggle sidebar" aria-label="Toggle sidebar">☰</button>
     <button class="dm-toggle" id="dmToggle" title="Toggle dark mode" aria-label="Toggle dark mode">🌙</button>
   </div>
@@ -918,8 +995,8 @@ textarea:focus { outline: none; border-color: var(--text-secondary); }
     <div class="sidebar-scroll">
 
       <div class="block" style="display:none;">
-        <span class="lbl">Description <span style="font-weight:400;text-transform:none;color:var(--text-muted);letter-spacing:0;">(optional — guide for AI)</span></span>
-        <textarea id="desc" placeholder="Optional: describe color, material, style to guide the AI.&#10;The original product image is always used as the primary reference.&#10;&#10;Example: tan leather dining chair, curved back, dark smoked ash wood legs"></textarea>
+        <span class="lbl">Materials & Style Reference <span style="font-weight:400;text-transform:none;color:var(--text-muted);letter-spacing:0;">(optional — describes the original product)</span></span>
+        <textarea id="desc" placeholder="Describe the materials, colors, and style of your product.&#10;This helps the AI understand what to preserve from the reference image.&#10;&#10;Example: tan leather dining chair, curved back, dark smoked ash wood legs"></textarea>
       </div>
 
       <div class="block">
@@ -1003,6 +1080,21 @@ textarea:focus { outline: none; border-color: var(--text-secondary); }
       <p>Add product images on the left. Each generates 5 separate views — front, side, isometric, back, and luxury interior. Finished batches appear here to download.</p>
     </div>
 
+    <!-- ── PRODUCT FEATURE PANEL ──────────────────────────────── -->
+    <div class="feature-panel" id="featurePanel" style="display:none;">
+      <div class="sec-title">
+        <span>📋 Product Features — View Prompts</span>
+        <span style="font-size:11px;font-weight:400;color:var(--text-secondary);margin-left:auto;">Edit prompts below to guide the AI for each view</span>
+      </div>
+      <div class="feature-grid" id="featureGrid">
+        <!-- populated by JS -->
+      </div>
+      <div class="feature-foot">
+        <button class="btn-start" id="featureResetBtn" style="width:auto;padding:6px 16px;font-size:12px;margin:0;">↺ Reset to Defaults</button>
+        <span class="feature-hint">💡 <strong>Tip:</strong> Be specific about material, color, shape, and style. The more detail you add, the more accurate the AI output will be.</span>
+      </div>
+    </div>
+
     <!-- ── QUEUE LOG PANEL ────────────────────────────────────── -->
     <div class="log-panel" id="queueLogPanel" style="display:none;">
       <div class="sec-title">
@@ -1044,15 +1136,15 @@ textarea:focus { outline: none; border-color: var(--text-secondary); }
 // ══════════════════════════════════════════════════════════════════
 
 function buildDesc(desc) {
-  return (desc && desc.trim()) ? desc : 'the product from the reference image';
+  return (desc && desc.trim()) ? `the product from the reference image (${desc})` : 'the product from the reference image';
 }
 
 const VIEWS = [
-  { id:1, label:'Front view',     prompt: d=>`Use the reference image as the product identity for this ${buildDesc(d)}. Create a clean front-facing studio catalog photo on a solid white background. Preserve the visible color, material, silhouette, and important details as closely as possible. Soft even lighting, centered composition.` },
-  { id:2, label:'Side view',      prompt: d=>`Use the reference image as the product identity for this ${buildDesc(d)}. Create a clean side-profile studio catalog photo on a solid white background. Preserve the visible color, material, silhouette, and important details as closely as possible. Soft even lighting, centered composition.` },
-  { id:3, label:'Isometric view', prompt: d=>`Use the reference image as the product identity for this ${buildDesc(d)}. Create a clean 45-degree isometric studio catalog photo on a solid white background. Preserve the visible color, material, silhouette, and important details as closely as possible. Soft even lighting, centered composition.` },
-  { id:4, label:'Back view',      prompt: d=>`Use the reference image as the product identity for this ${buildDesc(d)}. Create a clean rear-view studio catalog photo on a solid white background. Infer hidden rear details naturally from the visible design. Soft even lighting, centered composition.` },
-  { id:5, label:'Interior scene', prompt: d=>`Use the reference image as the product identity for this ${buildDesc(d)}. Place matching products in a refined modern dining interior with a round dark marble table, warm pendant light, light wood floor, large windows, and natural decor. Photorealistic interior product photography.` }
+  { id:1, label:'Front view',     prompt: d=>`Use the reference image as the product identity for this ${buildDesc(d)}. Create a clean front-facing studio catalog photo on a solid white background. Preserve the EXACT same product — same color, material, shape, texture, and all visible details. Do NOT change the product into a different object. Soft even lighting, centered composition.` },
+  { id:2, label:'Side view',      prompt: d=>`Use the reference image as the product identity for this ${buildDesc(d)}. Create a clean side-profile studio catalog photo on a solid white background. Preserve the EXACT same product — same color, material, shape, texture, and all visible details. Do NOT change the product into a different object. Soft even lighting, centered composition.` },
+  { id:3, label:'Isometric view', prompt: d=>`Use the reference image as the product identity for this ${buildDesc(d)}. Create a clean 45-degree isometric studio catalog photo on a solid white background. Preserve the EXACT same product — same color, material, shape, texture, and all visible details. Do NOT change the product into a different object. Soft even lighting, centered composition.` },
+  { id:4, label:'Back view',      prompt: d=>`Use the reference image as the product identity for this ${buildDesc(d)}. Create a clean rear-view studio catalog photo on a solid white background. Infer hidden rear details naturally from the visible design. Preserve the EXACT same product — same color, material, shape, texture. Do NOT change the product into a different object. Soft even lighting, centered composition.` },
+  { id:5, label:'Interior scene', prompt: d=>`Use the reference image as the product identity for this ${buildDesc(d)}. Place the EXACT same product in a refined modern dining interior with a round dark marble table, warm pendant light, light wood floor, large windows, and natural decor. Do NOT change the product into a different object. Photorealistic interior product photography.` }
 ];
 
 const STATUS = {
@@ -2014,6 +2106,128 @@ dmToggle.addEventListener('click', async () => {
   darkMode = !darkMode;
   await applyDarkMode();
 });
+
+// ── PRODUCT FEATURE PANEL ─────────────────────────────────────────
+const featureToggle = document.getElementById('featureToggle');
+const featurePanel = document.getElementById('featurePanel');
+const featureGrid = document.getElementById('featureGrid');
+const featureResetBtn = document.getElementById('featureResetBtn');
+
+/** Default prompts for each view (same as VIEWS array) */
+const DEFAULT_FEATURE_PROMPTS = [
+  { id: 1, label: 'Front View',     hint: 'Best for: product thumbnails, e-commerce listings, hero images.',
+    prompt: `Use the reference image as the product identity. Create a clean front-facing studio catalog photo on a solid white background. Preserve the EXACT same product — same color, material, shape, texture, and all visible details. Do NOT change the product into a different object. Soft even lighting, centered composition.` },
+  { id: 2, label: 'Side View',      hint: 'Best for: showing product depth, profile, and proportions.',
+    prompt: `Use the reference image as the product identity. Create a clean side-profile studio catalog photo on a solid white background. Preserve the EXACT same product — same color, material, shape, texture, and all visible details. Do NOT change the product into a different object. Soft even lighting, centered composition.` },
+  { id: 3, label: 'Isometric View', hint: 'Best for: 3D-feel marketing shots, social media, angled hero images.',
+    prompt: `Use the reference image as the product identity. Create a clean 45-degree isometric studio catalog photo on a solid white background. Preserve the EXACT same product — same color, material, shape, texture, and all visible details. Do NOT change the product into a different object. Soft even lighting, centered composition.` },
+  { id: 4, label: 'Back View',      hint: 'Best for: showing rear details, labels, ports, or stitching.',
+    prompt: `Use the reference image as the product identity. Create a clean rear-view studio catalog photo on a solid white background. Infer hidden rear details naturally from the visible design. Preserve the EXACT same product — same color, material, shape, texture. Do NOT change the product into a different object. Soft even lighting, centered composition.` },
+  { id: 5, label: 'Interior Scene', hint: 'Best for: lifestyle marketing, social media, catalog hero images showing product in context.',
+    prompt: `Use the reference image as the product identity. Place the EXACT same product in a refined modern interior with a round dark marble table, warm pendant light, light wood floor, large windows, and natural decor. Do NOT change the product into a different object. Photorealistic interior product photography.` }
+];
+
+/** Current feature prompts (editable by user) */
+let featurePrompts = JSON.parse(localStorage.getItem('featurePrompts')) || null;
+
+function getFeaturePrompts() {
+  if (!featurePrompts) {
+    featurePrompts = DEFAULT_FEATURE_PROMPTS.map(p => ({ ...p }));
+  }
+  return featurePrompts;
+}
+
+function saveFeaturePrompts() {
+  localStorage.setItem('featurePrompts', JSON.stringify(featurePrompts));
+}
+
+function renderFeatureGrid() {
+  const prompts = getFeaturePrompts();
+  featureGrid.innerHTML = '';
+  prompts.forEach((fp, idx) => {
+    const card = document.createElement('div');
+    card.className = 'feature-card';
+    card.innerHTML = `
+      <div class="feature-card-header" data-idx="${idx}">
+        <span class="fc-num">${idx + 1}</span>
+        <span class="fc-label">${fp.label}</span>
+        <span class="fc-arrow">▼</span>
+      </div>
+      <div class="feature-card-body">
+        <textarea data-idx="${idx}" rows="4">${fp.prompt}</textarea>
+        <div class="fc-hint">${fp.hint}</div>
+      </div>
+    `;
+    featureGrid.appendChild(card);
+
+    // Toggle expand/collapse
+    const header = card.querySelector('.feature-card-header');
+    const body = card.querySelector('.feature-card-body');
+    const arrow = card.querySelector('.fc-arrow');
+    header.addEventListener('click', () => {
+      const isOpen = body.classList.toggle('open');
+      arrow.classList.toggle('open', isOpen);
+    });
+
+    // Auto-open first card
+    if (idx === 0) {
+      body.classList.add('open');
+      arrow.classList.add('open');
+    }
+
+    // Save on edit
+    const textarea = card.querySelector('textarea');
+    textarea.addEventListener('input', () => {
+      featurePrompts[idx].prompt = textarea.value;
+      saveFeaturePrompts();
+      syncPromptsToViews();
+    });
+  });
+}
+
+/** Sync edited prompts back to the VIEWS and CLIENT_VIEW_PROMPTS arrays */
+function syncPromptsToViews() {
+  const prompts = getFeaturePrompts();
+  prompts.forEach(fp => {
+    const editedText = fp.prompt;
+    // Update server-side VIEWS
+    const v = VIEWS.find(v => v.id === fp.id);
+    if (v) {
+      v.prompt = () => editedText;
+    }
+    // Update client-side CLIENT_VIEW_PROMPTS
+    if (typeof CLIENT_VIEW_PROMPTS !== 'undefined') {
+      const cv = CLIENT_VIEW_PROMPTS.find(v => v.id === fp.id);
+      if (cv) {
+        cv.prompt = () => editedText;
+      }
+    }
+  });
+}
+
+/** Reset prompts to defaults */
+function resetFeaturePrompts() {
+  featurePrompts = DEFAULT_FEATURE_PROMPTS.map(p => ({ ...p }));
+  saveFeaturePrompts();
+  renderFeatureGrid();
+  syncPromptsToViews();
+  toast('Feature prompts reset to defaults', 'info');
+}
+
+// Toggle feature panel visibility
+let featurePanelOpen = false;
+featureToggle.addEventListener('click', () => {
+  featurePanelOpen = !featurePanelOpen;
+  featureToggle.classList.toggle('active', featurePanelOpen);
+  featurePanel.style.display = featurePanelOpen ? 'block' : 'none';
+  welcomeState.style.display = featurePanelOpen ? 'none' : 'flex';
+  // Hide other panels
+  document.getElementById('queueLogPanel').style.display = 'none';
+  document.getElementById('logPanel').style.display = 'none';
+  if (featurePanelOpen) renderFeatureGrid();
+});
+
+featureResetBtn.addEventListener('click', resetFeaturePrompts);
 
 // ── READY CHECK ───────────────────────────────────────────────────
 function checkReady() {
@@ -3012,6 +3226,276 @@ async function retryItemFromHistory(id) {
   startBtn.click();
 }
 
+// ── CLIENT-SIDE FAL.AI API ─────────────────────────────────────────
+// Direct fal.ai API calls from the browser (fallback when server endpoints are unavailable).
+// Uses the same fal.ai queue-based API as the server-side worker.
+
+const FAL_BASE = 'https://fal.run/fal-ai';
+
+const CLIENT_VIEW_PROMPTS = [
+  { id: 1, prompt: d => `Use the reference image as the product identity for this ${buildDesc(d)}. Create a clean front-facing studio catalog photo on a solid white background. Preserve the EXACT same product — same color, material, shape, texture, and all visible details. Do NOT change the product into a different object. Soft even lighting, centered composition.` },
+  { id: 2, prompt: d => `Use the reference image as the product identity for this ${buildDesc(d)}. Create a clean side-profile studio catalog photo on a solid white background. Preserve the EXACT same product — same color, material, shape, texture, and all visible details. Do NOT change the product into a different object. Soft even lighting, centered composition.` },
+  { id: 3, prompt: d => `Use the reference image as the product identity for this ${buildDesc(d)}. Create a clean 45-degree isometric studio catalog photo on a solid white background. Preserve the EXACT same product — same color, material, shape, texture, and all visible details. Do NOT change the product into a different object. Soft even lighting, centered composition.` },
+  { id: 4, prompt: d => `Use the reference image as the product identity for this ${buildDesc(d)}. Create a clean rear-view studio catalog photo on a solid white background. Infer hidden rear details naturally from the visible design. Preserve the EXACT same product — same color, material, shape, texture. Do NOT change the product into a different object. Soft even lighting, centered composition.` },
+  { id: 5, prompt: d => `Use the reference image as the product identity for this ${buildDesc(d)}. Place the EXACT same product in a refined modern dining interior with a round dark marble table, warm pendant light, light wood floor, large windows, and natural decor. Do NOT change the product into a different object. Photorealistic interior product photography.` }
+];
+
+/**
+ * Submit a generation to fal.ai and poll until complete.
+ * This is the browser-side equivalent of lib/fal.js generateView().
+ */
+async function clientGenerateView(view, desc, imageDataUrl, resolution) {
+  const apiKey = getApiKey();
+  if (!apiKey) throw new Error('fal.ai API key not configured');
+
+  const prompt = (CLIENT_VIEW_PROMPTS.find(v => v.id === view.id) || CLIENT_VIEW_PROMPTS[0]).prompt(desc);
+
+  // Step 1: Submit the generation request
+  const submitRes = await fetch(`${FAL_BASE}/nano-banana-2`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Key ${apiKey}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      prompt,
+      image_url: imageDataUrl,
+      resolution: resolution || '1K',
+      aspect_ratio: view.id === 5 ? '16:9' : '1:1',
+      output_format: 'jpeg',
+      num_images: 1,
+      safety_tolerance: 4,
+      enable_safety_checker: true
+    })
+  });
+
+  if (!submitRes.ok) {
+    let errMsg;
+    try { const e = await submitRes.json(); errMsg = e.message || e.detail || e.error; } catch(e2) {}
+    throw new Error(errMsg || `fal.ai API error ${submitRes.status}`);
+  }
+
+  const submitData = await submitRes.json();
+
+  // Step 2: If we got a queue response, poll for result
+  let result;
+  if (submitData.request_id && submitData.response_url) {
+    result = await clientPollQueue(submitData.response_url, apiKey);
+  } else {
+    // Direct response (sync mode)
+    result = submitData;
+  }
+
+  // Step 3: Extract image URL
+  const imgUrl = result.images?.[0]?.url
+    || result.output?.images?.[0]?.url
+    || result.data?.images?.[0]?.url
+    || result.image?.url
+    || (typeof result.image === 'string' ? result.image : null);
+
+  if (!imgUrl) throw new Error('No image URL in response');
+
+  // Step 4: Fetch image and convert to base64
+  const imgRes = await fetch(imgUrl);
+  if (!imgRes.ok) throw new Error(`Image fetch failed: ${imgRes.status}`);
+  const imgBlob = await imgRes.blob();
+  const b64 = await new Promise(resolve => {
+    const r = new FileReader();
+    r.onload = () => resolve(r.result.split(',')[1]);
+    r.readAsDataURL(imgBlob);
+  });
+  const dataUrl = `data:image/jpeg;base64,${b64}`;
+
+  return { b64, label: view.label, dataUrl, imageUrl: imgUrl };
+}
+
+/**
+ * Poll a fal.ai queue status URL until the job completes.
+ */
+async function clientPollQueue(statusUrl, apiKey, timeoutMs = 120000) {
+  const startTime = Date.now();
+  while (true) {
+    if (Date.now() - startTime > timeoutMs) {
+      throw new Error('fal.ai generation timed out');
+    }
+    const res = await fetch(statusUrl, {
+      headers: { 'Authorization': `Key ${apiKey}` }
+    });
+    if (!res.ok) throw new Error(`Status error ${res.status}`);
+    const data = await res.json();
+    if (data.status === 'COMPLETED' || data.status === 'completed' || data.status === 'SUCCESS') return data;
+    if (data.status === 'FAILED' || data.status === 'failed' || data.status === 'ERROR') {
+      throw new Error(data.error || data.detail || 'Generation failed');
+    }
+    await new Promise(r => setTimeout(r, 2000));
+  }
+}
+
+/**
+ * Process a single item client-side: generate all 5 views.
+ * Updates the active card UI in real-time as each view completes.
+ */
+let clientStopRequested = false;
+
+async function processItemClientSide(item) {
+  const viewsToGenerate = [...VIEWS];
+  const results = [];
+
+  for (const view of viewsToGenerate) {
+    if (clientStopRequested) {
+      // Mark remaining views as stopped
+      for (const remaining of viewsToGenerate.slice(results.length)) {
+        const badge = document.getElementById(`rb-${remaining.id}`);
+        const body = document.getElementById(`rbody-${remaining.id}`);
+        if (badge) { badge.textContent = 'stopped'; badge.className = 'rbadge rb-stop'; }
+        if (body) { body.innerHTML = `<span class="rph">Stopped</span>`; body.className = 'rslot-body'; }
+        results.push({ viewId: remaining.id, status: 'stopped' });
+      }
+      break;
+    }
+
+    // Update badge to generating
+    const badge = document.getElementById(`rb-${view.id}`);
+    const body = document.getElementById(`rbody-${view.id}`);
+    if (badge) { badge.textContent = 'generating...'; badge.className = 'rbadge rb-gen'; }
+    if (body) {
+      body.innerHTML = `<div class="spinner"></div>`;
+      body.className = 'rslot-body generating';
+    }
+    updateActiveProgress();
+    setActiveProg(`Generating ${view.label}...`);
+    addQueueLogEntry('gen', item.name, `Starting ${view.label}`);
+
+    try {
+      const viewResult = await clientGenerateView(view, item.desc, item.dataUrl, nb2Res);
+      // Update slot with result
+      if (badge) { badge.textContent = 'done'; badge.className = 'rbadge rb-ok'; }
+      if (body) {
+        body.innerHTML = `<img src="${viewResult.dataUrl}" alt="View ${view.id}"/>`;
+        body.querySelector('img').addEventListener('click', () => openLightbox(viewResult.dataUrl));
+        const dlBtn = document.createElement('button');
+        dlBtn.className = 'btn-dl1';
+        dlBtn.textContent = '⬇ Download';
+        dlBtn.addEventListener('click', () => dlOne(viewResult.dataUrl, `${item.name}_img${view.id}`));
+        body.appendChild(dlBtn);
+        body.className = 'rslot-body';
+      }
+      results.push({ viewId: view.id, status: 'done', imageUrl: viewResult.dataUrl, b64: viewResult.b64 });
+      addQueueLogEntry('done', item.name, `${view.label} completed`);
+    } catch (err) {
+      const errMsg = formatError(err);
+      if (badge) { badge.textContent = 'error'; badge.className = 'rbadge rb-err'; }
+      if (body) {
+        body.innerHTML = `<span class="rerr">${escHtml(errMsg)}</span>`;
+        body.className = 'rslot-body';
+      }
+      results.push({ viewId: view.id, status: 'error', errorMessage: errMsg });
+      logFailure(item.name, view.id, view.label, errMsg, 1);
+      addQueueLogEntry('error', item.name, `${view.label} failed: ${errMsg}`);
+    }
+    updateActiveProgress();
+  }
+
+  return results;
+}
+
+/**
+ * Process the entire queue client-side, respecting parallelism.
+ */
+async function processQueueClientSide() {
+  const itemsToProcess = queue.filter(q => q.status === STATUS.WAIT);
+  if (itemsToProcess.length === 0) return;
+
+  clientStopRequested = false;
+  startBtn.disabled = true;
+  stopBtn.style.display = 'block';
+  stopBtn.disabled = false;
+  stopBtn.textContent = '⏹ Stop';
+
+  setStatus(`Processing ${itemsToProcess.length} item(s) client-side...`);
+  addQueueLogEntry('start', '', `Client-side queue started — ${itemsToProcess.length} item(s)`);
+
+  // Process items respecting parallelism
+  let itemIndex = 0;
+  while (itemIndex < itemsToProcess.length && !clientStopRequested) {
+    // Take up to `parallelism` items for this batch
+    const batch = [];
+    while (batch.length < parallelism && itemIndex < itemsToProcess.length) {
+      const item = itemsToProcess[itemIndex];
+      if (clientStopRequested) break;
+      item.status = STATUS.ACTIVE;
+      const badge = document.getElementById(`qbadge-${item.id}`);
+      const el = document.getElementById(`qi-${item.id}`);
+      if (badge && el) {
+        const sc = STATUS_CLASS[STATUS.ACTIVE];
+        const sl = STATUS_LABEL[STATUS.ACTIVE];
+        el.className = `q-item ${sc.item}`;
+        badge.className = `q-badge ${sc.badge}`;
+        badge.textContent = sl;
+      }
+      batch.push(item);
+      itemIndex++;
+    }
+
+    // Process this batch in parallel
+    const batchResults = await Promise.all(
+      batch.map(async (item) => {
+        // Create/update active card for this item
+        createActiveCard(item);
+        startActiveTimer();
+        setActiveProg(`Generating 5 views for "${item.name}"...`);
+        addQueueLogEntry('gen', item.name, 'Starting generation');
+
+        const results = await processItemClientSide(item);
+
+        // Determine final status
+        const doneCount = results.filter(r => r.status === 'done').length;
+        const finalStatus = doneCount === 5 ? STATUS.DONE : (doneCount > 0 ? STATUS.PARTIAL : STATUS.ERROR);
+        item.status = finalStatus;
+
+        // Update queue badge
+        const badge = document.getElementById(`qbadge-${item.id}`);
+        const el = document.getElementById(`qi-${item.id}`);
+        if (badge && el) {
+          const sc = STATUS_CLASS[finalStatus];
+          const sl = STATUS_LABEL[finalStatus];
+          el.className = `q-item ${sc.item}`;
+          badge.className = `q-badge ${sc.badge}`;
+          badge.textContent = sl;
+        }
+
+        // Create batch card
+        const viewResults = results.map(r => ({
+          viewId: r.viewId,
+          status: r.status === 'done' ? 'done' : r.status,
+          imageUrl: r.imageUrl || null,
+          errorMessage: r.errorMessage || null
+        }));
+        createBatchCardFromUrls(item, viewResults);
+
+        stopActiveTimer();
+        setActiveProg(`Completed: ${item.name} (${doneCount}/5 views)`);
+        addQueueLogEntry('done', item.name, `${doneCount}/5 views generated`);
+
+        return { item, results };
+      })
+    );
+
+    if (clientStopRequested) break;
+  }
+
+  // All done
+  stopPolling();
+  stopBtn.style.display = 'none';
+  startBtn.disabled = false;
+  const done = queue.filter(q => q.status === STATUS.DONE).length;
+  const total = queue.length;
+  setStatus(`Complete — ${done}/${total} fully generated.`);
+  addQueueLogEntry('info', '', `Queue finished — ${done}/${total} fully generated`);
+  checkReady();
+  await saveState();
+}
+
 // ── SERVER-SIDE PROCESSING ─────────────────────────────────────────
 // Submit queue items to the server for background processing.
 // The server handles fal.ai API calls, retries, and saves results to Supabase.
@@ -3195,7 +3679,9 @@ function stopPolling() {
 
 // ── MAIN LOOP ──────────────────────────────────────────────────────
 stopBtn.addEventListener('click', () => {
-  // For server-side processing, stopping means we stop polling and mark items as stopped
+  // Signal client-side processing to stop
+  clientStopRequested = true;
+  // For server-side processing, stop polling
   stopPolling();
   startBtn.disabled = false;
   stopBtn.style.display = 'none';
@@ -3249,17 +3735,18 @@ startBtn.addEventListener('click', async () => {
   stopBtn.disabled = false;
   stopBtn.textContent = '⏹ Stop';
 
-  setStatus(`Submitting ${itemsToProcess.length} item(s) to server...`);
-  addQueueLogEntry('start', '', `Queue started — ${itemsToProcess.length} item(s) submitted to server`);
-
   // Create active card for the first item
   const firstItem = itemsToProcess[0];
   createActiveCard(firstItem);
-  setActiveProg('Submitted to server — waiting for processing to begin...');
 
-  // Submit to server
+  // Try server-side first; fall back to client-side if server unavailable
   const itemIds = itemsToProcess.map(i => i.id);
+  let serverAttempted = false;
   try {
+    serverAttempted = true;
+    setStatus(`Submitting ${itemsToProcess.length} item(s) to server...`);
+    addQueueLogEntry('start', '', `Queue started — ${itemsToProcess.length} item(s) submitted to server`);
+    setActiveProg('Submitted to server — waiting for processing to begin...');
     await submitToServer(itemIds);
     // Mark items as active locally
     for (const item of itemsToProcess) {
@@ -3279,23 +3766,32 @@ startBtn.addEventListener('click', async () => {
     // Start polling for status updates
     startPolling();
   } catch (e) {
-    startBtn.disabled = false;
-    stopBtn.style.display = 'none';
-    const title = document.getElementById('active-title');
-    const prog = document.getElementById('active-prog');
-    const dot = document.getElementById('active-dot');
-    const skipBtn = document.getElementById('skipBtn');
-    if (title) title.textContent = `Submission failed: ${firstItem.name}`;
-    if (prog) prog.textContent = 'The item is still queued. Click Start Queue to try again.';
-    if (dot) { dot.className = 'pulse error'; dot.style.animation = 'none'; dot.style.background = ''; }
-    if (skipBtn) {
-      skipBtn.textContent = 'Retry Submit';
-      skipBtn.disabled = false;
-      skipBtn.className = 'btn-skip';
-      skipBtn.onclick = () => startBtn.click();
+    if (serverAttempted) {
+      // Server unavailable — fall back to client-side processing
+      toast('Server endpoints unavailable — processing client-side', 'info');
+      addQueueLogEntry('info', '', 'Server unavailable — falling back to client-side processing');
+      setStatus(`Processing ${itemsToProcess.length} item(s) client-side...`);
+      await processQueueClientSide();
+    } else {
+      // Some other error before server attempt
+      startBtn.disabled = false;
+      stopBtn.style.display = 'none';
+      const title = document.getElementById('active-title');
+      const prog = document.getElementById('active-prog');
+      const dot = document.getElementById('active-dot');
+      const skipBtn = document.getElementById('skipBtn');
+      if (title) title.textContent = `Submission failed: ${firstItem.name}`;
+      if (prog) prog.textContent = 'The item is still queued. Click Start Queue to try again.';
+      if (dot) { dot.className = 'pulse error'; dot.style.animation = 'none'; dot.style.background = ''; }
+      if (skipBtn) {
+        skipBtn.textContent = 'Retry Submit';
+        skipBtn.disabled = false;
+        skipBtn.className = 'btn-skip';
+        skipBtn.onclick = () => startBtn.click();
+      }
+      checkReady();
+      saveState();
     }
-    checkReady();
-    saveState();
   }
 });
 

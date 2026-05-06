@@ -1,39 +1,27 @@
-// ═══════════════════════════════════════════════════════════════════
-//  POST /api/queue/submit — Start processing queue items
-//  This endpoint accepts a list of item IDs to process, sets them
-//  to ACTIVE, and kicks off background processing via waitUntil().
-// ═══════════════════════════════════════════════════════════════════
-import { supabase, QUEUE_TABLE, RESULTS_TABLE, BUCKET_NAME } from '../../lib/supabase.js';
-import { waitUntil } from '@vercel/functions';
+// POST /api/queue/submit
+// Starts durable fal.ai queue jobs for each product view and stores the
+// request/status URLs in Supabase so renders can survive tab closes/reloads.
+import { supabase, QUEUE_TABLE, RESULTS_TABLE } from '../../lib/supabase.js';
+import { VIEWS, submitViewJob, getAttemptCount } from '../../lib/fal.js';
 
 export const config = {
   runtime: 'nodejs',
-  // Must match or exceed process-item.js maxDuration
-  // waitUntil() keeps the function alive after response is sent
   maxDuration: 300
 };
 
 export default async function handler(req) {
-  // Only accept POST
   if (req.method !== 'POST') {
-    return new Response(JSON.stringify({ error: 'Method not allowed' }), {
-      status: 405,
-      headers: { 'Content-Type': 'application/json' }
-    });
+    return json({ error: 'Method not allowed' }, 405);
   }
 
   try {
     const body = await req.json();
     const { itemIds, resolution } = body || {};
 
-    if (!itemIds || !Array.isArray(itemIds) || itemIds.length === 0) {
-      return new Response(JSON.stringify({ error: 'itemIds array is required' }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' }
-      });
+    if (!Array.isArray(itemIds) || itemIds.length === 0) {
+      return json({ error: 'itemIds array is required' }, 400);
     }
 
-    // Fetch the items from Supabase
     const { data: items, error: fetchError } = await supabase
       .from(QUEUE_TABLE)
       .select('*')
@@ -41,71 +29,106 @@ export default async function handler(req) {
 
     if (fetchError) throw fetchError;
     if (!items || items.length === 0) {
-      return new Response(JSON.stringify({ error: 'No items found' }), {
-        status: 404,
-        headers: { 'Content-Type': 'application/json' }
-      });
+      return json({ error: 'No items found' }, 404);
     }
 
-    // Set all items to ACTIVE status
     const now = new Date().toISOString();
     const { error: updateError } = await supabase
       .from(QUEUE_TABLE)
-      .update({ status: 'active', updated_at: now })
+      .update({ status: 'active', sub_text: 'Submitting durable render jobs...', updated_at: now })
       .in('id', itemIds);
 
     if (updateError) throw updateError;
 
-    // Create render_results rows for each item's 5 views
     const resultRows = [];
+
     for (const item of items) {
-      for (let viewId = 1; viewId <= 5; viewId++) {
-        resultRows.push({
-          queue_item_id: item.id,
-          view_id: viewId,
-          status: 'waiting',
-          created_at: now,
-          updated_at: now
-        });
+      if (!item.image_url) {
+        for (const view of VIEWS) {
+          resultRows.push(errorRow(item.id, view.id, 'No reference image', now));
+        }
+        continue;
+      }
+
+      for (const view of VIEWS) {
+        resultRows.push(await submitDurableViewRow(item, view, resolution || '1K', now));
       }
     }
-    const { error: insertError } = await supabase
-      .from(RESULTS_TABLE)
-      .insert(resultRows);
 
-    if (insertError) {
-      console.error('Failed to insert render_results rows:', insertError);
-      // Non-fatal — continue processing
+    const { error: upsertError } = await supabase
+      .from(RESULTS_TABLE)
+      .upsert(resultRows, { onConflict: 'queue_item_id,view_id' });
+
+    if (upsertError) throw upsertError;
+
+    for (const item of items) {
+      const rowsForItem = resultRows.filter(row => row.queue_item_id === item.id);
+      const everyViewFailed = rowsForItem.length > 0 && rowsForItem.every(row => row.status === 'error');
+      await supabase
+        .from(QUEUE_TABLE)
+        .update({
+          status: everyViewFailed ? 'error' : 'active',
+          sub_text: everyViewFailed ? 'Failed to submit render jobs' : 'Render jobs submitted to fal.ai',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', item.id);
     }
 
-    // Kick off background processing using waitUntil
-    // This keeps the function alive after the response is sent
-    const processUrl = new URL('/api/process-item', req.url);
-    processUrl.searchParams.set('ids', itemIds.join(','));
-    if (resolution) processUrl.searchParams.set('res', resolution);
-
-    waitUntil(
-      fetch(processUrl.toString(), { method: 'POST' }).catch(e => {
-        console.error('Background processing request failed:', e);
-      })
-    );
-
-    return new Response(JSON.stringify({
+    return json({
       success: true,
-      message: `Started processing ${items.length} item(s)`,
-      items: items.map(i => ({ id: i.id, name: i.name }))
-    }), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' }
+      message: `Submitted ${resultRows.filter(row => row.status === 'generating').length} durable render job(s)`,
+      items: items.map(item => ({ id: item.id, name: item.name }))
     });
-
   } catch (error) {
     console.error('Queue submit error:', error);
-    return new Response(JSON.stringify({
-      error: error.message || 'Internal server error'
-    }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' }
-    });
+    return json({ error: error.message || 'Internal server error' }, 500);
   }
+}
+
+async function submitDurableViewRow(item, view, resolution, now) {
+  let lastError = null;
+
+  for (let attempt = 0; attempt < getAttemptCount(); attempt++) {
+    try {
+      const queued = await submitViewJob(view, item.description || '', item.image_url, resolution, attempt);
+      return {
+        queue_item_id: item.id,
+        view_id: view.id,
+        status: 'generating',
+        request_id: queued.request_id || '',
+        response_url: queued.response_url || '',
+        status_url: queued.status_url || '',
+        attempt_index: queued.attempt || 0,
+        attempt_label: queued.attempt_label || '',
+        error_message: '',
+        started_at: now,
+        completed_at: null,
+        created_at: now,
+        updated_at: now
+      };
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  return errorRow(item.id, view.id, lastError?.message || 'Failed to submit fal queue job', now);
+}
+
+function errorRow(itemId, viewId, message, now) {
+  return {
+    queue_item_id: itemId,
+    view_id: viewId,
+    status: 'error',
+    error_message: message,
+    completed_at: now,
+    created_at: now,
+    updated_at: now
+  };
+}
+
+function json(payload, status = 200) {
+  return new Response(JSON.stringify(payload), {
+    status,
+    headers: { 'Content-Type': 'application/json' }
+  });
 }

@@ -55,6 +55,11 @@ CREATE TABLE IF NOT EXISTS public.render_results (
   status          TEXT DEFAULT 'waiting' CHECK (status IN ('waiting', 'generating', 'done', 'error')),
   image_url       TEXT DEFAULT '',
   error_message   TEXT DEFAULT '',
+  request_id      TEXT DEFAULT '',
+  response_url    TEXT DEFAULT '',
+  status_url      TEXT DEFAULT '',
+  attempt_index   INTEGER DEFAULT 0,
+  attempt_label   TEXT DEFAULT '',
   started_at      TIMESTAMPTZ,
   completed_at    TIMESTAMPTZ,
   created_at      TIMESTAMPTZ DEFAULT NOW(),
@@ -64,6 +69,13 @@ CREATE TABLE IF NOT EXISTS public.render_results (
 
 -- Index for fast lookups by queue_item_id
 CREATE INDEX IF NOT EXISTS idx_render_results_queue_item_id ON public.render_results(queue_item_id);
+
+-- Migration for stores that already created render_results before durable fal jobs.
+ALTER TABLE public.render_results ADD COLUMN IF NOT EXISTS request_id TEXT DEFAULT '';
+ALTER TABLE public.render_results ADD COLUMN IF NOT EXISTS response_url TEXT DEFAULT '';
+ALTER TABLE public.render_results ADD COLUMN IF NOT EXISTS status_url TEXT DEFAULT '';
+ALTER TABLE public.render_results ADD COLUMN IF NOT EXISTS attempt_index INTEGER DEFAULT 0;
+ALTER TABLE public.render_results ADD COLUMN IF NOT EXISTS attempt_label TEXT DEFAULT '';
 
 ALTER TABLE public.render_results ENABLE ROW LEVEL SECURITY;
 

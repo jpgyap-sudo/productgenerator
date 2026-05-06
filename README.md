@@ -76,7 +76,7 @@ The app uses Supabase to persist your queue, images, and API key in the cloud, s
 
 ### Step 2: Create the database tables
 
-In the Supabase Dashboard, go to **SQL Editor** and run:
+In the Supabase Dashboard, go to **SQL Editor** and run the full contents of [`supabase_setup.sql`](supabase_setup.sql). The shorter SQL below is legacy setup; the full file is required for durable renders that survive reloads/closes because it adds `render_results` and fal.ai queue request columns.
 
 ```sql
 -- Create the queue table
