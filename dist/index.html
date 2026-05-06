@@ -968,6 +968,7 @@ const STATUS = {
   WAIT:    'wait',
   ACTIVE:  'active',
   DONE:    'done',
+  PARTIAL: 'partial',
   ERROR:   'error',
   STOPPED: 'stopped'
 };
@@ -976,6 +977,7 @@ const STATUS_CLASS = {
   [STATUS.WAIT]:    { item: '',              badge: 'b-wait' },
   [STATUS.ACTIVE]:  { item: 'is-active',     badge: 'b-active' },
   [STATUS.DONE]:    { item: 'is-done',       badge: 'b-done' },
+  [STATUS.PARTIAL]: { item: 'is-done',       badge: 'b-done' },
   [STATUS.ERROR]:   { item: 'is-error',      badge: 'b-error' },
   [STATUS.STOPPED]: { item: '',              badge: 'b-stopped' }
 };
@@ -984,6 +986,7 @@ const STATUS_LABEL = {
   [STATUS.WAIT]:    'queued',
   [STATUS.ACTIVE]:  'generating',
   [STATUS.DONE]:    'done ✓',
+  [STATUS.PARTIAL]: 'partial',
   [STATUS.ERROR]:   'error',
   [STATUS.STOPPED]: 'stopped'
 };
@@ -992,6 +995,7 @@ const RBADGE_CLASS = {
   [STATUS.WAIT]:    'rb-wait',
   [STATUS.ACTIVE]:  'rb-gen',
   [STATUS.DONE]:    'rb-ok',
+  [STATUS.PARTIAL]: 'rb-ok',
   [STATUS.ERROR]:   'rb-err',
   [STATUS.STOPPED]: 'rb-stop'
 };
@@ -1000,6 +1004,7 @@ const RBADGE_LABEL = {
   [STATUS.WAIT]:    'waiting',
   [STATUS.ACTIVE]:  'generating...',
   [STATUS.DONE]:    'done',
+  [STATUS.PARTIAL]: 'partial',
   [STATUS.ERROR]:   'error',
   [STATUS.STOPPED]: 'stopped'
 };
@@ -1864,7 +1869,8 @@ async function loadState() {
 }
 
 // ── DARK MODE ─────────────────────────────────────────────────────
-async function applyDarkMode() {
+async function applyDarkMode(options = {}) {
+  const { persist = true } = options;
   if (darkMode) {
     document.documentElement.setAttribute('data-theme', 'dark');
     dmToggle.textContent = '☀️';
@@ -1872,14 +1878,14 @@ async function applyDarkMode() {
     document.documentElement.removeAttribute('data-theme');
     dmToggle.textContent = '🌙';
   }
-  await saveState();
+  if (persist) await saveState();
 }
 
 // Check system preference on load (only if no saved preference exists)
 // loadState() sets darkMode from localStorage if previously saved
 if (!darkMode && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
   darkMode = true;
-  applyDarkMode();
+  applyDarkMode({ persist: false });
 }
 
 dmToggle.addEventListener('click', async () => {
@@ -1899,7 +1905,7 @@ function checkReady() {
     !isPolling
   );
   // Show/hide clear buttons
-  const hasDone = queue.some(q => q.status === STATUS.DONE || q.status === STATUS.ERROR || q.status === STATUS.STOPPED);
+  const hasDone = queue.some(q => q.status === STATUS.DONE || q.status === STATUS.PARTIAL || q.status === STATUS.ERROR || q.status === STATUS.STOPPED);
   clearDoneBtn.style.display = hasDone ? 'inline-block' : 'none';
   clearAllBtn.style.display = queue.length > 0 ? 'inline-block' : 'none';
 }
@@ -2659,7 +2665,7 @@ async function retryFailedViews(item, images) {
 // When the page reloads, batch cards (DOM elements) are gone.
 // This recreates summary cards for items that were completed/errored.
 function restoreBatchCards() {
-  const completedItems = queue.filter(q => q.status === STATUS.DONE || q.status === STATUS.ERROR || q.status === STATUS.STOPPED);
+  const completedItems = queue.filter(q => q.status === STATUS.DONE || q.status === STATUS.PARTIAL || q.status === STATUS.ERROR || q.status === STATUS.STOPPED);
   if (!completedItems.length) return;
 
   let batchSec = document.getElementById('batch-section');
