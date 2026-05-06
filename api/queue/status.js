@@ -2,7 +2,7 @@
 // Polls Supabase and reconciles any durable fal.ai queue jobs that finished
 // while the browser was closed or reloading.
 import { supabase, QUEUE_TABLE, RESULTS_TABLE, BUCKET_NAME } from '../../lib/supabase.js';
-import { getQueuedResult, extractImageUrl } from '../../lib/fal.js';
+import { getQueuedResult, extractImageUrl, getAttemptCount, submitViewJob, VIEWS } from '../../lib/fal.js';
 
 export const config = {
   runtime: 'nodejs',
@@ -39,7 +39,7 @@ export default async function handler(req) {
 
     if (resultsError) throw resultsError;
 
-    const reconciledRows = await reconcileFalJobs(renderRows || []);
+    const reconciledRows = await reconcileFalJobs(renderRows || [], queueItems);
     await updateQueueStatuses(queueItems, reconciledRows);
 
     const { data: refreshedQueue, error: refreshedQueueError } = await fetchQueueItems(itemId);
@@ -87,10 +87,18 @@ function fetchQueueItems(itemId) {
   return query;
 }
 
-async function reconcileFalJobs(rows) {
+async function reconcileFalJobs(rows, queueItems) {
   const nextRows = [];
+  const itemsById = new Map(queueItems.map(item => [item.id, item]));
 
   for (const row of rows) {
+    if (row.status === 'waiting') {
+      const item = itemsById.get(row.queue_item_id);
+      const submitted = await submitWaitingRow(row, item);
+      nextRows.push(submitted);
+      continue;
+    }
+
     if (row.status !== 'generating') {
       nextRows.push(row);
       continue;
@@ -150,6 +158,69 @@ async function reconcileFalJobs(rows) {
   return nextRows;
 }
 
+async function submitWaitingRow(row, item) {
+  const now = new Date().toISOString();
+
+  if (!item?.image_url) {
+    const updated = {
+      ...row,
+      status: 'error',
+      error_message: 'No reference image',
+      completed_at: now,
+      updated_at: now
+    };
+    await saveResultRow(updated);
+    return updated;
+  }
+
+  const view = VIEWS.find(v => v.id === row.view_id);
+  if (!view) {
+    const updated = {
+      ...row,
+      status: 'error',
+      error_message: 'Unknown render view',
+      completed_at: now,
+      updated_at: now
+    };
+    await saveResultRow(updated);
+    return updated;
+  }
+
+  let lastError = null;
+  for (let attempt = 0; attempt < getAttemptCount(); attempt++) {
+    try {
+      const queued = await submitViewJob(view, item.description || '', item.image_url, item.resolution || '1K', attempt);
+      const updated = {
+        ...row,
+        status: 'generating',
+        request_id: queued.request_id || '',
+        response_url: queued.response_url || '',
+        status_url: queued.status_url || '',
+        attempt_index: queued.attempt || 0,
+        attempt_label: queued.attempt_label || '',
+        error_message: '',
+        started_at: row.started_at || now,
+        completed_at: null,
+        updated_at: now
+      };
+      await saveSubmittedRow(updated);
+      return updated;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  const updated = {
+    ...row,
+    status: 'error',
+    error_message: lastError?.message || 'Failed to submit fal queue job',
+    completed_at: now,
+    updated_at: now
+  };
+  await saveResultRow(updated);
+  return updated;
+}
+
 async function copyImageToStorage(imageUrl, itemId, viewId) {
   const imageRes = await fetch(imageUrl);
   if (!imageRes.ok) throw new Error(`Image fetch failed: ${imageRes.status}`);
@@ -183,6 +254,27 @@ async function saveResultRow(row) {
       image_url: row.image_url || '',
       error_message: row.error_message || '',
       completed_at: row.completed_at || null,
+      updated_at: row.updated_at || new Date().toISOString()
+    })
+    .eq('queue_item_id', row.queue_item_id)
+    .eq('view_id', row.view_id);
+
+  if (error) throw error;
+}
+
+async function saveSubmittedRow(row) {
+  const { error } = await supabase
+    .from(RESULTS_TABLE)
+    .update({
+      status: row.status,
+      request_id: row.request_id || '',
+      response_url: row.response_url || '',
+      status_url: row.status_url || '',
+      attempt_index: row.attempt_index || 0,
+      attempt_label: row.attempt_label || '',
+      error_message: row.error_message || '',
+      started_at: row.started_at || new Date().toISOString(),
+      completed_at: null,
       updated_at: row.updated_at || new Date().toISOString()
     })
     .eq('queue_item_id', row.queue_item_id)
