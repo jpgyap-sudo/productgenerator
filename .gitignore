@@ -9,3 +9,6 @@ cdist/
 fal_docs.html
 product_studio_queue*.html
 plans/
+.env
+.env.local
+.env.*.local
