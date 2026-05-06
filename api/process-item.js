@@ -113,7 +113,12 @@ async function processItem(itemId, resolution, provider = 'fal') {
 
   try {
     // Step 1: Mark all views as generating
-    await updateItemStatus(itemId, 'active', 'Generating 5 views...');
+    // Use a provider-specific sub_text so status.js can identify
+    // non-fal.ai providers even if the provider column is missing
+    const providerLabel = provider === 'gemini' ? 'Gemini'
+      : provider === 'openai' ? 'OpenAI'
+      : 'fal.ai';
+    await updateItemStatus(itemId, 'active', `Generating 5 views with ${providerLabel}...`);
     await updateAllViewStatuses(itemId, 'generating', null);
 
     // Step 2: Generate all 5 views in parallel

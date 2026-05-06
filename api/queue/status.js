@@ -162,10 +162,20 @@ async function reconcileFalJobs(rows, queueItems) {
     // worker (process-item.js). The worker updates the DB directly when done.
     // No fal.ai queue to poll. The provider is stored on the queue item,
     // not on the render result row.
+    // NOTE: We use startsWith() for sub_text checks because process-item.js
+    // may overwrite the sub_text with a slightly different string (e.g.
+    // "Generating 5 views with OpenAI..."). The exact match fallback is
+    // for backward compatibility with previously submitted items.
     const queueItem = itemsById.get(row.queue_item_id);
     if (queueItem && (
-      queueItem.provider === 'gemini' || queueItem.sub_text === 'Generating with Gemini...' ||
-      queueItem.provider === 'openai' || queueItem.sub_text === 'Generating with OpenAI...'
+      queueItem.provider === 'gemini' ||
+      queueItem.provider === 'openai' ||
+      (queueItem.sub_text && (
+        queueItem.sub_text.startsWith('Generating with Gemini') ||
+        queueItem.sub_text.startsWith('Generating with OpenAI') ||
+        queueItem.sub_text.startsWith('Generating 5 views with Gemini') ||
+        queueItem.sub_text.startsWith('Generating 5 views with OpenAI')
+      ))
     )) {
       nextRows.push(row);
       continue;
