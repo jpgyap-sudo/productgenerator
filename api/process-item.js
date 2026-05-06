@@ -11,10 +11,10 @@ import { generateView, VIEWS } from '../lib/fal.js';
 
 export const config = {
   runtime: 'nodejs',
-  // Allow up to 600 seconds (10 minutes) for background processing
+  // Allow up to 300 seconds (5 minutes) for background processing
   // Each view generation uses fal.ai queue-based API with polling,
   // so we need enough time for all 5 parallel generations + fallbacks
-  maxDuration: 600
+  maxDuration: 300
 };
 
 export default async function handler(req) {

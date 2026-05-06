@@ -10,7 +10,7 @@ export const config = {
   runtime: 'nodejs',
   // Must match or exceed process-item.js maxDuration
   // waitUntil() keeps the function alive after response is sent
-  maxDuration: 600
+  maxDuration: 300
 };
 
 export default async function handler(req) {

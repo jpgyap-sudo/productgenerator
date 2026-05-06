@@ -3,10 +3,10 @@
   "outputDirectory": "dist",
   "functions": {
     "api/process-item.js": {
-      "maxDuration": 600
+      "maxDuration": 300
     },
     "api/queue/submit.js": {
-      "maxDuration": 600
+      "maxDuration": 300
     }
   },
   "rewrites": [
