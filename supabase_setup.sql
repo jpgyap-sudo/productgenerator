@@ -12,6 +12,8 @@ CREATE TABLE IF NOT EXISTS public.product_queue (
   status        TEXT DEFAULT 'wait',
   description   TEXT DEFAULT '',
   sub_text      TEXT DEFAULT '',
+  provider      TEXT DEFAULT 'fal',
+  resolution    TEXT DEFAULT '1K',
   drive_folder_id   TEXT DEFAULT '',
   drive_folder_name TEXT DEFAULT '',
   updated_at    TIMESTAMPTZ DEFAULT NOW()
@@ -60,6 +62,9 @@ CREATE TABLE IF NOT EXISTS public.render_results (
   request_id      TEXT DEFAULT '',
   response_url    TEXT DEFAULT '',
   status_url      TEXT DEFAULT '',
+  cancel_url      TEXT DEFAULT '',
+  queue_position  INTEGER,
+  resolution      TEXT DEFAULT '1K',
   attempt_index   INTEGER DEFAULT 0,
   attempt_label   TEXT DEFAULT '',
   started_at      TIMESTAMPTZ,
@@ -76,8 +81,14 @@ CREATE INDEX IF NOT EXISTS idx_render_results_queue_item_id ON public.render_res
 ALTER TABLE public.render_results ADD COLUMN IF NOT EXISTS request_id TEXT DEFAULT '';
 ALTER TABLE public.render_results ADD COLUMN IF NOT EXISTS response_url TEXT DEFAULT '';
 ALTER TABLE public.render_results ADD COLUMN IF NOT EXISTS status_url TEXT DEFAULT '';
+ALTER TABLE public.render_results ADD COLUMN IF NOT EXISTS cancel_url TEXT DEFAULT '';
+ALTER TABLE public.render_results ADD COLUMN IF NOT EXISTS queue_position INTEGER;
+ALTER TABLE public.render_results ADD COLUMN IF NOT EXISTS resolution TEXT DEFAULT '1K';
 ALTER TABLE public.render_results ADD COLUMN IF NOT EXISTS attempt_index INTEGER DEFAULT 0;
 ALTER TABLE public.render_results ADD COLUMN IF NOT EXISTS attempt_label TEXT DEFAULT '';
+
+ALTER TABLE public.product_queue ADD COLUMN IF NOT EXISTS provider TEXT DEFAULT 'fal';
+ALTER TABLE public.product_queue ADD COLUMN IF NOT EXISTS resolution TEXT DEFAULT '1K';
 
 ALTER TABLE public.render_results ENABLE ROW LEVEL SECURITY;
 

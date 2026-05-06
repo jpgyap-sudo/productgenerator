@@ -70,9 +70,7 @@ export default async function handler(req) {
       }
     }
 
-    const { error: upsertError } = await supabase
-      .from(RESULTS_TABLE)
-      .upsert(resultRows, { onConflict: 'queue_item_id,view_id' });
+    const { error: upsertError } = await upsertResultRows(resultRows);
 
     if (upsertError) throw upsertError;
 
@@ -107,9 +105,7 @@ async function submitDurableJobs(items, resolution, webhookUrl, provider = 'fal'
       // No image — mark all views as error immediately
       const errorRows = VIEWS.map(view => errorRow(item.id, view.id, 'No reference image', now));
       allPromises.push(
-        supabase
-          .from(RESULTS_TABLE)
-          .upsert(errorRows, { onConflict: 'queue_item_id,view_id' })
+        upsertResultRows(errorRows)
           .then(() => markItemError(item.id, 'No reference image'))
       );
       continue;
@@ -121,21 +117,16 @@ async function submitDurableJobs(items, resolution, webhookUrl, provider = 'fal'
       // worker directly. The worker calls generateGeminiView() for each view.
       const viewRows = VIEWS.map(view => waitingRow(item.id, view.id, now, resolution || '1K'));
       allPromises.push(
-        supabase
-          .from(RESULTS_TABLE)
-          .upsert(viewRows, { onConflict: 'queue_item_id,view_id' })
+        upsertResultRows(viewRows)
           .then(async () => {
             // Save provider on the queue item so status.js reconciliation
             // can identify Gemini rows and skip fal.ai queue polling
-            await supabase
-              .from(QUEUE_TABLE)
-              .update({
-                status: 'active',
-                sub_text: 'Generating with Gemini...',
-                provider: 'gemini',
-                updated_at: new Date().toISOString()
-              })
-              .eq('id', item.id);
+            await updateQueueItem(item.id, {
+              status: 'active',
+              sub_text: 'Generating with Gemini...',
+              provider: 'gemini',
+              updated_at: new Date().toISOString()
+            });
 
             // Trigger background worker for Gemini generation
             const workerUrl = process.env.VERCEL_URL
@@ -159,9 +150,7 @@ async function submitDurableJobs(items, resolution, webhookUrl, provider = 'fal'
 
       allPromises.push(
         Promise.all(viewPromises).then(async (itemRows) => {
-          const { error: upsertError } = await supabase
-            .from(RESULTS_TABLE)
-            .upsert(itemRows, { onConflict: 'queue_item_id,view_id' });
+          const { error: upsertError } = await upsertResultRows(itemRows);
 
           if (upsertError) {
             console.error(`Failed to save render rows for item ${item.id}:`, upsertError);
@@ -170,15 +159,12 @@ async function submitDurableJobs(items, resolution, webhookUrl, provider = 'fal'
           }
 
           const everyViewFailed = itemRows.length > 0 && itemRows.every(row => row.status === 'error');
-          await supabase
-            .from(QUEUE_TABLE)
-            .update({
-              status: everyViewFailed ? 'error' : 'active',
-              sub_text: everyViewFailed ? 'Failed to submit render jobs' : 'Render jobs submitted to fal.ai',
-              provider: 'fal',
-              updated_at: new Date().toISOString()
-            })
-            .eq('id', item.id);
+          await updateQueueItem(item.id, {
+            status: everyViewFailed ? 'error' : 'active',
+            sub_text: everyViewFailed ? 'Failed to submit render jobs' : 'Render jobs submitted to fal.ai',
+            provider: 'fal',
+            updated_at: new Date().toISOString()
+          });
         })
       );
     }
@@ -211,8 +197,6 @@ async function submitDurableViewRow(item, view, resolution, now, webhookUrl) {
         request_id: queued.request_id || '',
         response_url: queued.response_url || '',
         status_url: queued.status_url || '',
-        cancel_url: queued.cancel_url || '',
-        queue_position: queued.queue_position != null ? queued.queue_position : null,
         attempt_index: queued.attempt || 0,
         attempt_label: queued.attempt_label || '',
         error_message: '',
@@ -239,9 +223,6 @@ function waitingRow(itemId, viewId, now, resolution = '1K') {
     request_id: '',
     response_url: '',
     status_url: '',
-    cancel_url: '',
-    queue_position: null,
-    resolution: resolution,
     started_at: null,
     completed_at: null,
     created_at: now,
@@ -259,6 +240,44 @@ function errorRow(itemId, viewId, message, now) {
     created_at: now,
     updated_at: now
   };
+}
+
+function stripOptionalResultColumns(row) {
+  const { cancel_url, queue_position, resolution, ...safeRow } = row;
+  return safeRow;
+}
+
+async function upsertResultRows(rows) {
+  const result = await supabase
+    .from(RESULTS_TABLE)
+    .upsert(rows, { onConflict: 'queue_item_id,view_id' });
+
+  if (!result.error || !isMissingColumnError(result.error)) return result;
+
+  return supabase
+    .from(RESULTS_TABLE)
+    .upsert(rows.map(stripOptionalResultColumns), { onConflict: 'queue_item_id,view_id' });
+}
+
+async function updateQueueItem(itemId, fields) {
+  const result = await supabase
+    .from(QUEUE_TABLE)
+    .update(fields)
+    .eq('id', itemId);
+
+  if (!result.error || !isMissingColumnError(result.error)) return result;
+
+  const { provider, resolution, ...safeFields } = fields;
+  return supabase
+    .from(QUEUE_TABLE)
+    .update(safeFields)
+    .eq('id', itemId);
+}
+
+function isMissingColumnError(error) {
+  return error?.code === 'PGRST204'
+    || /column .* does not exist/i.test(error?.message || '')
+    || /Could not find .* column/i.test(error?.message || '');
 }
 
 async function markItemError(itemId, message) {

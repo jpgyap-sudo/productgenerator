@@ -53,11 +53,6 @@ export default async function handler(req) {
     // new URL() requires a full URL, so provide the host header as base
     const url = new URL(req.url, `https://${req.headers.get('host') || 'localhost'}`);
     const itemId = url.searchParams.get('itemId');
-    const cacheKey = itemId || '__all__';
-
-    // Check if client already has latest data via If-None-Match
-    const cached = getCached(cacheKey);
-    const ifNoneMatch = req.headers.get('if-none-match');
 
     const { data: queueItems, error: queueError } = await fetchQueueItems(itemId);
     if (queueError) throw queueError;
@@ -68,21 +63,6 @@ export default async function handler(req) {
         renderResults: {},
         hasActiveItems: false,
         hasPendingItems: false
-      });
-    }
-
-    // Compute ETag from latest updated_at across all items
-    const latestUpdate = queueItems.reduce((max, item) => {
-      const t = new Date(item.updated_at || 0).getTime();
-      return t > max ? t : max;
-    }, 0);
-    const etag = `"${latestUpdate}-${queueItems.length}"`;
-
-    // If client's ETag matches, nothing changed
-    if (ifNoneMatch === etag && cached) {
-      return new Response(null, {
-        status: 304,
-        headers: { 'ETag': etag, 'Cache-Control': 'no-cache' }
       });
     }
 
@@ -130,11 +110,7 @@ export default async function handler(req) {
       hasPendingItems: queue.some(item => item.status === 'wait')
     };
 
-    // Cache the response
-    setCached(cacheKey, response);
-
     return json(response, 200, {
-      'ETag': etag,
       'Cache-Control': 'no-cache, no-store, must-revalidate'
     });
   } catch (error) {
@@ -186,7 +162,7 @@ async function reconcileFalJobs(rows, queueItems) {
     // No fal.ai queue to poll. The provider is stored on the queue item,
     // not on the render result row.
     const queueItem = itemsById.get(row.queue_item_id);
-    if (queueItem && queueItem.provider === 'gemini') {
+    if (queueItem && (queueItem.provider === 'gemini' || queueItem.sub_text === 'Generating with Gemini...')) {
       nextRows.push(row);
       continue;
     }
@@ -283,7 +259,7 @@ async function ensureRowsForActiveItems(rows, queueItems) {
     // before the background worker is triggered. If no rows exist yet,
     // the worker will create them. Don't create waiting rows here that
     // would confuse the reconciliation logic.
-    if (item.provider === 'gemini') continue;
+    if (item.provider === 'gemini' || item.sub_text === 'Generating with Gemini...') continue;
     const itemRows = rowsByItemId.get(item.id) || [];
     if (itemRows.length > 0) continue;
 
@@ -297,9 +273,6 @@ async function ensureRowsForActiveItems(rows, queueItems) {
         request_id: '',
         response_url: '',
         status_url: '',
-        cancel_url: '',
-        queue_position: null,
-        resolution: item.resolution || '1K',
         started_at: null,
         completed_at: null,
         created_at: now,
@@ -452,8 +425,6 @@ async function saveSubmittedRow(row) {
       request_id: row.request_id || '',
       response_url: row.response_url || '',
       status_url: row.status_url || '',
-      cancel_url: row.cancel_url || '',
-      queue_position: row.queue_position != null ? row.queue_position : null,
       attempt_index: row.attempt_index || 0,
       attempt_label: row.attempt_label || '',
       error_message: row.error_message || '',
