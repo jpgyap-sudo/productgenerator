@@ -79,3 +79,35 @@
 5. **Keep `dist/` in sync** — after modifying `index.html`, copy to `dist/index.html`.
 6. **Test both paths** — server-side (Vercel) and client-side (local) processing.
 7. **Update this log's bug status** when previously-flagged issues are fixed in later commits.
+
+---
+
+## 2026-05-06 — Hardcoded API Key Removed + Secure Frontend Input
+
+### Changes Made
+
+| File | Change | Reason |
+|------|--------|--------|
+| `index.html` | **Removed** `HARDCODED_API_KEY` constant (was line 1232) | 🔴 CRITICAL security bug — real fal.ai key exposed in client-side source code |
+| `index.html` | **Updated** `getApiKey()` — removed `HARDCODED_API_KEY` fallback; priority is now `ENV_API_KEY \|\| savedApiKey` | No more hardcoded fallback; env var (Vercel) or user-saved key only |
+| `index.html` | **Updated** `loadState()` — removed steps 4 and 5 that referenced `HARDCODED_API_KEY` | Clean up dead code after hardcoded key removal |
+| `index.html` | **Added** `data-secure="true"` attribute to API key input | CSS selector target for copy-prevention styles |
+| `index.html` | **Added** CSS `.topbar input[data-secure="true"]` with `user-select: none` | Prevent text selection on the input |
+| `index.html` | **Updated** `.topbar input.is-saved` CSS — added `-webkit-user-select`, `-moz-user-select`, `-ms-user-select` | Cross-browser selection prevention when key is saved |
+| `index.html` | **Updated** `showSavedApiKeyState()` — shows `'••••••••••••••••••••••••••••••'` instead of actual key | Masked placeholder — actual key is never displayed in the DOM |
+| `index.html` | **Added** JS copy-prevention event handlers on `apiKeyEl`: `contextmenu`, `copy`, `cut`, `paste`, `keydown` (blocks Ctrl+C/V/X/Ins, Shift+Ins) | User requested API key "cannot be copied" from the input |
+
+### Bug Status Updates
+
+| # | Severity | Issue | Status |
+|---|----------|-------|--------|
+| 1 | 🔴 CRITICAL | **Hardcoded API key** — `HARDCODED_API_KEY` with real fal.ai key exposed in client-side code | **FIXED** — removed entirely |
+| 8 | 🔴 CRITICAL | **Hardcoded API key** (duplicate of #1) | **FIXED** — removed entirely |
+| 12 | 🟡 LOW | **`__FAL_API_KEY__` replacement bypassed** by `HARDCODED_API_KEY` fallback | **FIXED** — hardcoded key removed; env var now works as intended |
+
+### Notes
+
+- The `__FAL_API_KEY__` build-time replacement (Vercel env var) still works. If the replacement fails (local dev), `ENV_API_KEY` returns empty string and the user must enter their key in the input field.
+- The saved key persists in localStorage + Supabase `app_config` table. It is never displayed in the input — only `'••••••••••••••••••••••••••••••'` is shown.
+- Copy protection uses multiple layers: CSS `user-select: none`, `-webkit-text-security: disc`, and JS event prevention (contextmenu, copy, cut, paste, keyboard shortcuts).
+- The `dist/index.html` must be updated to match before committing.

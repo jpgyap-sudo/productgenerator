@@ -117,9 +117,19 @@ body {
 }
 .topbar input:focus { outline: none; border-color: var(--accent); }
 .topbar input::placeholder { color: #555; }
+/* Secure API key input — prevents copying/selecting the saved key */
 .topbar input.is-saved {
   color: var(--accent);
   -webkit-text-security: disc;
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+}
+.topbar input[data-secure="true"] {
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
   user-select: none;
 }
 .api-save-btn {
@@ -972,7 +982,7 @@ textarea:focus { outline: none; border-color: var(--text-secondary); }
   </div>
   <div class="topbar-right">
     <label for="apiKey">fal.ai Key</label>
-    <input type="password" id="apiKey" placeholder="Paste your fal.ai key..." autocomplete="off"/>
+    <input type="password" id="apiKey" placeholder="Paste your fal.ai key..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-secure="true"/>
     <button class="api-save-btn" id="apiKeySave" type="button" disabled>Save</button>
     <button class="tb-btn" id="featureToggle" title="View & edit product feature prompts" aria-label="Product Features">📋 Features</button>
     <button class="sidebar-toggle" id="sidebarToggle" title="Toggle sidebar" aria-label="Toggle sidebar">☰</button>
@@ -1226,10 +1236,6 @@ const ENV_API_KEY = (function(){
     return val.startsWith('__FAL') ? '' : val;
   } catch(e) { return ''; }
 })();
-
-// ── HARDCODED API KEY ──────────────────────────────────────────────
-// Your personal fal.ai API key — always available without re-entering.
-const HARDCODED_API_KEY = 'd266b8ac-4cf4-402a-a0bd-b06571960d91:29ebe710c15ec6e775e3c66d388c5f3f';
 
 // ── STATE ──────────────────────────────────────────────────────────
 let queue = [];
@@ -1933,12 +1939,13 @@ async function saveApiKeyImmediately(key) {
 }
 
 function getApiKey() {
-  // Priority: env var > hardcoded key > saved key from localStorage/Supabase
-  return (ENV_API_KEY || HARDCODED_API_KEY || savedApiKey || '').trim();
+  // Priority: env var (Vercel build-time) > saved key (localStorage/Supabase)
+  return (ENV_API_KEY || savedApiKey || '').trim();
 }
 
 function showSavedApiKeyState(source) {
-  apiKeyEl.value = 'saved-api-key';
+  // Show masked placeholder — actual key is never displayed in the input
+  apiKeyEl.value = '••••••••••••••••••••••••••••••';
   apiKeyEl.disabled = true;
   apiKeyEl.classList.add('is-saved');
   apiKeyEl.title = source === 'env'
@@ -2042,21 +2049,8 @@ async function loadState() {
     // This will override localStorage data with cloud data if connected
     await initSupabase();
     
-    // 4. If no env var or localStorage key, use the hardcoded key
-    if (!ENV_API_KEY && !savedApiKey && HARDCODED_API_KEY) {
-      savedApiKey = HARDCODED_API_KEY;
-      showSavedApiKeyState('manual');
-      // Persist to localStorage so it survives even if HARDCODED_API_KEY changes later
-      try {
-        const raw3 = localStorage.getItem(LS_KEY);
-        const state3 = raw3 ? JSON.parse(raw3) : {};
-        state3.apiKey = HARDCODED_API_KEY;
-        localStorage.setItem(LS_KEY, JSON.stringify(state3));
-      } catch (e3) {}
-      checkReady();
-    }
-    
-    // 5. Final fallback: check localStorage directly one more time
+    // 4. Final fallback: check localStorage directly one more time
+    // (in case the state load above was skipped due to corrupt data)
     if (!ENV_API_KEY && !savedApiKey) {
       try {
         const raw2 = localStorage.getItem(LS_KEY);
@@ -2269,6 +2263,23 @@ apiKeySave.addEventListener('click', () => {
     return;
   }
   saveApiKeyFromInput();
+});
+
+// ── API KEY COPY PROTECTION ────────────────────────────────────────
+// Prevent right-click context menu on the API key input
+apiKeyEl.addEventListener('contextmenu', e => e.preventDefault());
+// Prevent copy, cut, and paste events
+apiKeyEl.addEventListener('copy', e => e.preventDefault());
+apiKeyEl.addEventListener('cut', e => e.preventDefault());
+apiKeyEl.addEventListener('paste', e => e.preventDefault());
+// Block Ctrl+C, Ctrl+Ins (copy), Shift+Ins (paste), Ctrl+V (paste) via keydown
+apiKeyEl.addEventListener('keydown', e => {
+  if (
+    (e.ctrlKey && (e.key === 'c' || e.key === 'C' || e.key === 'v' || e.key === 'V' || e.key === 'x' || e.key === 'X' || e.key === 'Insert')) ||
+    (e.shiftKey && e.key === 'Insert')
+  ) {
+    e.preventDefault();
+  }
 });
 
 // ── RESOLUTION PICKER ──────────────────────────────────────────────
