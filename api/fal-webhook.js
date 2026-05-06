@@ -239,19 +239,43 @@ async function maybeUploadToDrive(itemId) {
 
   if (doneViews.length === 5) {
     try {
-      const driveResult = await uploadRendersToDrive(item.id, item.name, doneViews);
+      await updateDriveUploadState(item.id, {
+        drive_upload_status: 'uploading',
+        drive_upload_done: 0,
+        drive_upload_total: doneViews.length,
+        drive_upload_error: '',
+        updated_at: new Date().toISOString()
+      });
 
-      await supabase
-        .from(QUEUE_TABLE)
-        .update({
-          drive_folder_id: driveResult.folderId,
-          drive_folder_name: driveResult.folderName,
+      const driveResult = await uploadRendersToDrive(item.id, item.name, doneViews, {
+        onProgress: progress => updateDriveUploadState(item.id, {
+          drive_upload_status: progress.status,
+          drive_upload_done: progress.uploaded,
+          drive_upload_total: progress.total,
+          drive_upload_error: progress.status === 'error' ? progress.message || 'Drive upload incomplete' : '',
+          drive_folder_id: progress.folderId || item.drive_folder_id || '',
+          drive_folder_name: progress.folderName || item.drive_folder_name || '',
           updated_at: new Date().toISOString()
         })
-        .eq('id', item.id);
+      });
+
+      await updateDriveUploadState(item.id, {
+        drive_folder_id: driveResult.folderId,
+        drive_folder_name: driveResult.folderName,
+        drive_upload_status: driveResult.files.length === doneViews.length ? 'done' : 'error',
+        drive_upload_done: driveResult.files.length,
+        drive_upload_total: doneViews.length,
+        drive_upload_error: driveResult.files.length === doneViews.length ? '' : 'Some files failed to upload',
+        updated_at: new Date().toISOString()
+      });
 
       console.log(`[FAL-WEBHOOK] SUCCESS: Uploaded ${item.name} to Drive folder "${driveResult.folderName}"`);
     } catch (driveErr) {
+      await updateDriveUploadState(item.id, {
+        drive_upload_status: 'error',
+        drive_upload_error: driveErr.message || 'Drive upload failed',
+        updated_at: new Date().toISOString()
+      });
       console.error(`[FAL-WEBHOOK] Drive upload FAILED for item ${itemId}:`, driveErr.message);
     }
   }
@@ -260,6 +284,34 @@ async function maybeUploadToDrive(itemId) {
 function getViewLabel(viewId) {
   const view = VIEWS.find(v => v.id === viewId);
   return view ? view.label : `View ${viewId}`;
+}
+
+async function updateDriveUploadState(itemId, fields) {
+  const { error } = await supabase
+    .from(QUEUE_TABLE)
+    .update(fields)
+    .eq('id', itemId);
+
+  if (!error || !isMissingColumnError(error)) return;
+
+  const {
+    drive_upload_status,
+    drive_upload_done,
+    drive_upload_total,
+    drive_upload_error,
+    ...safeFields
+  } = fields;
+
+  await supabase
+    .from(QUEUE_TABLE)
+    .update(safeFields)
+    .eq('id', itemId);
+}
+
+function isMissingColumnError(error) {
+  return error?.code === 'PGRST204'
+    || /column .* does not exist/i.test(error?.message || '')
+    || /Could not find .* column/i.test(error?.message || '');
 }
 
 function json(payload, status = 200) {

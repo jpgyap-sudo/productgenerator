@@ -16,6 +16,10 @@ CREATE TABLE IF NOT EXISTS public.product_queue (
   resolution    TEXT DEFAULT '1K',
   drive_folder_id   TEXT DEFAULT '',
   drive_folder_name TEXT DEFAULT '',
+  drive_upload_status TEXT DEFAULT '',
+  drive_upload_done   INTEGER DEFAULT 0,
+  drive_upload_total  INTEGER DEFAULT 0,
+  drive_upload_error  TEXT DEFAULT '',
   updated_at    TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -89,6 +93,10 @@ ALTER TABLE public.render_results ADD COLUMN IF NOT EXISTS attempt_label TEXT DE
 
 ALTER TABLE public.product_queue ADD COLUMN IF NOT EXISTS provider TEXT DEFAULT 'fal';
 ALTER TABLE public.product_queue ADD COLUMN IF NOT EXISTS resolution TEXT DEFAULT '1K';
+ALTER TABLE public.product_queue ADD COLUMN IF NOT EXISTS drive_upload_status TEXT DEFAULT '';
+ALTER TABLE public.product_queue ADD COLUMN IF NOT EXISTS drive_upload_done INTEGER DEFAULT 0;
+ALTER TABLE public.product_queue ADD COLUMN IF NOT EXISTS drive_upload_total INTEGER DEFAULT 0;
+ALTER TABLE public.product_queue ADD COLUMN IF NOT EXISTS drive_upload_error TEXT DEFAULT '';
 
 ALTER TABLE public.render_results ENABLE ROW LEVEL SECURITY;
 

@@ -758,6 +758,43 @@ textarea:focus { outline: none; border-color: var(--text-secondary); }
 }
 
 /* ── CLEAR BUTTONS ───────────────────────────────────────────── */
+.drive-progress {
+  display: none;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-top: 1px solid var(--border-light);
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+.drive-progress.visible { display: flex; }
+.drive-label {
+  min-width: 150px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.drive-bar {
+  flex: 1;
+  height: 5px;
+  background: var(--border-light);
+  border-radius: 99px;
+  overflow: hidden;
+}
+.drive-bar-fill {
+  height: 100%;
+  width: 0%;
+  background: var(--accent);
+  transition: width 0.3s ease;
+}
+.drive-progress.done .drive-bar-fill { background: var(--success); }
+.drive-progress.error .drive-bar-fill { background: var(--error); }
+.drive-count {
+  min-width: 48px;
+  text-align: right;
+  font-family: monospace;
+  color: var(--text-muted);
+}
+
 .clear-actions {
   display: flex; gap: 4px; padding: 0.4rem 0.75rem;
   border-bottom: 1px solid var(--border-light);
@@ -1037,6 +1074,7 @@ textarea:focus { outline: none; border-color: var(--text-secondary); }
         <div class="q-btns" id="providerBtns">
           <button class="q-btn active" data-provider="fal">fal.ai<br><span class="price">Nano Banana 2</span></button>
           <button class="q-btn" data-provider="gemini">Gemini 3<br><span class="price">Flash / Pro</span></button>
+          <button class="q-btn" data-provider="openai">OpenAI<br><span class="price">GPT Image 2</span></button>
         </div>
         <div class="res-note" id="providerNote">fal.ai — Nano Banana 2 / GPT Image 2. Requires fal.ai API key.</div>
       </div>
@@ -1273,7 +1311,7 @@ const ENV_API_KEY = (function(){
 let queue = [];
 let pendingItems = [];
 let nb2Res = '0.5K';
-let provider = 'fal'; // 'fal' or 'gemini'
+let provider = 'fal'; // 'fal', 'gemini', or 'openai'
 let nextId = 1;
 let darkMode = false;
 let parallelism = 1;
@@ -1837,7 +1875,13 @@ async function loadQueueFromSupabase() {
           dataUrl: row.image_url || '',
           supabaseUrl: row.image_url || '',
           status: row.status || STATUS.WAIT,
-          desc: row.description || ''
+          desc: row.description || '',
+          driveFolderId: row.drive_folder_id || '',
+          driveFolderName: row.drive_folder_name || '',
+          driveUploadStatus: row.drive_upload_status || '',
+          driveUploadDone: row.drive_upload_done || 0,
+          driveUploadTotal: row.drive_upload_total || 0,
+          driveUploadError: row.drive_upload_error || ''
         };
         item.status = recoverInterruptedStatus(item);
         return item;
@@ -1911,7 +1955,13 @@ async function saveState() {
         hasLocalImage: (q.status === STATUS.WAIT || q.status === STATUS.ACTIVE) && !!q.dataUrl && q.dataUrl.startsWith('data:'),
         status: q.status,
         supabaseUrl: q.supabaseUrl || '',
-        desc: q.desc || ''
+        desc: q.desc || '',
+        driveFolderId: q.driveFolderId || '',
+        driveFolderName: q.driveFolderName || '',
+        driveUploadStatus: q.driveUploadStatus || '',
+        driveUploadDone: q.driveUploadDone || 0,
+        driveUploadTotal: q.driveUploadTotal || 0,
+        driveUploadError: q.driveUploadError || ''
       })),
       pendingItems: pendingItems.map(p => ({
         id: p.id, name: p.name,
@@ -2071,6 +2121,8 @@ async function loadState() {
         const note = document.getElementById('providerNote');
         if (provider === 'gemini') {
           note.textContent = 'Gemini 3 — gemini-3.1-flash-image-preview (views 1-4) & gemini-3-pro-image-preview (view 5). GEMINI_API_KEY set on server.';
+        } else if (provider === 'openai') {
+          note.textContent = 'OpenAI — GPT Image 2 (HD, natural style). OPENAI_API_KEY set on server.';
         }
       }
       if (state.darkMode !== undefined) {
@@ -2351,8 +2403,10 @@ document.querySelectorAll('.q-btn[data-provider]').forEach(btn => {
     const note = document.getElementById('providerNote');
     if (provider === 'fal') {
       note.textContent = 'fal.ai — Nano Banana 2 / GPT Image 2. Requires fal.ai API key.';
-    } else {
+    } else if (provider === 'gemini') {
       note.textContent = 'Gemini 3 — gemini-3.1-flash-image-preview (views 1-4) & gemini-3-pro-image-preview (view 5). GEMINI_API_KEY set on server.';
+    } else if (provider === 'openai') {
+      note.textContent = 'OpenAI — GPT Image 2 (HD, natural style). OPENAI_API_KEY set on server.';
     }
     await saveState();
   });
@@ -3045,6 +3099,49 @@ function completedBatchHeaderHtml() {
   </div>`;
 }
 
+function driveProgressHtml(item) {
+  const id = item.id;
+  return `<div class="drive-progress" id="dprog-${id}">
+    <span class="drive-label" id="dlabel-${id}">Google Drive</span>
+    <div class="drive-bar"><div class="drive-bar-fill" id="dfill-${id}"></div></div>
+    <span class="drive-count" id="dcount-${id}">0/5</span>
+  </div>`;
+}
+
+function updateBatchDriveStatus(item) {
+  const wrap = document.getElementById(`dprog-${item.id}`);
+  if (!wrap) return;
+
+  const label = document.getElementById(`dlabel-${item.id}`);
+  const fill = document.getElementById(`dfill-${item.id}`);
+  const count = document.getElementById(`dcount-${item.id}`);
+  const status = item.driveUploadStatus || (item.driveFolderName ? 'done' : '');
+  const total = Number(item.driveUploadTotal || 5);
+  const done = Number(item.driveUploadDone || (status === 'done' ? total : 0));
+  const pct = total > 0 ? Math.min(100, Math.round((done / total) * 100)) : 0;
+
+  wrap.classList.toggle('visible', !!status);
+  wrap.classList.toggle('done', status === 'done');
+  wrap.classList.toggle('error', status === 'error');
+  if (fill) fill.style.width = (status === 'done' ? 100 : pct) + '%';
+  if (count) count.textContent = `${status === 'done' ? total : done}/${total}`;
+  if (!label) return;
+
+  if (status === 'uploading') {
+    label.textContent = item.driveFolderName
+      ? `Uploading to Drive (${item.driveFolderName})`
+      : 'Uploading to Google Drive';
+  } else if (status === 'done') {
+    label.textContent = item.driveFolderName
+      ? `Uploaded to Drive: ${item.driveFolderName}`
+      : 'Uploaded to Google Drive';
+  } else if (status === 'error') {
+    label.textContent = item.driveUploadError
+      ? `Drive upload failed: ${item.driveUploadError}`
+      : 'Drive upload failed';
+  }
+}
+
 function createBatchCard(item, images) {
   let batchSec = document.getElementById('batch-section');
   if (!batchSec) {
@@ -3082,8 +3179,10 @@ function createBatchCard(item, images) {
       <span>Zipping...</span>
       <div class="zip-bar"><div class="zip-bar-fill" id="zfill-${item.id}"></div></div>
       <span id="zpct-${item.id}">0%</span>
-    </div>`;
+    </div>
+    ${driveProgressHtml(item)}`;
   batchSec.appendChild(card);
+  updateBatchDriveStatus(item);
 
   const grid = document.getElementById(`bgrid-${item.id}`);
   VIEWS.forEach(v => {
@@ -3192,8 +3291,10 @@ function createBatchCardFromUrls(item, viewResults) {
       <span>Zipping...</span>
       <div class="zip-bar"><div class="zip-bar-fill" id="zfill-${item.id}"></div></div>
       <span id="zpct-${item.id}">0%</span>
-    </div>`;
+    </div>
+    ${driveProgressHtml(item)}`;
   batchSec.appendChild(card);
+  updateBatchDriveStatus(item);
 
   const grid = document.getElementById(`bgrid-${item.id}`);
   VIEWS.forEach(v => {
@@ -3434,8 +3535,10 @@ async function restoreBatchCards() {
           Images are not available after page reload.<br/>
           Click "↻ Re-generate" to create them again.
         </div>
-      </div>`;
+      </div>
+      ${driveProgressHtml(item)}`;
     batchSec.appendChild(card);
+    updateBatchDriveStatus(item);
   });
 }
 
@@ -3820,6 +3923,12 @@ async function pollStatus() {
           const prevStatus = localItem.status;
           localItem.status = serverItem.status;
           localItem.supabaseUrl = serverItem.imageUrl || localItem.supabaseUrl;
+          localItem.driveFolderId = serverItem.driveFolderId || '';
+          localItem.driveFolderName = serverItem.driveFolderName || '';
+          localItem.driveUploadStatus = serverItem.driveUploadStatus || '';
+          localItem.driveUploadDone = serverItem.driveUploadDone || 0;
+          localItem.driveUploadTotal = serverItem.driveUploadTotal || 0;
+          localItem.driveUploadError = serverItem.driveUploadError || '';
           if (serverItem.imageUrl && !localItem.dataUrl) {
             localItem.dataUrl = serverItem.imageUrl;
           }
@@ -3835,6 +3944,7 @@ async function pollStatus() {
               badge.textContent = sl;
             }
           }
+          updateBatchDriveStatus(localItem);
         }
       }
     }
@@ -3898,14 +4008,20 @@ async function pollStatus() {
         const viewResults = data.renderResults[serverItem.id];
         if (localItem && viewResults && viewResults.length > 0) {
           createBatchCardFromUrls(localItem, viewResults);
+          updateBatchDriveStatus(localItem);
           welcomeState.style.display = 'none';
         }
       }
     }
 
-    // Check if all items are done
+    const driveUploading = data.queue.some(q => q.driveUploadStatus === 'uploading');
+
+    // Check if all items are done and any Drive upload has finished too.
     const activeOrWait = data.queue.filter(q => q.status === 'active' || q.status === 'wait' || q.status === 'generating');
-    if (activeOrWait.length === 0 && isPolling) {
+    if (activeOrWait.length === 0 && driveUploading && isPolling) {
+      setStatus('Renders complete — uploading to Google Drive...');
+    }
+    if (activeOrWait.length === 0 && !driveUploading && isPolling) {
       // All done — stop polling
       stopPolling();
       const done = data.queue.filter(q => q.status === 'done').length;
@@ -4111,7 +4227,13 @@ window.addEventListener('beforeunload', function(e) {
         hasLocalImage: (q.status === STATUS.WAIT || q.status === STATUS.ACTIVE) && !!q.dataUrl && q.dataUrl.startsWith('data:'),
         status: q.status,
         supabaseUrl: q.supabaseUrl || '',
-        desc: q.desc || ''
+        desc: q.desc || '',
+        driveFolderId: q.driveFolderId || '',
+        driveFolderName: q.driveFolderName || '',
+        driveUploadStatus: q.driveUploadStatus || '',
+        driveUploadDone: q.driveUploadDone || 0,
+        driveUploadTotal: q.driveUploadTotal || 0,
+        driveUploadError: q.driveUploadError || ''
       })),
       pendingItems: pendingItems.map(p => ({
         id: p.id, name: p.name,
