@@ -7,7 +7,10 @@ import { supabase, QUEUE_TABLE, RESULTS_TABLE, BUCKET_NAME } from '../../lib/sup
 import { waitUntil } from '@vercel/functions';
 
 export const config = {
-  runtime: 'nodejs'
+  runtime: 'nodejs',
+  // Must match or exceed process-item.js maxDuration
+  // waitUntil() keeps the function alive after response is sent
+  maxDuration: 600
 };
 
 export default async function handler(req) {

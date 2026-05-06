@@ -1,18 +1,20 @@
 // ═══════════════════════════════════════════════════════════════════
 //  POST /api/process-item — Background worker
 //  Called by submit.js via waitUntil(). Processes queue items by:
-//  1. Uploading reference image to fal.ai CDN
-//  2. Generating all 5 views in parallel
-//  3. Saving results to Supabase (render_results table + storage)
-//  4. Updating queue item status
+//  1. Generating all 5 views in parallel via fal.ai queue-based API
+//     (no CDN upload needed — passes Supabase public URL directly)
+//  2. Saving results to Supabase (render_results table + storage)
+//  3. Updating queue item status
 // ═══════════════════════════════════════════════════════════════════
 import { supabase, QUEUE_TABLE, RESULTS_TABLE, BUCKET_NAME } from '../lib/supabase.js';
-import { uploadToFal, generateView, VIEWS } from '../lib/fal.js';
+import { generateView, VIEWS } from '../lib/fal.js';
 
 export const config = {
   runtime: 'nodejs',
-  // Allow up to 300 seconds (5 minutes) for background processing
-  maxDuration: 300
+  // Allow up to 600 seconds (10 minutes) for background processing
+  // Each view generation uses fal.ai queue-based API with polling,
+  // so we need enough time for all 5 parallel generations + fallbacks
+  maxDuration: 600
 };
 
 export default async function handler(req) {
@@ -26,7 +28,7 @@ export default async function handler(req) {
   try {
     const url = new URL(req.url);
     const idsParam = url.searchParams.get('ids');
-    const resolution = url.searchParams.get('res') || '0.5K';
+    const resolution = url.searchParams.get('res') || '1K';
 
     if (!idsParam) {
       return new Response(JSON.stringify({ error: 'ids parameter required' }), {
@@ -96,27 +98,18 @@ async function processItem(itemId, resolution) {
   }
 
   try {
-    // Step 1: Upload reference image to fal.ai CDN
-    await updateItemStatus(itemId, 'active', 'Uploading reference image...');
-    let falImageUrl;
-    try {
-      falImageUrl = await uploadToFal(imageUrl);
-    } catch (uploadErr) {
-      await updateItemStatus(itemId, 'error', `Upload failed: ${uploadErr.message}`);
-      await updateAllViewStatuses(itemId, 'error', `Upload failed: ${uploadErr.message}`);
-      return;
-    }
-
-    // Step 2: Mark all views as generating
+    // Step 1: Mark all views as generating
+    // We pass the Supabase public URL directly to fal.ai — no CDN upload needed
     await updateItemStatus(itemId, 'active', 'Generating 5 views...');
     await updateAllViewStatuses(itemId, 'generating', null);
 
-    // Step 3: Generate all 5 views in parallel
+    // Step 2: Generate all 5 views in parallel
+    // Each call uses fal.ai queue-based API internally (submit + poll)
     const results = await Promise.allSettled(
-      VIEWS.map(view => generateView(view, desc, falImageUrl, resolution))
+      VIEWS.map(view => generateView(view, desc, imageUrl, resolution))
     );
 
-    // Step 4: Save results
+    // Step 3: Save results
     let successCount = 0;
     let failCount = 0;
 
@@ -190,7 +183,7 @@ async function processItem(itemId, resolution) {
       }
     }
 
-    // Step 5: Update queue item final status
+    // Step 4: Update queue item final status
     const finalStatus = successCount === 5 ? 'done' : (successCount > 0 ? 'partial' : 'error');
     const statusText = successCount === 5
       ? 'All 5 views generated'
