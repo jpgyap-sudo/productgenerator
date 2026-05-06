@@ -2274,7 +2274,7 @@ function createActiveCard(item) {
     if (titleEl) titleEl.textContent = `Generating: ${item.name}`;
     if (progEl) progEl.textContent = 'Starting...';
     if (dot) { dot.className = 'pulse'; dot.style.animation = ''; dot.style.background = ''; }
-    if (skipBtn) { skipBtn.textContent = '⏭ Skip'; skipBtn.disabled = false; skipBtn.className = 'btn-skip'; }
+    if (skipBtn) { skipBtn.textContent = '⏭ Skip'; skipBtn.disabled = false; skipBtn.className = 'btn-skip'; skipBtn.onclick = null; }
     // Reset all render slots
     VIEWS.forEach(v => {
       const badge = document.getElementById(`rb-${v.id}`);
@@ -2370,6 +2370,7 @@ function restoreInterruptedActiveCard() {
     skipBtn.textContent = '⏭ Skip';
     skipBtn.disabled = false;
     skipBtn.className = 'btn-skip';
+    skipBtn.onclick = null;
   }
 
   VIEWS.forEach(v => {
@@ -2426,6 +2427,32 @@ function restoreInterruptedActiveCard() {
 }
 
 // ── ACTIVE CARD PROGRESS BAR & TIMER ───────────────────────────────
+function restoreQueuedPreviewCard() {
+  if (document.getElementById('active-section') || document.getElementById('batch-section')) return;
+
+  const item = queue.find(q => q.status === STATUS.WAIT && (q.dataUrl || q.supabaseUrl));
+  if (!item) return;
+
+  createActiveCard(item);
+
+  const title = document.getElementById('active-title');
+  const prog = document.getElementById('active-prog');
+  const dot = document.getElementById('active-dot');
+  const skipBtn = document.getElementById('skipBtn');
+  const timerEl = document.getElementById('active-timer');
+
+  if (title) title.textContent = `Queued: ${item.name}`;
+  if (prog) prog.textContent = 'Ready to submit. Click Start Queue to begin processing.';
+  if (dot) { dot.className = 'pulse'; dot.style.animation = 'none'; dot.style.background = 'var(--text-dim)'; }
+  if (timerEl) timerEl.textContent = '';
+  if (skipBtn) {
+    skipBtn.textContent = 'Start Queue';
+    skipBtn.disabled = false;
+    skipBtn.className = 'btn-skip';
+    skipBtn.onclick = () => startBtn.click();
+  }
+}
+
 let activeTimerInterval = null;
 let activeStartTime = null;
 
@@ -2981,7 +3008,21 @@ startBtn.addEventListener('click', async () => {
   } catch (e) {
     startBtn.disabled = false;
     stopBtn.style.display = 'none';
+    const title = document.getElementById('active-title');
+    const prog = document.getElementById('active-prog');
+    const dot = document.getElementById('active-dot');
+    const skipBtn = document.getElementById('skipBtn');
+    if (title) title.textContent = `Submission failed: ${firstItem.name}`;
+    if (prog) prog.textContent = 'The item is still queued. Click Start Queue to try again.';
+    if (dot) { dot.className = 'pulse error'; dot.style.animation = 'none'; dot.style.background = ''; }
+    if (skipBtn) {
+      skipBtn.textContent = 'Retry Submit';
+      skipBtn.disabled = false;
+      skipBtn.className = 'btn-skip';
+      skipBtn.onclick = () => startBtn.click();
+    }
     checkReady();
+    saveState();
   }
 });
 
@@ -3042,6 +3083,7 @@ window.addEventListener('beforeunload', function(e) {
   restoreInterruptedActiveCard();
   // Restore batch cards for completed items (they don't survive page reload)
   restoreBatchCards();
+  restoreQueuedPreviewCard();
 })();
 </script>
 </body>
