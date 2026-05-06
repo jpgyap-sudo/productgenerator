@@ -2582,6 +2582,34 @@ async function deleteQueueItemFromSupabase(id) {
   }
 }
 
+async function deleteCompletedBatch(id) {
+  const item = queue.find(q => q.id === id);
+  if (item && (item.status === STATUS.WAIT || item.status === STATUS.ACTIVE)) {
+    toast('Only completed batches can be deleted here', 'error');
+    return;
+  }
+
+  const card = document.getElementById(`bc-${id}`);
+  if (card) card.remove();
+
+  queue = queue.filter(q => q.id !== id);
+  await deleteQueueItemFromSupabase(id);
+
+  const batchSection = document.getElementById('batch-section');
+  if (batchSection && !batchSection.querySelector('[id^="bc-"]')) {
+    batchSection.remove();
+  }
+  if (!queue.length && !document.getElementById('active-section')) {
+    welcomeState.style.display = 'block';
+  }
+
+  renderQueue();
+  updateCost();
+  checkReady();
+  await saveState();
+  toast(item ? `Deleted "${item.name}"` : 'Deleted completed batch', 'info');
+}
+
 // ── PENDING PREVIEW ─────────────────────────────────────────────────
 function renderPendingList() {
   if (!pendingItems.length) {
@@ -2669,6 +2697,10 @@ clearDoneBtn.addEventListener('click', async () => {
 });
 
 async function clearCompletedItems() {
+  const completedIds = queue
+    .filter(q => q.status !== STATUS.WAIT && q.status !== STATUS.ACTIVE)
+    .map(q => q.id);
+
   // Remove batch cards from DOM for completed/errored/stopped items
   queue.forEach(q => {
     if (q.status !== STATUS.WAIT && q.status !== STATUS.ACTIVE) {
@@ -2679,6 +2711,7 @@ async function clearCompletedItems() {
   const batchSection = document.getElementById('batch-section');
   if (batchSection) batchSection.remove();
   queue = queue.filter(q => q.status === STATUS.WAIT || q.status === STATUS.ACTIVE);
+  await Promise.all(completedIds.map(id => deleteQueueItemFromSupabase(id)));
   // If no items remain and no active section, show welcome state
   if (!queue.length && !document.getElementById('active-section')) {
     welcomeState.style.display = 'block';
@@ -2695,6 +2728,7 @@ clearAllBtn.addEventListener('click', async () => {
     toast('Cannot clear while processing', 'error');
     return;
   }
+  const queueIds = queue.map(q => q.id);
   // Remove all batch cards from DOM
   document.querySelectorAll('[id^="bc-"]').forEach(el => el.remove());
   const batchSection = document.getElementById('batch-section');
@@ -2703,6 +2737,7 @@ clearAllBtn.addEventListener('click', async () => {
   const activeSec = document.getElementById('active-section');
   if (activeSec) activeSec.remove();
   queue = [];
+  await Promise.all(queueIds.map(id => deleteQueueItemFromSupabase(id)));
   renderQueue();
   updateCost();
   checkReady();
@@ -3172,6 +3207,7 @@ function createBatchCard(item, images) {
       <div class="batch-actions">
         <button class="btn-retry-batch" id="bretry-${item.id}" ${count === 5 ? 'style="display:none"' : ''}>↻ Retry failed</button>
         <button class="btn-zip" id="bzip-${item.id}">⬇ ZIP</button>
+        <button class="btn-mini-clear" id="bdel-${item.id}">Delete</button>
       </div>
     </div>
     <div class="batch-grid" id="bgrid-${item.id}"></div>
@@ -3204,6 +3240,7 @@ function createBatchCard(item, images) {
   });
 
   document.getElementById(`bzip-${item.id}`).addEventListener('click', () => dlZip(item.id, item.name, images));
+  document.getElementById(`bdel-${item.id}`).addEventListener('click', () => deleteCompletedBatch(item.id));
   const retryBtn = document.getElementById(`bretry-${item.id}`);
   if (retryBtn) {
     retryBtn.addEventListener('click', () => retryFailedViews(item, images));
@@ -3284,6 +3321,7 @@ function createBatchCardFromUrls(item, viewResults) {
       <div class="batch-actions">
         <button class="btn-retry-batch" id="bretry-${item.id}" ${doneCount === 5 ? 'style="display:none"' : ''}>↻ Retry failed</button>
         <button class="btn-zip" id="bzip-${item.id}">⬇ ZIP</button>
+        <button class="btn-mini-clear" id="bdel-${item.id}">Delete</button>
       </div>
     </div>
     <div class="batch-grid" id="bgrid-${item.id}"></div>
@@ -3318,6 +3356,7 @@ function createBatchCardFromUrls(item, viewResults) {
   });
 
   document.getElementById(`bzip-${item.id}`).addEventListener('click', () => dlZipFromUrls(item.id, item.name, viewResults));
+  document.getElementById(`bdel-${item.id}`).addEventListener('click', () => deleteCompletedBatch(item.id));
   const retryBtn = document.getElementById(`bretry-${item.id}`);
   if (retryBtn) {
     retryBtn.addEventListener('click', () => retryFailedViews(item, {}));
@@ -3349,6 +3388,15 @@ async function dlZipFromUrls(itemId, name, viewResults) {
 
   const zip = new JSZip();
   const doneResults = viewResults.filter(r => r.status === 'done' && r.imageUrl);
+  if (!doneResults.length) {
+    toast('No completed render images to zip', 'info');
+    btn.textContent = '⬇ ZIP';
+    btn.disabled = false;
+    prog.classList.remove('visible');
+    fill.style.width = '0%';
+    pct.textContent = '0%';
+    return;
+  }
   let completed = 0;
 
   for (const r of doneResults) {
@@ -3471,24 +3519,23 @@ async function retryFailedViews(item, images) {
 // When the page reloads, batch cards (DOM elements) are gone.
 // This recreates summary cards for items that were completed/errored.
 async function restoreBatchCards() {
+  if (supaConnected) {
+    await pollStatus();
+  }
+
   const completedItems = queue.filter(q => q.status === STATUS.DONE || q.status === STATUS.PARTIAL || q.status === STATUS.ERROR || q.status === STATUS.STOPPED);
   if (!completedItems.length) return;
 
   if (supaConnected) {
-    await pollStatus();
-    let restoredFromUrls = false;
     completedItems.forEach(item => {
       if (document.getElementById(`bc-${item.id}`)) {
-        restoredFromUrls = true;
         return;
       }
       const viewResults = lastPollRenderResults[item.id];
       if (viewResults && viewResults.some(r => r.status === 'done' && r.imageUrl)) {
         createBatchCardFromUrls(item, viewResults);
-        restoredFromUrls = true;
       }
     });
-    if (restoredFromUrls) return;
   }
 
   let batchSec = document.getElementById('batch-section');
@@ -3528,6 +3575,7 @@ async function restoreBatchCards() {
         </div>
         <div class="batch-actions">
           <button class="btn-retry-batch" onclick="retryItemFromHistory(${item.id})">↻ Re-generate</button>
+          <button class="btn-mini-clear" id="bdel-${item.id}">Delete</button>
         </div>
       </div>
       <div class="batch-grid" id="bgrid-${item.id}">
@@ -3538,6 +3586,7 @@ async function restoreBatchCards() {
       </div>
       ${driveProgressHtml(item)}`;
     batchSec.appendChild(card);
+    document.getElementById(`bdel-${item.id}`).addEventListener('click', () => deleteCompletedBatch(item.id));
     updateBatchDriveStatus(item);
   });
 }
@@ -3918,7 +3967,19 @@ async function pollStatus() {
     if (data.queue && data.queue.length > 0) {
       // Merge server status into local queue
       for (const serverItem of data.queue) {
-        const localItem = queue.find(q => q.id === serverItem.id);
+        let localItem = queue.find(q => q.id === serverItem.id);
+        if (!localItem) {
+          localItem = {
+            id: serverItem.id,
+            name: serverItem.name || `Item ${serverItem.id}`,
+            dataUrl: serverItem.imageUrl || '',
+            supabaseUrl: serverItem.imageUrl || '',
+            status: serverItem.status || STATUS.WAIT,
+            desc: serverItem.description || ''
+          };
+          queue.push(localItem);
+          queue.sort((a, b) => a.id - b.id);
+        }
         if (localItem) {
           const prevStatus = localItem.status;
           localItem.status = serverItem.status;
