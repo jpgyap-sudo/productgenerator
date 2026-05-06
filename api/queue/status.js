@@ -207,6 +207,7 @@ async function submitWaitingRow(row, item) {
       return updated;
     } catch (error) {
       lastError = error;
+      console.error(`fal submit attempt ${attempt + 1} failed for item ${row.queue_item_id} view ${row.view_id}:`, error);
     }
   }
 

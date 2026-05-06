@@ -3421,27 +3421,27 @@ const CLIENT_VIEW_PROMPTS = [
 
 const CLIENT_ATTEMPTS = [
   {
-    label: 'Nano Banana 2',
-    url: () => `${FAL_BASE}/fal-ai/nano-banana-2`,
+    label: 'Nano Banana 2 Edit',
+    url: () => `${FAL_BASE}/fal-ai/nano-banana-2/edit`,
     body: (view, prompt, imageDataUrl, resolution) => ({
       prompt,
-      image_url: imageDataUrl,
+      image_urls: [imageDataUrl],
       resolution: resolution || '1K',
       aspect_ratio: view.id === 5 ? '16:9' : '1:1',
       output_format: 'jpeg',
       num_images: 1,
-      safety_tolerance: 4,
-      enable_safety_checker: true
+      safety_tolerance: '4',
+      limit_generations: true
     })
   },
   {
-    label: 'GPT Image 2',
-    url: () => `${FAL_BASE}/openai/gpt-image-2`,
+    label: 'GPT Image 2 Edit',
+    url: () => `${FAL_BASE}/openai/gpt-image-2/edit`,
     body: (view, prompt, imageDataUrl) => ({
       prompt,
-      image_url: imageDataUrl,
+      image_urls: [imageDataUrl],
       image_size: view.id === 5 ? 'landscape_16_9' : 'square_hd',
-      quality: 'hd',
+      quality: 'high',
       num_images: 1,
       output_format: 'jpeg'
     })
