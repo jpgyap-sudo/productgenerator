@@ -757,7 +757,7 @@ textarea:focus { outline: none; border-color: var(--text-secondary); }
   width: 0%; transition: width 0.3s ease;
 }
 
-/* ── CLEAR BUTTONS ───────────────────────────────────────────── */
+/* ── DRIVE UPLOAD PROGRESS ───────────────────────────────────── */
 .drive-progress {
   display: none;
   align-items: center;
@@ -922,6 +922,7 @@ textarea:focus { outline: none; border-color: var(--text-secondary); }
 .ql-entry.ql-skip { border-left: 3px solid var(--text-dim); }
 .ql-entry.ql-stop { border-left: 3px solid var(--text-muted); }
 .ql-entry.ql-info { border-left: 3px solid var(--accent); }
+.ql-entry.ql-drive { border-left: 3px solid #4a90d9; }
 
 .btn-log-toggle {
   width: 100%;
@@ -1631,7 +1632,8 @@ function renderQueueLog() {
     error:  '❌',
     skip:   '⏭️',
     stop:   '⏹️',
-    info:   'ℹ️'
+    info:   'ℹ️',
+    drive:  '☁️'
   };
   entries.forEach(entry => {
     const div = document.createElement('div');
@@ -2913,6 +2915,11 @@ function createActiveCard(item) {
         <span class="progress-label" id="active-bar-label">0 / 5 views</span>
         <span class="progress-timer" id="active-timer">⏱ 0s</span>
       </div>
+      <div class="drive-progress" id="active-drive-prog" style="display:none;">
+        <span class="drive-label" id="active-drive-label">Google Drive</span>
+        <div class="drive-bar"><div class="drive-bar-fill" id="active-drive-fill"></div></div>
+        <span class="drive-count" id="active-drive-count">0/5</span>
+      </div>
       <div class="renders-grid" id="active-grid"></div>
     </div>`;
   mainPanel.insertBefore(sec, mainPanel.firstChild);
@@ -3156,6 +3163,47 @@ function updateBatchDriveStatus(item) {
   const pct = total > 0 ? Math.min(100, Math.round((done / total) * 100)) : 0;
 
   wrap.classList.toggle('visible', !!status);
+  wrap.classList.toggle('done', status === 'done');
+  wrap.classList.toggle('error', status === 'error');
+  if (fill) fill.style.width = (status === 'done' ? 100 : pct) + '%';
+  if (count) count.textContent = `${status === 'done' ? total : done}/${total}`;
+  if (!label) return;
+
+  if (status === 'uploading') {
+    label.textContent = item.driveFolderName
+      ? `Uploading to Drive (${item.driveFolderName})`
+      : 'Uploading to Google Drive';
+  } else if (status === 'done') {
+    label.textContent = item.driveFolderName
+      ? `Uploaded to Drive: ${item.driveFolderName}`
+      : 'Uploaded to Google Drive';
+  } else if (status === 'error') {
+    label.textContent = item.driveUploadError
+      ? `Drive upload failed: ${item.driveUploadError}`
+      : 'Drive upload failed';
+  }
+}
+
+/**
+ * Update the Drive upload progress bar in the active card.
+ * Shows real-time upload progress (e.g., "Uploading to Drive: 3/5 files")
+ * while the background worker is uploading renders to Google Drive.
+ */
+function updateActiveDriveStatus(item) {
+  const wrap = document.getElementById('active-drive-prog');
+  if (!wrap) return;
+
+  const label = document.getElementById('active-drive-label');
+  const fill = document.getElementById('active-drive-fill');
+  const count = document.getElementById('active-drive-count');
+  const status = item.driveUploadStatus || (item.driveFolderName ? 'done' : '');
+  const total = Number(item.driveUploadTotal || 5);
+  const done = Number(item.driveUploadDone || (status === 'done' ? total : 0));
+  const pct = total > 0 ? Math.min(100, Math.round((done / total) * 100)) : 0;
+
+  // Show/hide the drive progress bar
+  wrap.style.display = status ? 'flex' : 'none';
+  wrap.className = 'drive-progress visible';
   wrap.classList.toggle('done', status === 'done');
   wrap.classList.toggle('error', status === 'error');
   if (fill) fill.style.width = (status === 'done' ? 100 : pct) + '%';
@@ -4075,14 +4123,38 @@ async function pollStatus() {
       }
     }
 
+    // ── Drive upload progress monitoring ──
+    // Update the active card's Drive progress bar and status bar text
+    // with real-time upload progress (e.g., "Uploading to Drive: 3/5 files")
     const driveUploading = data.queue.some(q => q.driveUploadStatus === 'uploading');
+    const driveItem = data.queue.find(q => q.driveUploadStatus === 'uploading' || q.driveUploadStatus === 'done' || q.driveUploadStatus === 'error');
+    if (driveItem) {
+      // Update active card drive progress
+      updateActiveDriveStatus(driveItem);
+      // Also update batch card drive progress if it exists
+      updateBatchDriveStatus(driveItem);
+    }
 
     // Check if all items are done and any Drive upload has finished too.
     const activeOrWait = data.queue.filter(q => q.status === 'active' || q.status === 'wait' || q.status === 'generating');
     if (activeOrWait.length === 0 && driveUploading && isPolling) {
-      setStatus('Renders complete — uploading to Google Drive...');
+      const uploadingItem = data.queue.find(q => q.driveUploadStatus === 'uploading');
+      const done = uploadingItem ? uploadingItem.driveUploadDone || 0 : 0;
+      const total = uploadingItem ? uploadingItem.driveUploadTotal || 5 : 5;
+      setStatus(`Renders complete — uploading to Google Drive (${done}/${total} files)...`);
     }
     if (activeOrWait.length === 0 && !driveUploading && isPolling) {
+      // Check if Drive upload just completed (transitioned from uploading to done/error)
+      const prevDriveUploading = window._prevDriveUploading;
+      if (prevDriveUploading && driveItem) {
+        if (driveItem.driveUploadStatus === 'done') {
+          addQueueLogEntry('drive', driveItem.name || '', `Uploaded to Drive folder ${driveItem.driveFolderName || 'HA##'}`);
+        } else if (driveItem.driveUploadStatus === 'error') {
+          addQueueLogEntry('error', driveItem.name || '', `Drive upload failed: ${driveItem.driveUploadError || 'Unknown error'}`);
+        }
+      }
+      window._prevDriveUploading = driveUploading;
+
       // All done — stop polling
       stopPolling();
       const done = data.queue.filter(q => q.status === 'done').length;
@@ -4096,6 +4168,7 @@ async function pollStatus() {
       // Fall back to placeholder cards for any item still missing a batch card
       await restoreBatchCards();
     }
+    window._prevDriveUploading = driveUploading;
 
     // Update processingItemIds
     processingItemIds = data.queue
