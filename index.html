@@ -4,8 +4,8 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Product Image Studio</title>
-<meta name="description" content="AI-powered product photography studio — generate 5 professional views from a single product image using fal.ai"/>
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://unpkg.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; connect-src 'self' https://fal.run https://queue.fal.run https://api.fal.ai https://*.fal.ai https://v3.fal.media https://fal.media https://*.fal.media https://*.supabase.co wss://*.supabase.co; font-src 'self' data:;"/>
+<meta name="description" content="AI-powered product photography studio — generate 5 professional views from a single product image using fal.ai or Gemini"/>
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://unpkg.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; connect-src 'self' https://fal.run https://queue.fal.run https://api.fal.ai https://*.fal.ai https://v3.fal.media https://fal.media https://*.fal.media https://*.supabase.co wss://*.supabase.co https://generativelanguage.googleapis.com; font-src 'self' data:;"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 <style>
@@ -989,7 +989,7 @@ textarea:focus { outline: none; border-color: var(--text-secondary); }
 <div class="topbar">
   <div class="topbar-left">
     <h1>Product Image Studio</h1>
-    <span class="pill">⚡ Nano Banana 2</span>
+    <span class="pill">⚡ AI Studio</span>
   </div>
   <div class="topbar-right">
     <label for="apiKey">fal.ai Key</label>
@@ -1029,6 +1029,16 @@ textarea:focus { outline: none; border-color: var(--text-secondary); }
           <button class="q-btn" data-res="4K">4K<br><span class="price">$0.16/img</span></button>
         </div>
         <div class="res-note" id="resNote">0.5K (512px) — fastest & cheapest, good for drafts and previews.</div>
+      </div>
+
+      <!-- ── PROVIDER SELECTOR ──────────────────────────────────── -->
+      <div class="block">
+        <span class="lbl">AI Provider</span>
+        <div class="q-btns" id="providerBtns">
+          <button class="q-btn active" data-provider="fal">fal.ai<br><span class="price">Nano Banana 2</span></button>
+          <button class="q-btn" data-provider="gemini">Gemini 3<br><span class="price">Flash / Pro</span></button>
+        </div>
+        <div class="res-note" id="providerNote">fal.ai — Nano Banana 2 / GPT Image 2. Requires fal.ai API key.</div>
       </div>
 
       <div class="block">
@@ -1263,6 +1273,7 @@ const ENV_API_KEY = (function(){
 let queue = [];
 let pendingItems = [];
 let nb2Res = '0.5K';
+let provider = 'fal'; // 'fal' or 'gemini'
 let nextId = 1;
 let darkMode = false;
 let parallelism = 1;
@@ -1911,6 +1922,7 @@ async function saveState() {
         desc: p.desc || ''
       })),
       nb2Res,
+      provider,
       nextId,
       darkMode,
       apiKey: savedApiKey,
@@ -2046,10 +2058,20 @@ async function loadState() {
       }
       if (state.nb2Res) {
         nb2Res = state.nb2Res;
-        document.querySelectorAll('.q-btn').forEach(b => {
+        document.querySelectorAll('.q-btn[data-res]').forEach(b => {
           b.classList.toggle('active', b.dataset.res === nb2Res);
         });
         document.getElementById('resNote').textContent = NB2_NOTES[nb2Res] || '';
+      }
+      if (state.provider) {
+        provider = state.provider;
+        document.querySelectorAll('.q-btn[data-provider]').forEach(b => {
+          b.classList.toggle('active', b.dataset.provider === provider);
+        });
+        const note = document.getElementById('providerNote');
+        if (provider === 'gemini') {
+          note.textContent = 'Gemini 3 — gemini-3.1-flash-image-preview (views 1-4) & gemini-3-pro-image-preview (view 5). GEMINI_API_KEY set on server.';
+        }
       }
       if (state.darkMode !== undefined) {
         darkMode = state.darkMode;
@@ -2309,13 +2331,29 @@ apiKeyEl.addEventListener('keydown', e => {
 });
 
 // ── RESOLUTION PICKER ──────────────────────────────────────────────
-document.querySelectorAll('.q-btn').forEach(btn => {
+document.querySelectorAll('.q-btn[data-res]').forEach(btn => {
   btn.addEventListener('click', async () => {
     nb2Res = btn.dataset.res;
-    document.querySelectorAll('.q-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.q-btn[data-res]').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     document.getElementById('resNote').textContent = NB2_NOTES[nb2Res];
     updateCost();
+    await saveState();
+  });
+});
+
+// ── PROVIDER SELECTOR ──────────────────────────────────────────────
+document.querySelectorAll('.q-btn[data-provider]').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    provider = btn.dataset.provider;
+    document.querySelectorAll('.q-btn[data-provider]').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    const note = document.getElementById('providerNote');
+    if (provider === 'fal') {
+      note.textContent = 'fal.ai — Nano Banana 2 / GPT Image 2. Requires fal.ai API key.';
+    } else {
+      note.textContent = 'Gemini 3 — gemini-3.1-flash-image-preview (views 1-4) & gemini-3-pro-image-preview (view 5). GEMINI_API_KEY set on server.';
+    }
     await saveState();
   });
 });
@@ -3742,7 +3780,7 @@ async function submitToServer(itemIds) {
     const res = await fetch('/api/queue/submit', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ itemIds, resolution: nb2Res })
+      body: JSON.stringify({ itemIds, resolution: nb2Res, provider })
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
@@ -4084,6 +4122,7 @@ window.addEventListener('beforeunload', function(e) {
         desc: p.desc || ''
       })),
       nb2Res,
+      provider,
       nextId,
       darkMode,
       apiKey: savedApiKey,
