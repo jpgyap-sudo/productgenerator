@@ -1,12 +1,16 @@
 // GET /api/queue/status
-// Polls Supabase and reconciles any durable fal.ai queue jobs that finished
+// Polls Supabase and reconciles any durable render jobs that finished
 // while the browser was closed or reloading.
 //
-// IMPROVEMENT: With webhooks enabled, most results are delivered server-side
-// via /api/fal-webhook. This endpoint now primarily serves as a fallback
-// reconciliation layer for any jobs that complete without a webhook delivery
-// (e.g., webhook timeout, network issues). Fal.ai retries webhooks 10x over
-// 2 hours, so this is a safety net.
+// IMPROVEMENT: With webhooks enabled, most fal.ai results are delivered
+// server-side via /api/fal-webhook. This endpoint now primarily serves as a
+// fallback reconciliation layer for any jobs that complete without a webhook
+// delivery (e.g., webhook timeout, network issues). Fal.ai retries webhooks
+// 10x over 2 hours, so this is a safety net.
+//
+// PROVIDER SUPPORT: Supports both 'fal' and 'gemini' providers.
+// - fal: Uses fal.ai queue-based API with webhook support (reconciliation polls fal.ai)
+// - gemini: Uses Google Gemini API directly (synchronous, no queue to poll)
 import { supabase, QUEUE_TABLE, RESULTS_TABLE, BUCKET_NAME } from '../../lib/supabase.js';
 import { getQueuedResult, extractImageUrl, getAttemptCount, submitViewJob, VIEWS } from '../../lib/fal.js';
 import { uploadRendersToDrive } from '../../lib/drive.js';
@@ -150,12 +154,17 @@ function fetchQueueItems(itemId) {
 }
 
 /**
- * Reconcile fal.ai queue jobs that are still in progress.
+ * Reconcile render jobs that are still in progress.
  *
- * IMPROVEMENT: With webhooks, most jobs are handled server-side.
+ * IMPROVEMENT: With webhooks, most fal.ai jobs are handled server-side.
  * This reconciliation is a fallback for jobs that complete without
  * a webhook delivery (e.g., webhook timeout, network issues).
  * Fal.ai retries webhooks 10x over 2 hours, so this is a safety net.
+ *
+ * PROVIDER SUPPORT:
+ * - fal rows: Poll fal.ai queue status for completion
+ * - gemini rows: Skip reconciliation (Gemini is synchronous, handled by
+ *   the background worker in process-item.js)
  */
 async function reconcileFalJobs(rows, queueItems) {
   const nextRows = [];
@@ -167,6 +176,14 @@ async function reconcileFalJobs(rows, queueItems) {
     // However, if the row is 'done' but has a CDN URL (not Supabase),
     // we should attempt to mirror it to Supabase for persistence.
     if (row.status === 'done' || row.status === 'error') {
+      nextRows.push(row);
+      continue;
+    }
+
+    // ── Gemini provider: skip reconciliation ──
+    // Gemini is synchronous and handled by the background worker.
+    // The worker updates the DB directly when done. No queue to poll.
+    if (row.provider === 'gemini') {
       nextRows.push(row);
       continue;
     }

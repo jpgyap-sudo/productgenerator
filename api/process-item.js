@@ -9,9 +9,14 @@
 //  IMPROVEMENT: Now uses fal.ai CDN URLs directly instead of
 //  downloading images and re-uploading to Supabase. This eliminates
 //  the redundant data transfer and speeds up processing.
+//
+//  PROVIDER SUPPORT: Supports both 'fal' (default) and 'gemini' providers.
+//  - fal: Uses fal.ai queue-based API with webhook support
+//  - gemini: Uses Google Gemini API directly (synchronous, no queue)
 // ═══════════════════════════════════════════════════════════════════
 import { supabase, QUEUE_TABLE, RESULTS_TABLE, BUCKET_NAME } from '../lib/supabase.js';
 import { generateView, VIEWS } from '../lib/fal.js';
+import { generateGeminiView } from '../lib/gemini.js';
 
 export const config = {
   runtime: 'nodejs',
@@ -35,6 +40,7 @@ export default async function handler(req) {
     const url = new URL(req.url, `https://${req.headers.get('host') || 'localhost'}`);
     const idsParam = url.searchParams.get('ids');
     const resolution = url.searchParams.get('res') || '1K';
+    const provider = url.searchParams.get('provider') || 'fal';
 
     if (!idsParam) {
       return new Response(JSON.stringify({ error: 'ids parameter required' }), {
@@ -53,7 +59,7 @@ export default async function handler(req) {
 
     // Process each item sequentially
     for (const itemId of itemIds) {
-      await processItem(itemId, resolution);
+      await processItem(itemId, resolution, provider);
     }
 
     return new Response(JSON.stringify({
@@ -77,8 +83,12 @@ export default async function handler(req) {
 
 /**
  * Process a single queue item: generate 5 views, save results.
+ *
+ * @param {number} itemId - Queue item ID
+ * @param {string} resolution - Resolution setting (e.g., '1K')
+ * @param {string} provider - AI provider to use: 'fal' (default) or 'gemini'
  */
-async function processItem(itemId, resolution) {
+async function processItem(itemId, resolution, provider = 'fal') {
   const now = new Date().toISOString();
 
   // Fetch the item
@@ -109,10 +119,14 @@ async function processItem(itemId, resolution) {
     await updateAllViewStatuses(itemId, 'generating', null);
 
     // Step 2: Generate all 5 views in parallel
-    // Each call uses fal.ai queue-based API internally (submit + poll)
-    // Returns fal.ai CDN URLs directly — no redundant download/upload
+    // Provider selection:
+    //   - 'fal' (default): Uses fal.ai queue-based API with webhook support.
+    //     Returns fal.ai CDN URLs directly — no redundant download/upload.
+    //   - 'gemini': Uses Google Gemini API directly (synchronous).
+    //     Returns Supabase storage URLs (Gemini returns inline base64 images).
+    const generateFn = provider === 'gemini' ? generateGeminiView : generateView;
     const results = await Promise.allSettled(
-      VIEWS.map(view => generateView(view, desc, imageUrl, resolution))
+      VIEWS.map(view => generateFn(view, desc, imageUrl, resolution))
     );
 
     // Step 3: Save results
