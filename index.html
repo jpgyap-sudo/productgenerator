@@ -141,6 +141,17 @@ body {
   cursor: default;
 }
 
+/* Sidebar toggle (mobile) */
+.sidebar-toggle {
+  display: none;
+  background: none; border: 1px solid #3a3a3a; color: #888;
+  cursor: pointer; font-size: 18px; padding: 4px 8px;
+  border-radius: var(--radius-sm); line-height: 1;
+  flex-shrink: 0;
+}
+.sidebar-toggle:hover { border-color: var(--accent); color: var(--accent); }
+.sidebar-toggle.open { color: var(--accent); border-color: var(--accent); }
+
 /* Dark mode toggle */
 .dm-toggle {
   background: none; border: 1px solid #3a3a3a; color: #888;
@@ -190,6 +201,7 @@ body {
   height: calc(100vh - 52px);
 }
 @media (max-width: 768px) {
+  .sidebar-toggle { display: inline-block; }
   .layout {
     grid-template-columns: 1fr;
     grid-template-rows: auto 1fr;
@@ -201,6 +213,18 @@ body {
     max-height: 50vh;
     border-right: none;
     border-bottom: 1px solid var(--border);
+    transition: max-height 0.3s ease, opacity 0.3s ease;
+    overflow: hidden;
+  }
+  .sidebar.collapsed {
+    max-height: 0;
+    opacity: 0;
+    padding: 0;
+    border-bottom: none;
+  }
+  .sidebar.collapsed .sidebar-scroll,
+  .sidebar.collapsed .sidebar-foot {
+    display: none;
   }
 }
 
@@ -594,6 +618,15 @@ textarea:focus { outline: none; border-color: var(--text-secondary); }
   background: none; border: none; opacity: 0.7;
 }
 .lightbox-close:hover { opacity: 1; }
+.lightbox-download {
+  position: absolute; bottom: 24px; right: 24px;
+  background: var(--accent); color: #000;
+  border: none; padding: 10px 20px; border-radius: var(--radius);
+  font-size: 14px; font-weight: 700; cursor: pointer;
+  font-family: inherit; opacity: 0.85;
+  transition: opacity var(--transition);
+}
+.lightbox-download:hover { opacity: 1; }
 
 /* ── TOAST ───────────────────────────────────────────────────── */
 .toast-container {
@@ -788,12 +821,68 @@ textarea:focus { outline: none; border-color: var(--text-secondary); }
 
 /* ── RESPONSIVE TWEAKS ───────────────────────────────────────── */
 @media (max-width: 480px) {
-  .topbar { flex-wrap: wrap; height: auto; padding: 8px; gap: 6px; }
-  .topbar input[type="password"] { width: 140px; }
-  .api-save-btn { padding: 6px 8px; }
-  .renders-grid { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
-  .batch-grid { grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); }
-  .main { padding: 0.75rem; }
+  .topbar { flex-wrap: wrap; height: auto; padding: 6px; gap: 4px; }
+  .topbar h1 { font-size: 12px; }
+  .topbar input[type="password"] { width: 110px; font-size: 11px; padding: 5px 8px; }
+  .api-save-btn { padding: 5px 7px; font-size: 11px; }
+  .renders-grid { grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 5px; padding: 8px; }
+  .batch-grid { grid-template-columns: repeat(auto-fill, minmax(95px, 1fr)); gap: 4px; padding: 6px; }
+  .main { padding: 0.5rem; }
+  .card-head { padding: 8px 10px; }
+  .card-thumb { width: 34px; height: 34px; }
+  .card-info h3 { font-size: 12px; }
+  .card-info p { font-size: 10px; }
+  .batch-head { padding: 8px 10px; }
+  .batch-thumb { width: 34px; height: 34px; }
+  .batch-info h3 { font-size: 12px; }
+  .batch-info p { font-size: 10px; }
+  .batch-actions .btn-zip { padding: 5px 8px; font-size: 10px; }
+  .batch-actions .btn-retry-batch { padding: 5px 8px; font-size: 10px; }
+  .rslot-head { padding: 4px 6px; }
+  .rslot-title { font-size: 9px; }
+  .rslot-body { min-height: 70px; padding: 4px; }
+  .rbadge { font-size: 8px; padding: 1px 4px; }
+  .btn-dl1 { font-size: 9px; padding: 3px 6px; }
+  .btn-zip { font-size: 10px; padding: 5px 8px; }
+  .btn-dl-all { font-size: 9px; padding: 3px 8px; }
+  .sec-title { font-size: 12px; }
+  .progress-bar-wrap { padding: 6px 10px; gap: 6px; }
+  .progress-label { font-size: 9px; min-width: 50px; }
+  .progress-timer { font-size: 9px; min-width: 45px; }
+  .lightbox { padding: 10px; }
+  .lightbox img { max-width: 95vw; max-height: 85vh; }
+  .lightbox-download { bottom: 16px; right: 16px; padding: 8px 14px; font-size: 12px; }
+  .lightbox-close { top: 10px; right: 14px; font-size: 26px; }
+  .supa-bar { padding: 4px 8px; font-size: 10px; }
+  .supa-label { font-size: 10px; }
+  .supa-status { font-size: 9px; }
+  .block { padding: 0.6rem 0.75rem; }
+  .lbl { font-size: 9px; }
+  .q-btn { min-width: 50px; padding: 5px 3px; font-size: 10px; }
+  .q-btn .price { font-size: 8px; }
+  .q-item { padding: 5px 6px; }
+  .q-thumb { width: 28px; height: 28px; }
+  .q-name { font-size: 10px; }
+  .q-sub { font-size: 9px; }
+  .q-badge { font-size: 8px; padding: 1px 5px; }
+  .btn-start { padding: 8px; font-size: 12px; }
+  .btn-stop { padding: 6px; font-size: 11px; }
+  .status { font-size: 10px; }
+  .cost { font-size: 10px; }
+  .par-block { padding: 0.4rem 0.75rem; }
+  .par-block label { font-size: 9px; }
+  .par-block .par-val { font-size: 10px; }
+  .upload-box { padding: 0.75rem; min-height: 80px; }
+  .upload-box .icon { font-size: 20px; }
+  .upload-box .txt { font-size: 11px; }
+  .upload-box .sub { font-size: 10px; }
+  .sidebar-foot { padding: 0.6rem 0.75rem; }
+  .btn-skip { font-size: 10px; padding: 3px 8px; }
+  .btn-clear { font-size: 9px; padding: 3px 8px; }
+  .btn-log-toggle { font-size: 11px; padding: 6px 8px; }
+  .btn-log-clear { font-size: 9px; padding: 5px 8px; }
+  .toast { font-size: 11px; padding: 8px 12px; max-width: 260px; }
+  .toast-container { bottom: 12px; right: 12px; gap: 6px; }
 }
 </style>
 </head>
@@ -809,6 +898,7 @@ textarea:focus { outline: none; border-color: var(--text-secondary); }
     <label for="apiKey">fal.ai Key</label>
     <input type="password" id="apiKey" placeholder="Paste your fal.ai key..." autocomplete="off"/>
     <button class="api-save-btn" id="apiKeySave" type="button" disabled>Save</button>
+    <button class="sidebar-toggle" id="sidebarToggle" title="Toggle sidebar" aria-label="Toggle sidebar">☰</button>
     <button class="dm-toggle" id="dmToggle" title="Toggle dark mode" aria-label="Toggle dark mode">🌙</button>
   </div>
 </div>
@@ -942,6 +1032,7 @@ textarea:focus { outline: none; border-color: var(--text-secondary); }
 <div class="lightbox" id="lightbox">
   <button class="lightbox-close" id="lbClose">&times;</button>
   <img id="lbImg" src="" alt="Preview"/>
+  <button class="lightbox-download" id="lbDownload">⬇ Download</button>
 </div>
 
 <!-- ── TOAST CONTAINER ────────────────────────────────────────── -->
@@ -1062,19 +1153,20 @@ let queueLog = [];
 let pollInterval = null;
 let isPolling = false;
 let processingItemIds = []; // IDs currently being processed on the server
+let lastPollRenderResults = {}; // render_results from most recent poll, keyed by queue_item_id
 
 function recoverInterruptedStatus(item) {
   if (item.status !== STATUS.ACTIVE) return item.status || STATUS.WAIT;
   item.interruptedOnLoad = true;
-  // If the item has a supabaseUrl (image was uploaded to cloud), we can auto-resume
-  // without needing a re-upload. The dataUrl will be restored from supabaseUrl.
+  // Server-side processing survives the browser tab. Keep ACTIVE items active
+  // after reload and reconnect the UI/poller instead of submitting them again.
   if (item.supabaseUrl) {
     item.dataUrl = item.supabaseUrl;
     item.needsReupload = false;
   } else {
     item.needsReupload = true;
   }
-  return STATUS.WAIT;
+  return STATUS.ACTIVE;
 }
 
 // ── SUPABASE STATE ──────────────────────────────────────────────────
@@ -1189,9 +1281,32 @@ function closeLightbox() {
   lbImg.src = '';
 }
 
+function dlFromLightbox() {
+  const src = lbImg.src;
+  if (!src) return;
+  const a = document.createElement('a');
+  a.href = src;
+  a.download = 'product_render_' + Date.now() + '.jpg';
+  a.click();
+  toast('Downloading image...', 'success');
+}
+
 lbClose.addEventListener('click', closeLightbox);
+document.getElementById('lbDownload').addEventListener('click', dlFromLightbox);
 lightbox.addEventListener('click', e => { if (e.target === lightbox) closeLightbox(); });
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeLightbox(); });
+
+// ── SIDEBAR TOGGLE (MOBILE) ─────────────────────────────────────────
+const sidebarToggle = document.getElementById('sidebarToggle');
+const sidebar = document.querySelector('.sidebar');
+let sidebarOpen = true;
+
+sidebarToggle.addEventListener('click', () => {
+  sidebarOpen = !sidebarOpen;
+  sidebar.classList.toggle('collapsed', !sidebarOpen);
+  sidebarToggle.textContent = sidebarOpen ? '☰' : '☰';
+  sidebarToggle.classList.toggle('open', sidebarOpen);
+});
 
 // ── FAILURE LOG ────────────────────────────────────────────────────
 function getFailureLog() {
@@ -1662,7 +1777,7 @@ async function saveState() {
         // Don't store dataUrl in localStorage — it's too large (multi-MB base64).
         // Instead, store a flag so we know to re-upload on next session.
         dataUrl: '',
-        hasLocalImage: q.status === STATUS.WAIT && !!q.dataUrl && q.dataUrl.startsWith('data:'),
+        hasLocalImage: (q.status === STATUS.WAIT || q.status === STATUS.ACTIVE) && !!q.dataUrl && q.dataUrl.startsWith('data:'),
         status: q.status,
         supabaseUrl: q.supabaseUrl || '',
         desc: q.desc || ''
@@ -1881,12 +1996,19 @@ async function applyDarkMode(options = {}) {
   if (persist) await saveState();
 }
 
-// Check system preference on load (only if no saved preference exists)
-// loadState() sets darkMode from localStorage if previously saved
-if (!darkMode && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
-  darkMode = true;
-  applyDarkMode({ persist: false });
-}
+// Apply system dark preference only when the user has no saved preference.
+// Checking localStorage synchronously here prevents a flash of the wrong theme
+// before loadState() runs its async Supabase init.
+(function initDarkFromSystem() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(LS_KEY) || '{}');
+    if (saved.darkMode !== undefined) return; // loadState() will apply saved preference
+  } catch(e) {}
+  if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+    darkMode = true;
+    applyDarkMode({ persist: false });
+  }
+})();
 
 dmToggle.addEventListener('click', async () => {
   darkMode = !darkMode;
@@ -2416,13 +2538,13 @@ function restoreInterruptedActiveCard() {
     }
     setStatus(`${item.name} needs the original image uploaded again.`);
   } else {
-    // Image is available (via supabaseUrl) — auto-resume via server
-    setStatus(`Auto-resuming ${item.name} after page reload...`);
-    if (prog) prog.textContent = 'Page was reloaded — automatically submitting to server for processing...';
-    // Small delay to let the DOM settle, then auto-start the queue
-    setTimeout(() => {
-      startBtn.click();
-    }, 500);
+    setStatus(`Reconnected to ${item.name} after page reload...`);
+    if (prog) prog.textContent = 'Page was reloaded — reconnecting to server processing...';
+    startBtn.disabled = true;
+    stopBtn.style.display = 'block';
+    stopBtn.disabled = false;
+    stopBtn.textContent = '⏹ Stop';
+    startPolling();
   }
 }
 
@@ -2595,6 +2717,135 @@ async function dlZip(itemId, name, images) {
   pct.textContent = '0%';
 }
 
+// ── BATCH CARD FROM SERVER RENDER RESULTS (URL-based) ──────────────
+// Called after server-side processing so renders show actual images + working downloads.
+function createBatchCardFromUrls(item, viewResults) {
+  if (document.getElementById(`bc-${item.id}`)) return;
+
+  let batchSec = document.getElementById('batch-section');
+  if (!batchSec) {
+    batchSec = document.createElement('div');
+    batchSec.id = 'batch-section';
+    batchSec.innerHTML = `<div class="sec-title" style="margin-top:1rem;"><span class="pulse done"></span><span>Completed Batches</span><button class="btn-dl-all" id="dlAllBtn" onclick="downloadAllBatches()">⬇ Download All</button></div>`;
+    const activeSec = document.getElementById('active-section');
+    if (activeSec) {
+      mainPanel.insertBefore(batchSec, activeSec.nextSibling);
+    } else {
+      mainPanel.appendChild(batchSec);
+    }
+  }
+
+  const doneCount = viewResults.filter(r => r.status === 'done' && r.imageUrl).length;
+  const hasImage = item.dataUrl && (item.dataUrl.startsWith('data:') || item.dataUrl.startsWith('http'));
+
+  const card = document.createElement('div');
+  card.className = 'batch-card';
+  card.id = `bc-${item.id}`;
+  card.innerHTML = `
+    <div class="batch-head">
+      ${hasImage
+        ? `<img class="batch-thumb" src="${item.dataUrl}" alt="${escHtml(item.name)}"/>`
+        : `<div class="batch-thumb" style="display:flex;align-items:center;justify-content:center;background:var(--border-light);font-size:18px;color:var(--text-dim);">📷</div>`
+      }
+      <div class="batch-info">
+        <h3>${escHtml(item.name)}</h3>
+        <p>${doneCount} of 5 renders completed</p>
+      </div>
+      <div class="batch-actions">
+        <button class="btn-retry-batch" id="bretry-${item.id}" ${doneCount === 5 ? 'style="display:none"' : ''}>↻ Retry failed</button>
+        <button class="btn-zip" id="bzip-${item.id}">⬇ ZIP</button>
+      </div>
+    </div>
+    <div class="batch-grid" id="bgrid-${item.id}"></div>
+    <div class="zip-progress" id="zprog-${item.id}">
+      <span>Zipping...</span>
+      <div class="zip-bar"><div class="zip-bar-fill" id="zfill-${item.id}"></div></div>
+      <span id="zpct-${item.id}">0%</span>
+    </div>`;
+  batchSec.appendChild(card);
+
+  const grid = document.getElementById(`bgrid-${item.id}`);
+  VIEWS.forEach(v => {
+    const r = viewResults.find(r => r.viewId === v.id);
+    const slot = document.createElement('div');
+    slot.className = 'bslot';
+    if (r && r.status === 'done' && r.imageUrl) {
+      slot.innerHTML = `
+        <img src="${r.imageUrl}" alt="${v.label}" onclick="openLightbox('${r.imageUrl}')"/>
+        <div class="bslot-label">Img ${v.id} — ${v.label}</div>
+        <button class="btn-dl1" data-url="${r.imageUrl}" data-name="${item.name}_img${v.id}">⬇ Download</button>`;
+      slot.querySelector('.btn-dl1').addEventListener('click', function() {
+        dlOneUrl(this.dataset.url, this.dataset.name);
+      });
+    } else {
+      slot.innerHTML = `
+        <div style="min-height:90px;display:flex;align-items:center;justify-content:center;"><span style="font-size:10px;color:var(--text-dim);">${r && r.errorMessage ? escHtml(r.errorMessage) : 'Not generated'}</span></div>
+        <div class="bslot-label">Img ${v.id} — ${v.label}</div>`;
+    }
+    grid.appendChild(slot);
+  });
+
+  document.getElementById(`bzip-${item.id}`).addEventListener('click', () => dlZipFromUrls(item.id, item.name, viewResults));
+  const retryBtn = document.getElementById(`bretry-${item.id}`);
+  if (retryBtn) {
+    retryBtn.addEventListener('click', () => retryFailedViews(item, {}));
+  }
+}
+
+async function dlOneUrl(url, filename) {
+  try {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const blob = await res.blob();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = filename + '.jpg';
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  } catch (e) {
+    toast('Download failed: ' + formatError(e), 'error');
+  }
+}
+
+async function dlZipFromUrls(itemId, name, viewResults) {
+  const btn = document.getElementById(`bzip-${itemId}`);
+  const prog = document.getElementById(`zprog-${itemId}`);
+  const fill = document.getElementById(`zfill-${itemId}`);
+  const pct = document.getElementById(`zpct-${itemId}`);
+  btn.textContent = 'Zipping...'; btn.disabled = true;
+  prog.classList.add('visible');
+
+  const zip = new JSZip();
+  const doneResults = viewResults.filter(r => r.status === 'done' && r.imageUrl);
+  let completed = 0;
+
+  for (const r of doneResults) {
+    const view = VIEWS.find(v => v.id === r.viewId);
+    const label = view ? view.label.replace(/ /g, '_') : `view_${r.viewId}`;
+    try {
+      const res = await fetch(r.imageUrl);
+      const arrayBuf = await res.arrayBuffer();
+      zip.file(`${name}_img${r.viewId}_${label}.jpg`, new Uint8Array(arrayBuf));
+    } catch (e) {
+      console.warn(`Failed to fetch view ${r.viewId} for zip:`, e);
+    }
+    completed++;
+    const p = Math.round((completed / doneResults.length) * 100);
+    fill.style.width = p + '%';
+    pct.textContent = p + '%';
+    await sleep(20);
+  }
+
+  const blob = await zip.generateAsync({ type: 'blob' });
+  const objUrl = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = objUrl; a.download = `${name}_renders.zip`; a.click();
+  URL.revokeObjectURL(objUrl);
+  btn.textContent = '⬇ ZIP'; btn.disabled = false;
+  prog.classList.remove('visible');
+  fill.style.width = '0%';
+  pct.textContent = '0%';
+}
+
 // ── DOWNLOAD ALL BATCHES ────────────────────────────────────────────
 async function downloadAllBatches() {
   const btn = document.getElementById('dlAllBtn');
@@ -2602,7 +2853,6 @@ async function downloadAllBatches() {
   btn.textContent = 'Zipping all...';
   btn.disabled = true;
 
-  // Collect all batch card images
   const batchCards = document.querySelectorAll('[id^="bc-"]');
   if (!batchCards.length) {
     toast('No completed batches to download', 'info');
@@ -2612,39 +2862,36 @@ async function downloadAllBatches() {
   }
 
   const zip = new JSZip();
-  let totalImages = 0;
   let processed = 0;
 
-  // Count total images first
-  batchCards.forEach(card => {
-    const imgs = card.querySelectorAll('.bslot img');
-    totalImages += imgs.length;
-  });
+  for (const card of batchCards) {
+    const nameEl = card.querySelector('.batch-info h3');
+    const productName = nameEl ? nameEl.textContent.trim() : 'product';
+    const slots = card.querySelectorAll('.bslot');
+    for (const slot of slots) {
+      const img = slot.querySelector('img');
+      const label = slot.querySelector('.bslot-label');
+      const viewLabel = label ? label.textContent.trim().replace(/[^a-zA-Z0-9]/g, '_') : `view_${processed + 1}`;
+      if (!img || !img.src) continue;
+      if (img.src.startsWith('data:')) {
+        const b64 = img.src.split(',')[1];
+        if (b64) { zip.file(`${productName}_${viewLabel}.jpg`, b64, { base64: true }); processed++; }
+      } else if (img.src.startsWith('http')) {
+        try {
+          const res = await fetch(img.src);
+          const arrayBuf = await res.arrayBuffer();
+          zip.file(`${productName}_${viewLabel}.jpg`, new Uint8Array(arrayBuf));
+          processed++;
+        } catch(e) { console.warn('Skipped image in zip:', img.src, e); }
+      }
+    }
+  }
 
-  if (!totalImages) {
+  if (!processed) {
     toast('No images found in batch cards', 'info');
     btn.textContent = '⬇ Download All';
     btn.disabled = false;
     return;
-  }
-
-  // Add each image to the zip
-  for (const card of batchCards) {
-    const nameEl = card.querySelector('.batch-info h3');
-    const productName = nameEl ? nameEl.textContent.trim() : 'product';
-    const imgs = card.querySelectorAll('.bslot');
-    imgs.forEach((slot, idx) => {
-      const img = slot.querySelector('img');
-      const label = slot.querySelector('.bslot-label');
-      const viewLabel = label ? label.textContent.trim().replace(/[^a-zA-Z0-9]/g, '_') : `view_${idx + 1}`;
-      if (img && img.src) {
-        const b64 = img.src.split(',')[1];
-        if (b64) {
-          zip.file(`${productName}_${viewLabel}.jpg`, b64, { base64: true });
-          processed++;
-        }
-      }
-    });
   }
 
   const blob = await zip.generateAsync({ type: 'blob' });
@@ -2838,6 +3085,11 @@ async function pollStatus() {
       }
     }
 
+    // Store render results for use when building batch cards
+    if (data.renderResults) {
+      lastPollRenderResults = data.renderResults;
+    }
+
     // Update active card with render results
     if (data.hasActiveItems && data.renderResults) {
       const activeItemId = data.queue.find(q => q.status === 'active' || q.status === 'generating')?.id;
@@ -2864,7 +3116,13 @@ async function pollStatus() {
           } else if (r.status === 'done' && r.imageUrl) {
             badge.textContent = 'done';
             badge.className = 'rbadge rb-ok';
-            body.innerHTML = `<img src="${r.imageUrl}" alt="View ${r.viewId}" onclick="openLightbox('${r.imageUrl}')"/>`;
+            body.innerHTML = `<img src="${r.imageUrl}" alt="View ${r.viewId}"/>`;
+            body.querySelector('img').addEventListener('click', () => openLightbox(r.imageUrl));
+            const dlBtn = document.createElement('button');
+            dlBtn.className = 'btn-dl1';
+            dlBtn.textContent = '⬇ Download';
+            dlBtn.addEventListener('click', () => dlOneUrl(r.imageUrl, `view_${r.viewId}`));
+            body.appendChild(dlBtn);
             body.className = 'rslot-body';
           } else if (r.status === 'error') {
             badge.textContent = 'error';
@@ -2874,6 +3132,20 @@ async function pollStatus() {
           }
         }
         updateActiveProgress();
+      }
+    }
+
+    // Create batch cards for items that just finished (done or error) this poll
+    if (data.renderResults) {
+      for (const serverItem of data.queue) {
+        if (serverItem.status !== 'done' && serverItem.status !== 'error') continue;
+        if (document.getElementById(`bc-${serverItem.id}`)) continue;
+        const localItem = queue.find(q => q.id === serverItem.id);
+        const viewResults = data.renderResults[serverItem.id];
+        if (localItem && viewResults && viewResults.length > 0) {
+          createBatchCardFromUrls(localItem, viewResults);
+          welcomeState.style.display = 'none';
+        }
       }
     }
 
@@ -2890,7 +3162,7 @@ async function pollStatus() {
       stopBtn.style.display = 'none';
       checkReady();
       await saveState();
-      // Restore batch cards for completed items
+      // Fall back to placeholder cards for any item still missing a batch card
       restoreBatchCards();
     }
 
@@ -3003,6 +3275,7 @@ startBtn.addEventListener('click', async () => {
       }
     }
     setStatus(`Processing ${itemsToProcess.length} item(s) on server...`);
+    await saveState();
     // Start polling for status updates
     startPolling();
   } catch (e) {
@@ -3044,7 +3317,7 @@ window.addEventListener('beforeunload', function(e) {
       queue: queue.map(q => ({
         id: q.id, name: q.name,
         dataUrl: '',
-        hasLocalImage: q.status === STATUS.WAIT && !!q.dataUrl && q.dataUrl.startsWith('data:'),
+        hasLocalImage: (q.status === STATUS.WAIT || q.status === STATUS.ACTIVE) && !!q.dataUrl && q.dataUrl.startsWith('data:'),
         status: q.status,
         supabaseUrl: q.supabaseUrl || '',
         desc: q.desc || ''

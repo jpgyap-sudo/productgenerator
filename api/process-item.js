@@ -184,7 +184,8 @@ async function processItem(itemId, resolution) {
     }
 
     // Step 4: Update queue item final status
-    const finalStatus = successCount === 5 ? 'done' : (successCount > 0 ? 'partial' : 'error');
+    // 'partial' is not a frontend-known status — use 'error' for any incomplete result
+    const finalStatus = successCount === 5 ? 'done' : 'error';
     const statusText = successCount === 5
       ? 'All 5 views generated'
       : `${successCount}/5 views generated`;
