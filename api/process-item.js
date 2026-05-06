@@ -30,7 +30,9 @@ export default async function handler(req) {
   }
 
   try {
-    const url = new URL(req.url);
+    // BUGFIX: In Vercel serverless, req.url is a relative path (e.g. '/api/process-item')
+    // new URL() requires a full URL, so provide the host header as base
+    const url = new URL(req.url, `https://${req.headers.get('host') || 'localhost'}`);
     const idsParam = url.searchParams.get('ids');
     const resolution = url.searchParams.get('res') || '1K';
 

@@ -45,7 +45,9 @@ export default async function handler(req) {
   }
 
   try {
-    const url = new URL(req.url);
+    // BUGFIX: In Vercel serverless, req.url is a relative path (e.g. '/api/queue/status')
+    // new URL() requires a full URL, so provide the host header as base
+    const url = new URL(req.url, `https://${req.headers.get('host') || 'localhost'}`);
     const itemId = url.searchParams.get('itemId');
     const cacheKey = itemId || '__all__';
 

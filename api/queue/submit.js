@@ -22,7 +22,9 @@ export const config = {
 function getWebhookUrl(req) {
   const origin = process.env.VERCEL_URL
     ? `https://${process.env.VERCEL_URL}`
-    : new URL(req.url).origin;
+    // BUGFIX: In Vercel serverless, req.url is a relative path (e.g. '/api/queue/submit')
+    // new URL() requires a full URL, so provide the host header as base
+    : new URL(req.url, `https://${req.headers.get('host') || 'localhost'}`).origin;
   return `${origin}/api/fal-webhook`;
 }
 
