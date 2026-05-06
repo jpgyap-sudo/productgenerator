@@ -1,6 +1,11 @@
 // POST /api/queue/submit
 // Starts durable fal.ai queue jobs for each product view and stores the
 // request/status URLs in Supabase so renders can survive tab closes/reloads.
+//
+// IMPROVEMENT: Now passes a webhook URL to fal.ai so results are delivered
+// server-side when complete, eliminating the need for client-side polling.
+// Fal.ai's queue guarantees: no dropped requests, auto-retry up to 10x,
+// automatic runner scaling, and model fallbacks.
 import { supabase, QUEUE_TABLE, RESULTS_TABLE } from '../../lib/supabase.js';
 import { VIEWS, submitViewJob, getAttemptCount } from '../../lib/fal.js';
 import { waitUntil } from '@vercel/functions';
@@ -9,6 +14,17 @@ export const config = {
   runtime: 'nodejs',
   maxDuration: 300
 };
+
+// ── Improvement: Derive webhook URL from the request's own origin ──
+// This ensures the webhook points back to this same deployment.
+// Fal.ai will POST the result to this URL when processing completes,
+// so we don't need to poll from the client.
+function getWebhookUrl(req) {
+  const origin = process.env.VERCEL_URL
+    ? `https://${process.env.VERCEL_URL}`
+    : new URL(req.url).origin;
+  return `${origin}/api/fal-webhook`;
+}
 
 export default async function handler(req) {
   if (req.method !== 'POST') {
@@ -54,7 +70,11 @@ export default async function handler(req) {
 
     if (upsertError) throw upsertError;
 
-    waitUntil(submitDurableJobs(items, resolution || '1K'));
+    // ── Improvement: Pass webhook URL so fal.ai notifies us on completion ──
+    // This eliminates the need for client-side polling. The webhook endpoint
+    // (/api/fal-webhook) will receive the result and update Supabase directly.
+    const webhookUrl = getWebhookUrl(req);
+    waitUntil(submitDurableJobs(items, resolution || '1K', webhookUrl));
 
     return json({
       success: true,
@@ -67,9 +87,8 @@ export default async function handler(req) {
   }
 }
 
-async function submitDurableJobs(items, resolution) {
-  // ── Improvement 1: Parallel job submission ──
-  // Submit all views for all items in parallel instead of sequentially
+async function submitDurableJobs(items, resolution, webhookUrl) {
+  // Submit all views for all items in parallel
   const allPromises = [];
 
   for (const item of items) {
@@ -87,9 +106,9 @@ async function submitDurableJobs(items, resolution) {
       continue;
     }
 
-    // Submit all 5 views in parallel
+    // Submit all 5 views in parallel with webhook URL
     const viewPromises = VIEWS.map(view =>
-      submitDurableViewRow(item, view, resolution, now)
+      submitDurableViewRow(item, view, resolution, now, webhookUrl)
     );
 
     allPromises.push(
@@ -121,12 +140,22 @@ async function submitDurableJobs(items, resolution) {
   await Promise.all(allPromises);
 }
 
-async function submitDurableViewRow(item, view, resolution, now) {
+async function submitDurableViewRow(item, view, resolution, now, webhookUrl) {
   let lastError = null;
 
   for (let attempt = 0; attempt < getAttemptCount(); attempt++) {
     try {
-      const queued = await submitViewJob(view, item.description || '', item.image_url, resolution, attempt);
+      // ── Improvement: Pass webhookUrl so fal.ai notifies us on completion ──
+      // Fal.ai will POST the result to our webhook endpoint when done.
+      // This eliminates the need for client-side polling.
+      const queued = await submitViewJob(
+        view,
+        item.description || '',
+        item.image_url,
+        resolution,
+        attempt,
+        { webhookUrl }
+      );
       return {
         queue_item_id: item.id,
         view_id: view.id,
@@ -134,6 +163,8 @@ async function submitDurableViewRow(item, view, resolution, now) {
         request_id: queued.request_id || '',
         response_url: queued.response_url || '',
         status_url: queued.status_url || '',
+        cancel_url: queued.cancel_url || '',
+        queue_position: queued.queue_position != null ? queued.queue_position : null,
         attempt_index: queued.attempt || 0,
         attempt_label: queued.attempt_label || '',
         error_message: '',
@@ -160,6 +191,8 @@ function waitingRow(itemId, viewId, now) {
     request_id: '',
     response_url: '',
     status_url: '',
+    cancel_url: '',
+    queue_position: null,
     started_at: null,
     completed_at: null,
     created_at: now,

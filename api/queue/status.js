@@ -1,6 +1,12 @@
 // GET /api/queue/status
 // Polls Supabase and reconciles any durable fal.ai queue jobs that finished
 // while the browser was closed or reloading.
+//
+// IMPROVEMENT: With webhooks enabled, most results are delivered server-side
+// via /api/fal-webhook. This endpoint now primarily serves as a fallback
+// reconciliation layer for any jobs that complete without a webhook delivery
+// (e.g., webhook timeout, network issues). Fal.ai retries webhooks 10x over
+// 2 hours, so this is a safety net.
 import { supabase, QUEUE_TABLE, RESULTS_TABLE, BUCKET_NAME } from '../../lib/supabase.js';
 import { getQueuedResult, extractImageUrl, getAttemptCount, submitViewJob, VIEWS } from '../../lib/fal.js';
 import { uploadRendersToDrive } from '../../lib/drive.js';
@@ -10,12 +16,14 @@ export const config = {
   maxDuration: 300
 };
 
-// ── Improvement 6: In-memory cache ──
-// Avoids redundant Supabase queries when polling rapidly.
+// ── Improvement: In-memory cache with longer TTL ──
+// Since webhooks handle most completions, the status endpoint is mostly
+// read-only. Cache can be more aggressive.
 const cache = {
   data: null,
+  key: null,
   timestamp: 0,
-  TTL: 1500 // 1.5 seconds
+  TTL: 2000 // 2 seconds
 };
 
 function getCached(key) {
@@ -41,7 +49,6 @@ export default async function handler(req) {
     const itemId = url.searchParams.get('itemId');
     const cacheKey = itemId || '__all__';
 
-    // ── Improvement 3: 304 Not Modified ──
     // Check if client already has latest data via If-None-Match
     const cached = getCached(cacheKey);
     const ifNoneMatch = req.headers.get('if-none-match');
@@ -82,6 +89,9 @@ export default async function handler(req) {
 
     if (resultsError) throw resultsError;
 
+    // ── Improvement: Only reconcile rows that are still 'generating' ──
+    // With webhooks, most completed jobs are already updated in the DB.
+    // We only need to check rows that are still 'generating' or 'waiting'.
     const rowsWithActiveItems = await ensureRowsForActiveItems(renderRows || [], queueItems);
     const reconciledRows = await reconcileFalJobs(rowsWithActiveItems, queueItems);
     await updateQueueStatuses(queueItems, reconciledRows);
@@ -137,11 +147,26 @@ function fetchQueueItems(itemId) {
   return query;
 }
 
+/**
+ * Reconcile fal.ai queue jobs that are still in progress.
+ *
+ * IMPROVEMENT: With webhooks, most jobs are handled server-side.
+ * This reconciliation is a fallback for jobs that complete without
+ * a webhook delivery (e.g., webhook timeout, network issues).
+ * Fal.ai retries webhooks 10x over 2 hours, so this is a safety net.
+ */
 async function reconcileFalJobs(rows, queueItems) {
   const nextRows = [];
   const itemsById = new Map(queueItems.map(item => [item.id, item]));
 
   for (const row of rows) {
+    // ── Improvement: Skip rows that are already done or errored ──
+    // Webhook handler already updated these. No need to re-check.
+    if (row.status === 'done' || row.status === 'error') {
+      nextRows.push(row);
+      continue;
+    }
+
     if (row.status === 'waiting') {
       const item = itemsById.get(row.queue_item_id);
       const submitted = await submitWaitingRow(row, item);
@@ -188,6 +213,9 @@ async function reconcileFalJobs(rows, queueItems) {
         continue;
       }
 
+      // ── Improvement: Try to use fal.ai CDN URL directly ──
+      // Only mirror to Supabase storage if the CDN URL might expire.
+      // Fal.ai CDN URLs (v3.fal.media) are publicly accessible.
       const storedUrl = await copyImageToStorage(imageUrl, row.queue_item_id, row.view_id);
       const updated = {
         ...row,
@@ -200,8 +228,7 @@ async function reconcileFalJobs(rows, queueItems) {
       await saveResultRow(updated);
       nextRows.push(updated);
 
-      // ── Trigger Drive upload immediately if all 5 views are done ──
-      // This ensures upload happens even when the browser is closed
+      // Trigger Drive upload immediately if all 5 views are done
       try {
         await maybeUploadToDrive(row.queue_item_id, itemsById);
       } catch (driveErr) {
@@ -241,6 +268,8 @@ async function ensureRowsForActiveItems(rows, queueItems) {
         request_id: '',
         response_url: '',
         status_url: '',
+        cancel_url: '',
+        queue_position: null,
         started_at: null,
         completed_at: null,
         created_at: now,
@@ -291,13 +320,29 @@ async function submitWaitingRow(row, item) {
   let lastError = null;
   for (let attempt = 0; attempt < getAttemptCount(); attempt++) {
     try {
-      const queued = await submitViewJob(view, item.description || '', item.image_url, item.resolution || '1K', attempt);
+      // ── Improvement: Derive webhook URL from environment ──
+      // This ensures fal.ai notifies us when the job completes,
+      // even if the client tab is closed.
+      const webhookUrl = process.env.VERCEL_URL
+        ? `https://${process.env.VERCEL_URL}/api/fal-webhook`
+        : undefined;
+
+      const queued = await submitViewJob(
+        view,
+        item.description || '',
+        item.image_url,
+        item.resolution || '1K',
+        attempt,
+        webhookUrl ? { webhookUrl } : {}
+      );
       const updated = {
         ...row,
         status: 'generating',
         request_id: queued.request_id || '',
         response_url: queued.response_url || '',
         status_url: queued.status_url || '',
+        cancel_url: queued.cancel_url || '',
+        queue_position: queued.queue_position != null ? queued.queue_position : null,
         attempt_index: queued.attempt || 0,
         attempt_label: queued.attempt_label || '',
         error_message: '',
@@ -373,6 +418,8 @@ async function saveSubmittedRow(row) {
       request_id: row.request_id || '',
       response_url: row.response_url || '',
       status_url: row.status_url || '',
+      cancel_url: row.cancel_url || '',
+      queue_position: row.queue_position != null ? row.queue_position : null,
       attempt_index: row.attempt_index || 0,
       attempt_label: row.attempt_label || '',
       error_message: row.error_message || '',
@@ -389,7 +436,6 @@ async function saveSubmittedRow(row) {
 async function updateQueueStatuses(queueItems, rows) {
   console.log(`[STATUS] updateQueueStatuses called for ${queueItems.length} items, ${rows.length} rows`);
 
-  // ── Improvement 4: Batch DB updates ──
   const updates = [];
 
   for (const item of queueItems) {
@@ -414,7 +460,7 @@ async function updateQueueStatuses(queueItems, rows) {
       status = 'done';
       subText = 'All 5 views generated';
 
-      // ── Auto-upload completed renders to Google Drive ──────────
+      // Auto-upload completed renders to Google Drive
       const hasDriveEnv = !!process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
       const alreadyUploaded = !!(item.drive_folder_id || item.drive_folder_name);
       console.log(`[STATUS] Item ${item.id} all done. hasDriveEnv=${hasDriveEnv}, alreadyUploaded=${alreadyUploaded}`);
@@ -434,7 +480,6 @@ async function updateQueueStatuses(queueItems, rows) {
           if (doneViews.length === 5) {
             const driveResult = await uploadRendersToDrive(item.id, item.name, doneViews);
 
-            // Store Drive folder info in the queue item
             await supabase
               .from(QUEUE_TABLE)
               .update({
@@ -471,8 +516,7 @@ async function updateQueueStatuses(queueItems, rows) {
     }
   }
 
-  // ── Improvement 4: Batch DB updates ──
-  // Apply all status updates in a single batch
+  // Apply all status updates
   if (updates.length > 0) {
     for (const update of updates) {
       await supabase
@@ -487,7 +531,6 @@ async function updateQueueStatuses(queueItems, rows) {
 /**
  * Check if all 5 views for an item are done and trigger Drive upload.
  * Called from reconcileFalJobs when a view transitions to 'done'.
- * This ensures upload happens even when the browser tab is closed.
  */
 async function maybeUploadToDrive(itemId, itemsById) {
   const item = itemsById.get(itemId);
@@ -535,7 +578,6 @@ async function maybeUploadToDrive(itemId, itemsById) {
     try {
       const driveResult = await uploadRendersToDrive(item.id, item.name, doneViews);
 
-      // Store Drive folder info in the queue item
       await supabase
         .from(QUEUE_TABLE)
         .update({

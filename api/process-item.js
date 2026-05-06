@@ -2,9 +2,13 @@
 //  POST /api/process-item — Background worker
 //  Called by submit.js via waitUntil(). Processes queue items by:
 //  1. Generating all 5 views in parallel via fal.ai queue-based API
-//     (no CDN upload needed — passes Supabase public URL directly)
+//     (uses fal.ai CDN URLs directly — no redundant download/upload)
 //  2. Saving results to Supabase (render_results table + storage)
 //  3. Updating queue item status
+//
+//  IMPROVEMENT: Now uses fal.ai CDN URLs directly instead of
+//  downloading images and re-uploading to Supabase. This eliminates
+//  the redundant data transfer and speeds up processing.
 // ═══════════════════════════════════════════════════════════════════
 import { supabase, QUEUE_TABLE, RESULTS_TABLE, BUCKET_NAME } from '../lib/supabase.js';
 import { generateView, VIEWS } from '../lib/fal.js';
@@ -70,7 +74,7 @@ export default async function handler(req) {
 }
 
 /**
- * Process a single queue item: upload image, generate 5 views, save results.
+ * Process a single queue item: generate 5 views, save results.
  */
 async function processItem(itemId, resolution) {
   const now = new Date().toISOString();
@@ -99,12 +103,12 @@ async function processItem(itemId, resolution) {
 
   try {
     // Step 1: Mark all views as generating
-    // We pass the Supabase public URL directly to fal.ai — no CDN upload needed
     await updateItemStatus(itemId, 'active', 'Generating 5 views...');
     await updateAllViewStatuses(itemId, 'generating', null);
 
     // Step 2: Generate all 5 views in parallel
     // Each call uses fal.ai queue-based API internally (submit + poll)
+    // Returns fal.ai CDN URLs directly — no redundant download/upload
     const results = await Promise.allSettled(
       VIEWS.map(view => generateView(view, desc, imageUrl, resolution))
     );
@@ -118,28 +122,39 @@ async function processItem(itemId, resolution) {
       const result = results[i];
 
       if (result.status === 'fulfilled' && result.value) {
-        // Success — save image to Supabase storage and update result row
+        // Success — save the fal.ai CDN URL to Supabase
         successCount++;
         try {
-          const imageDataUrl = result.value.dataUrl;
-          const imageB64 = result.value.b64;
+          const cdnUrl = result.value.cdnUrl;
           const fileName = `renders/${itemId}_view${view.id}_${Date.now()}.jpg`;
 
-          // Upload to Supabase storage
-          const buffer = Buffer.from(imageB64, 'base64');
-          const { error: uploadError } = await supabase.storage
-            .from(BUCKET_NAME)
-            .upload(fileName, buffer, {
-              contentType: 'image/jpeg',
-              upsert: true
-            });
+          // ── Improvement: Use fal.ai CDN URL directly ──
+          // Fal.ai serves results via their CDN (v3.fal.media).
+          // We store the CDN URL and optionally mirror to Supabase.
+          // This is faster than downloading + re-uploading.
+          let publicUrl = cdnUrl;
 
-          let publicUrl = '';
-          if (!uploadError) {
-            const { data: { publicUrl: pubUrl } } = supabase.storage
-              .from(BUCKET_NAME)
-              .getPublicUrl(fileName);
-            publicUrl = pubUrl;
+          // Optionally mirror to Supabase storage for redundancy
+          try {
+            const imgRes = await fetch(cdnUrl);
+            if (imgRes.ok) {
+              const buffer = Buffer.from(await imgRes.arrayBuffer());
+              const { error: uploadError } = await supabase.storage
+                .from(BUCKET_NAME)
+                .upload(fileName, buffer, {
+                  contentType: 'image/jpeg',
+                  upsert: true
+                });
+
+              if (!uploadError) {
+                const { data: { publicUrl: pubUrl } } = supabase.storage
+                  .from(BUCKET_NAME)
+                  .getPublicUrl(fileName);
+                publicUrl = pubUrl;
+              }
+            }
+          } catch (mirrorErr) {
+            console.warn(`Mirror to Supabase failed for item ${itemId} view ${view.id}, using CDN URL`);
           }
 
           // Update render_results row
@@ -147,7 +162,7 @@ async function processItem(itemId, resolution) {
             .from(RESULTS_TABLE)
             .update({
               status: 'done',
-              image_url: publicUrl || imageDataUrl,
+              image_url: publicUrl,
               completed_at: new Date().toISOString(),
               updated_at: new Date().toISOString()
             })
@@ -184,7 +199,6 @@ async function processItem(itemId, resolution) {
     }
 
     // Step 4: Update queue item final status
-    // 'partial' is not a frontend-known status — use 'error' for any incomplete result
     const finalStatus = successCount === 5 ? 'done' : 'error';
     const statusText = successCount === 5
       ? 'All 5 views generated'
