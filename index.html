@@ -1149,12 +1149,23 @@ function buildDesc(desc) {
   return (desc && desc.trim()) ? `the product from the reference image (${desc})` : 'the product from the reference image';
 }
 
+function homeuPrompt(view, desc) {
+  const d = buildDesc(desc);
+  const fidelity = `Use ONLY the exact uploaded reference product image for ${d}. Maintain 100% product fidelity: do not redesign, reinterpret, replace, improve, recolor, resize disproportionately, add/remove cushions, change legs/base/frame, alter materials, or change structure. The product must remain the same object with the same proportions, color, material, silhouette, texture, and visible details.`;
+  const productShot = `Generate one separate image only, not a collage or grid. White background, centered product photography, clean premium catalog lighting, soft realistic shadows, no extra furniture or decor.`;
+  if (view.id === 1) return `${fidelity} ${productShot} Image 1: front view of the chair.`;
+  if (view.id === 2) return `${fidelity} ${productShot} Image 2: side view of the chair.`;
+  if (view.id === 3) return `${fidelity} ${productShot} Image 3: isometric 45-degree view of the chair.`;
+  if (view.id === 4) return `${fidelity} ${productShot} Image 4: back view of the chair. Infer hidden rear details conservatively from the reference without changing the design.`;
+  return `${fidelity} Generate one separate image only, not a collage or grid. Image 5: full luxury modern dining room interior scene using the EXACT same chair as the main furniture. Place it naturally in a high-end condominium or architect-designed luxury home setting with premium materials such as marble, travertine, wood veneer, brushed metal, linen or boucle textures, soft natural daylight, balanced exposure, realistic grounding shadows, correct scale and perspective, eye-level camera, and Homeu-style neutral luxury tones: beige, taupe, cream, warm gray, black accents, walnut or oak. Supporting decor such as rugs, pendant lights, wall art, curtains, vases, books, or trays is allowed only if it does not overpower the chair. The scene must look like a real photographed luxury property listing or interior design magazine image.`;
+}
+
 const VIEWS = [
-  { id:1, label:'Front view',     prompt: d=>`Use the reference image as the product identity for this ${buildDesc(d)}. Create a clean front-facing studio catalog photo on a solid white background. Preserve the EXACT same product — same color, material, shape, texture, and all visible details. Do NOT change the product into a different object. Soft even lighting, centered composition.` },
-  { id:2, label:'Side view',      prompt: d=>`Use the reference image as the product identity for this ${buildDesc(d)}. Create a clean side-profile studio catalog photo on a solid white background. Preserve the EXACT same product — same color, material, shape, texture, and all visible details. Do NOT change the product into a different object. Soft even lighting, centered composition.` },
-  { id:3, label:'Isometric view', prompt: d=>`Use the reference image as the product identity for this ${buildDesc(d)}. Create a clean 45-degree isometric studio catalog photo on a solid white background. Preserve the EXACT same product — same color, material, shape, texture, and all visible details. Do NOT change the product into a different object. Soft even lighting, centered composition.` },
-  { id:4, label:'Back view',      prompt: d=>`Use the reference image as the product identity for this ${buildDesc(d)}. Create a clean rear-view studio catalog photo on a solid white background. Infer hidden rear details naturally from the visible design. Preserve the EXACT same product — same color, material, shape, texture. Do NOT change the product into a different object. Soft even lighting, centered composition.` },
-  { id:5, label:'Interior scene', prompt: d=>`Use the reference image as the product identity for this ${buildDesc(d)}. Place the EXACT same product in a refined modern dining interior with a round dark marble table, warm pendant light, light wood floor, large windows, and natural decor. Do NOT change the product into a different object. Photorealistic interior product photography.` }
+  { id:1, label:'Front view',     prompt: d=>homeuPrompt({ id: 1 }, d) },
+  { id:2, label:'Side view',      prompt: d=>homeuPrompt({ id: 2 }, d) },
+  { id:3, label:'Isometric view', prompt: d=>homeuPrompt({ id: 3 }, d) },
+  { id:4, label:'Back view',      prompt: d=>homeuPrompt({ id: 4 }, d) },
+  { id:5, label:'Interior scene', prompt: d=>homeuPrompt({ id: 5 }, d) }
 ];
 
 const STATUS = {
@@ -2110,19 +2121,22 @@ const featureResetBtn = document.getElementById('featureResetBtn');
 /** Default prompts for each view (same as VIEWS array) */
 const DEFAULT_FEATURE_PROMPTS = [
   { id: 1, label: 'Front View',     hint: 'Best for: product thumbnails, e-commerce listings, hero images.',
-    prompt: `Use the reference image as the product identity. Create a clean front-facing studio catalog photo on a solid white background. Preserve the EXACT same product — same color, material, shape, texture, and all visible details. Do NOT change the product into a different object. Soft even lighting, centered composition.` },
+    prompt: homeuPrompt({ id: 1 }, '') },
   { id: 2, label: 'Side View',      hint: 'Best for: showing product depth, profile, and proportions.',
-    prompt: `Use the reference image as the product identity. Create a clean side-profile studio catalog photo on a solid white background. Preserve the EXACT same product — same color, material, shape, texture, and all visible details. Do NOT change the product into a different object. Soft even lighting, centered composition.` },
+    prompt: homeuPrompt({ id: 2 }, '') },
   { id: 3, label: 'Isometric View', hint: 'Best for: 3D-feel marketing shots, social media, angled hero images.',
-    prompt: `Use the reference image as the product identity. Create a clean 45-degree isometric studio catalog photo on a solid white background. Preserve the EXACT same product — same color, material, shape, texture, and all visible details. Do NOT change the product into a different object. Soft even lighting, centered composition.` },
+    prompt: homeuPrompt({ id: 3 }, '') },
   { id: 4, label: 'Back View',      hint: 'Best for: showing rear details, labels, ports, or stitching.',
-    prompt: `Use the reference image as the product identity. Create a clean rear-view studio catalog photo on a solid white background. Infer hidden rear details naturally from the visible design. Preserve the EXACT same product — same color, material, shape, texture. Do NOT change the product into a different object. Soft even lighting, centered composition.` },
+    prompt: homeuPrompt({ id: 4 }, '') },
   { id: 5, label: 'Interior Scene', hint: 'Best for: lifestyle marketing, social media, catalog hero images showing product in context.',
-    prompt: `Use the reference image as the product identity. Place the EXACT same product in a refined modern interior with a round dark marble table, warm pendant light, light wood floor, large windows, and natural decor. Do NOT change the product into a different object. Photorealistic interior product photography.` }
+    prompt: homeuPrompt({ id: 5 }, '') }
 ];
 
 /** Current feature prompts (editable by user) */
-let featurePrompts = JSON.parse(localStorage.getItem('featurePrompts')) || null;
+const FEATURE_PROMPTS_VERSION = 'homeu-v2';
+let featurePrompts = localStorage.getItem('featurePromptsVersion') === FEATURE_PROMPTS_VERSION
+  ? JSON.parse(localStorage.getItem('featurePrompts')) || null
+  : null;
 
 function getFeaturePrompts() {
   if (!featurePrompts) {
@@ -2133,6 +2147,7 @@ function getFeaturePrompts() {
 
 function saveFeaturePrompts() {
   localStorage.setItem('featurePrompts', JSON.stringify(featurePrompts));
+  localStorage.setItem('featurePromptsVersion', FEATURE_PROMPTS_VERSION);
 }
 
 function renderFeatureGrid() {
@@ -3241,14 +3256,43 @@ async function retryItemFromHistory(id) {
 // Direct fal.ai API calls from the browser (fallback when server endpoints are unavailable).
 // Uses the same fal.ai queue-based API as the server-side worker.
 
-const FAL_BASE = 'https://fal.run/fal-ai';
+const FAL_BASE = 'https://queue.fal.run';
 
 const CLIENT_VIEW_PROMPTS = [
-  { id: 1, prompt: d => `Use the reference image as the product identity for this ${buildDesc(d)}. Create a clean front-facing studio catalog photo on a solid white background. Preserve the EXACT same product — same color, material, shape, texture, and all visible details. Do NOT change the product into a different object. Soft even lighting, centered composition.` },
-  { id: 2, prompt: d => `Use the reference image as the product identity for this ${buildDesc(d)}. Create a clean side-profile studio catalog photo on a solid white background. Preserve the EXACT same product — same color, material, shape, texture, and all visible details. Do NOT change the product into a different object. Soft even lighting, centered composition.` },
-  { id: 3, prompt: d => `Use the reference image as the product identity for this ${buildDesc(d)}. Create a clean 45-degree isometric studio catalog photo on a solid white background. Preserve the EXACT same product — same color, material, shape, texture, and all visible details. Do NOT change the product into a different object. Soft even lighting, centered composition.` },
-  { id: 4, prompt: d => `Use the reference image as the product identity for this ${buildDesc(d)}. Create a clean rear-view studio catalog photo on a solid white background. Infer hidden rear details naturally from the visible design. Preserve the EXACT same product — same color, material, shape, texture. Do NOT change the product into a different object. Soft even lighting, centered composition.` },
-  { id: 5, prompt: d => `Use the reference image as the product identity for this ${buildDesc(d)}. Place the EXACT same product in a refined modern dining interior with a round dark marble table, warm pendant light, light wood floor, large windows, and natural decor. Do NOT change the product into a different object. Photorealistic interior product photography.` }
+  { id: 1, prompt: d => homeuPrompt({ id: 1 }, d) },
+  { id: 2, prompt: d => homeuPrompt({ id: 2 }, d) },
+  { id: 3, prompt: d => homeuPrompt({ id: 3 }, d) },
+  { id: 4, prompt: d => homeuPrompt({ id: 4 }, d) },
+  { id: 5, prompt: d => homeuPrompt({ id: 5 }, d) }
+];
+
+const CLIENT_ATTEMPTS = [
+  {
+    label: 'Nano Banana 2',
+    url: () => `${FAL_BASE}/fal-ai/nano-banana-2`,
+    body: (view, prompt, imageDataUrl, resolution) => ({
+      prompt,
+      image_url: imageDataUrl,
+      resolution: resolution || '1K',
+      aspect_ratio: view.id === 5 ? '16:9' : '1:1',
+      output_format: 'jpeg',
+      num_images: 1,
+      safety_tolerance: 4,
+      enable_safety_checker: true
+    })
+  },
+  {
+    label: 'GPT Image 2',
+    url: () => `${FAL_BASE}/openai/gpt-image-2`,
+    body: (view, prompt, imageDataUrl) => ({
+      prompt,
+      image_url: imageDataUrl,
+      image_size: view.id === 5 ? 'landscape_16_9' : 'square_hd',
+      quality: 'hd',
+      num_images: 1,
+      output_format: 'jpeg'
+    })
+  }
 ];
 
 /**
@@ -3261,37 +3305,38 @@ async function clientGenerateView(view, desc, imageDataUrl, resolution) {
 
   const prompt = (CLIENT_VIEW_PROMPTS.find(v => v.id === view.id) || CLIENT_VIEW_PROMPTS[0]).prompt(desc);
 
-  // Step 1: Submit the generation request
-  const submitRes = await fetch(`${FAL_BASE}/nano-banana-2`, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Key ${apiKey}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      prompt,
-      image_url: imageDataUrl,
-      resolution: resolution || '1K',
-      aspect_ratio: view.id === 5 ? '16:9' : '1:1',
-      output_format: 'jpeg',
-      num_images: 1,
-      safety_tolerance: 4,
-      enable_safety_checker: true
-    })
-  });
+  let submitData;
+  let lastError;
+  for (const attempt of CLIENT_ATTEMPTS) {
+    try {
+      const submitRes = await fetch(attempt.url(view), {
+        method: 'POST',
+        headers: {
+          'Authorization': `Key ${apiKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(attempt.body(view, prompt, imageDataUrl, resolution))
+      });
 
-  if (!submitRes.ok) {
-    let errMsg;
-    try { const e = await submitRes.json(); errMsg = e.message || e.detail || e.error; } catch(e2) {}
-    throw new Error(errMsg || `fal.ai API error ${submitRes.status}`);
+      if (!submitRes.ok) {
+        let errMsg;
+        try { const e = await submitRes.json(); errMsg = e.message || e.detail || e.error; } catch(e2) {}
+        throw new Error(errMsg || `fal.ai API error ${submitRes.status}`);
+      }
+
+      submitData = await submitRes.json();
+      break;
+    } catch (e) {
+      lastError = e;
+    }
   }
 
-  const submitData = await submitRes.json();
+  if (!submitData) throw lastError || new Error('fal.ai submission failed');
 
   // Step 2: If we got a queue response, poll for result
   let result;
   if (submitData.request_id && submitData.response_url) {
-    result = await clientPollQueue(submitData.response_url, apiKey);
+    result = await clientPollQueue(submitData.status_url || submitData.response_url, apiKey, submitData.response_url);
   } else {
     // Direct response (sync mode)
     result = submitData;
@@ -3323,7 +3368,7 @@ async function clientGenerateView(view, desc, imageDataUrl, resolution) {
 /**
  * Poll a fal.ai queue status URL until the job completes.
  */
-async function clientPollQueue(statusUrl, apiKey, timeoutMs = 120000) {
+async function clientPollQueue(statusUrl, apiKey, responseUrl = statusUrl, timeoutMs = 120000) {
   const startTime = Date.now();
   while (true) {
     if (Date.now() - startTime > timeoutMs) {
@@ -3334,7 +3379,13 @@ async function clientPollQueue(statusUrl, apiKey, timeoutMs = 120000) {
     });
     if (!res.ok) throw new Error(`Status error ${res.status}`);
     const data = await res.json();
-    if (data.status === 'COMPLETED' || data.status === 'completed' || data.status === 'SUCCESS') return data;
+    if (data.status === 'COMPLETED' || data.status === 'completed' || data.status === 'SUCCESS') {
+      const responseRes = await fetch(responseUrl, {
+        headers: { 'Authorization': `Key ${apiKey}` }
+      });
+      if (!responseRes.ok) throw new Error(`Response error ${responseRes.status}`);
+      return responseRes.json();
+    }
     if (data.status === 'FAILED' || data.status === 'failed' || data.status === 'ERROR') {
       throw new Error(data.error || data.detail || 'Generation failed');
     }
