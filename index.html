@@ -3331,9 +3331,26 @@ async function retryFailedViews(item, images) {
 // ── RESTORE BATCH CARDS ON PAGE LOAD ───────────────────────────────
 // When the page reloads, batch cards (DOM elements) are gone.
 // This recreates summary cards for items that were completed/errored.
-function restoreBatchCards() {
+async function restoreBatchCards() {
   const completedItems = queue.filter(q => q.status === STATUS.DONE || q.status === STATUS.PARTIAL || q.status === STATUS.ERROR || q.status === STATUS.STOPPED);
   if (!completedItems.length) return;
+
+  if (supaConnected) {
+    await pollStatus();
+    let restoredFromUrls = false;
+    completedItems.forEach(item => {
+      if (document.getElementById(`bc-${item.id}`)) {
+        restoredFromUrls = true;
+        return;
+      }
+      const viewResults = lastPollRenderResults[item.id];
+      if (viewResults && viewResults.some(r => r.status === 'done' && r.imageUrl)) {
+        createBatchCardFromUrls(item, viewResults);
+        restoredFromUrls = true;
+      }
+    });
+    if (restoredFromUrls) return;
+  }
 
   let batchSec = document.getElementById('batch-section');
   if (!batchSec) {
@@ -3862,7 +3879,7 @@ async function pollStatus() {
       checkReady();
       await saveState();
       // Fall back to placeholder cards for any item still missing a batch card
-      restoreBatchCards();
+      await restoreBatchCards();
     }
 
     // Update processingItemIds
@@ -4066,7 +4083,7 @@ window.addEventListener('beforeunload', function(e) {
   updateLogBadge();
   restoreInterruptedActiveCard();
   // Restore batch cards for completed items (they don't survive page reload)
-  restoreBatchCards();
+  await restoreBatchCards();
   restoreQueuedPreviewCard();
 })();
 </script>
