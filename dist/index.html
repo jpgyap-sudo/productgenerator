@@ -401,6 +401,17 @@ textarea:focus { outline: none; border-color: var(--text-secondary); }
   font-size: 13px; font-weight: 700; margin-bottom: 0.75rem;
   display: flex; align-items: center; gap: 8px;
 }
+.sec-title-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sec-actions { margin-left: auto; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.btn-mini-stop, .btn-mini-clear {
+  font-size: 11px; padding: 4px 10px; border-radius: 6px;
+  background: var(--surface); cursor: pointer; font-family: inherit;
+  transition: all var(--transition); white-space: nowrap;
+}
+.btn-mini-stop { border: 1px solid var(--warning); color: var(--warning-text); }
+.btn-mini-stop:hover { background: var(--warning-bg); }
+.btn-mini-clear { border: 1px solid var(--error); color: var(--error); }
+.btn-mini-clear:hover { background: var(--error-bg); }
 .pulse {
   width: 8px; height: 8px; border-radius: 50%;
   background: var(--accent); animation: pulse 1s infinite; flex-shrink: 0;
@@ -2446,7 +2457,19 @@ async function moveItem(id, dir) {
 }
 
 async function removeItem(id) {
+  const removed = queue.find(q => q.id === id);
   queue = queue.filter(q => q.id !== id);
+  const activeSec = document.getElementById('active-section');
+  if (removed && activeSec?.dataset?.itemId === String(id)) {
+    clientStopRequested = true;
+    stopPolling();
+    stopActiveTimer();
+    activeSec.remove();
+    stopBtn.style.display = 'none';
+    startBtn.disabled = false;
+  }
+  const batchCard = document.getElementById(`bc-${id}`);
+  if (batchCard) batchCard.remove();
   renderQueue();
   updateCost();
   checkReady();
@@ -2550,6 +2573,10 @@ confirmAddBtn.addEventListener('click', async () => {
 
 // ── CLEAR BUTTONS ─────────────────────────────────────────────────
 clearDoneBtn.addEventListener('click', async () => {
+  await clearCompletedItems();
+});
+
+async function clearCompletedItems() {
   // Remove batch cards from DOM for completed/errored/stopped items
   queue.forEach(q => {
     if (q.status !== STATUS.WAIT && q.status !== STATUS.ACTIVE) {
@@ -2557,6 +2584,8 @@ clearDoneBtn.addEventListener('click', async () => {
       if (card) card.remove();
     }
   });
+  const batchSection = document.getElementById('batch-section');
+  if (batchSection) batchSection.remove();
   queue = queue.filter(q => q.status === STATUS.WAIT || q.status === STATUS.ACTIVE);
   // If no items remain and no active section, show welcome state
   if (!queue.length && !document.getElementById('active-section')) {
@@ -2567,7 +2596,7 @@ clearDoneBtn.addEventListener('click', async () => {
   checkReady();
   await saveState();
   toast('Cleared completed items', 'info');
-});
+}
 
 clearAllBtn.addEventListener('click', async () => {
   if (queue.some(q => q.status === STATUS.ACTIVE)) {
@@ -2588,6 +2617,70 @@ clearAllBtn.addEventListener('click', async () => {
   await saveState();
   toast('Queue cleared', 'info');
 });
+
+function getActiveCardItem() {
+  const sec = document.getElementById('active-section');
+  const activeId = sec?.dataset?.itemId ? Number(sec.dataset.itemId) : null;
+  return queue.find(q => q.id === activeId)
+    || queue.find(q => q.status === STATUS.ACTIVE)
+    || queue.find(q => q.interruptedOnLoad);
+}
+
+async function stopActiveGeneration() {
+  const item = getActiveCardItem();
+  if (!item) {
+    toast('No active generation to stop', 'info');
+    return;
+  }
+
+  clientStopRequested = true;
+  item.status = STATUS.STOPPED;
+  item.interruptedOnLoad = false;
+  stopPolling();
+  stopBtn.style.display = 'none';
+  startBtn.disabled = false;
+
+  const title = document.getElementById('active-title');
+  const prog = document.getElementById('active-prog');
+  const dot = document.getElementById('active-dot');
+  if (title) title.textContent = `Stopped: ${item.name}`;
+  if (prog) prog.textContent = 'Generation stopped. Clear this card or re-queue the item to generate again.';
+  if (dot) { dot.className = 'pulse skip'; dot.style.animation = 'none'; }
+
+  renderQueue();
+  updateCost();
+  checkReady();
+  await saveState();
+  addQueueLogEntry('stop', item.name, 'Generation stopped');
+  toast(`Stopped "${item.name}"`, 'info');
+}
+
+async function clearActiveGeneration() {
+  const item = getActiveCardItem();
+  const sec = document.getElementById('active-section');
+
+  clientStopRequested = true;
+  stopPolling();
+  stopActiveTimer();
+  stopBtn.style.display = 'none';
+  startBtn.disabled = false;
+
+  if (item) {
+    queue = queue.filter(q => q.id !== item.id);
+    await deleteQueueItemFromSupabase(item.id);
+    addQueueLogEntry('stop', item.name, 'Generation cleared');
+  }
+
+  if (sec) sec.remove();
+  renderQueue();
+  updateCost();
+  checkReady();
+  await saveState();
+  if (!queue.length && !document.getElementById('batch-section')) {
+    welcomeState.style.display = 'block';
+  }
+  toast(item ? `Cleared "${item.name}"` : 'Generation card cleared', 'info');
+}
 
 async function updateQueueItem(id, status, subText) {
   const item = queue.find(q => q.id === id);
@@ -2624,6 +2717,7 @@ function createActiveCard(item) {
   }
   
   if (sec) {
+    sec.dataset.itemId = String(item.id);
     // Update existing active card with new item info
     const thumb = document.getElementById('active-thumb');
     const nameEl = document.getElementById('active-name');
@@ -2637,6 +2731,7 @@ function createActiveCard(item) {
     if (progEl) progEl.textContent = 'Starting...';
     if (dot) { dot.className = 'pulse'; dot.style.animation = ''; dot.style.background = ''; }
     if (skipBtn) { skipBtn.textContent = '⏭ Skip'; skipBtn.disabled = false; skipBtn.className = 'btn-skip'; skipBtn.onclick = null; }
+    ensureActiveCardControls();
     // Reset all render slots
     VIEWS.forEach(v => {
       const badge = document.getElementById(`rb-${v.id}`);
@@ -2665,11 +2760,16 @@ function createActiveCard(item) {
 
   sec = document.createElement('div');
   sec.id = 'active-section';
+  sec.dataset.itemId = String(item.id);
   sec.innerHTML = `
     <div class="sec-title">
       <span class="pulse" id="active-dot"></span>
-      <span id="active-title">Generating: ${escHtml(item.name)}</span>
-      <button class="btn-skip" id="skipBtn" title="Skip this item and proceed to next (Ctrl+Shift+S)">⏭ Skip</button>
+      <span class="sec-title-text" id="active-title">Generating: ${escHtml(item.name)}</span>
+      <div class="sec-actions">
+        <button class="btn-mini-stop" id="activeStopBtn" type="button" title="Stop this generation">Stop</button>
+        <button class="btn-mini-clear" id="activeClearBtn" type="button" title="Clear this generation">Clear</button>
+        <button class="btn-skip" id="skipBtn" title="Skip this item and proceed to next (Ctrl+Shift+S)">⏭ Skip</button>
+      </div>
     </div>
     <div class="active-card">
       <div class="card-head">
@@ -2689,6 +2789,7 @@ function createActiveCard(item) {
       <div class="renders-grid" id="active-grid"></div>
     </div>`;
   mainPanel.insertBefore(sec, mainPanel.firstChild);
+  ensureActiveCardControls();
   // Auto-scroll to show the active card
   setTimeout(() => {
     sec.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -2712,6 +2813,47 @@ function createActiveCard(item) {
 }
 
 const setActiveProg = msg => { const el = document.getElementById('active-prog'); if (el) el.textContent = msg; };
+
+function ensureActiveCardControls() {
+  const title = document.getElementById('active-title');
+  const secTitle = title?.closest('.sec-title');
+  if (!secTitle) return;
+
+  title.classList.add('sec-title-text');
+  let actions = secTitle.querySelector('.sec-actions');
+  const skipBtn = document.getElementById('skipBtn');
+  if (!actions) {
+    actions = document.createElement('div');
+    actions.className = 'sec-actions';
+    if (skipBtn) actions.appendChild(skipBtn);
+    secTitle.appendChild(actions);
+  }
+
+  let stop = document.getElementById('activeStopBtn');
+  if (!stop) {
+    stop = document.createElement('button');
+    stop.className = 'btn-mini-stop';
+    stop.id = 'activeStopBtn';
+    stop.type = 'button';
+    stop.title = 'Stop this generation';
+    stop.textContent = 'Stop';
+    actions.insertBefore(stop, actions.firstChild);
+  }
+
+  let clear = document.getElementById('activeClearBtn');
+  if (!clear) {
+    clear = document.createElement('button');
+    clear.className = 'btn-mini-clear';
+    clear.id = 'activeClearBtn';
+    clear.type = 'button';
+    clear.title = 'Clear this generation';
+    clear.textContent = 'Clear';
+    actions.insertBefore(clear, stop.nextSibling);
+  }
+
+  stop.onclick = stopActiveGeneration;
+  clear.onclick = clearActiveGeneration;
+}
 
 function restoreInterruptedActiveCard() {
   const item = queue.find(q => q.interruptedOnLoad);
@@ -2854,12 +2996,23 @@ function updateActiveProgress() {
 }
 
 // ── BATCH CARD ─────────────────────────────────────────────────────
+function completedBatchHeaderHtml() {
+  return `<div class="sec-title" style="margin-top:1rem;">
+    <span class="pulse done"></span>
+    <span class="sec-title-text">Completed Batches</span>
+    <div class="sec-actions">
+      <button class="btn-mini-clear" type="button" onclick="clearCompletedItems()">Clear</button>
+      <button class="btn-dl-all" id="dlAllBtn" onclick="downloadAllBatches()">⬇ Download All</button>
+    </div>
+  </div>`;
+}
+
 function createBatchCard(item, images) {
   let batchSec = document.getElementById('batch-section');
   if (!batchSec) {
     batchSec = document.createElement('div');
     batchSec.id = 'batch-section';
-    batchSec.innerHTML = `<div class="sec-title" style="margin-top:1rem;"><span class="pulse done"></span><span>Completed Batches</span><button class="btn-dl-all" id="dlAllBtn" onclick="downloadAllBatches()">⬇ Download All</button></div>`;
+    batchSec.innerHTML = completedBatchHeaderHtml();
     // Insert batch section AFTER the active section (if it exists), otherwise at the end
     const activeSec = document.getElementById('active-section');
     if (activeSec) {
@@ -2966,7 +3119,7 @@ function createBatchCardFromUrls(item, viewResults) {
   if (!batchSec) {
     batchSec = document.createElement('div');
     batchSec.id = 'batch-section';
-    batchSec.innerHTML = `<div class="sec-title" style="margin-top:1rem;"><span class="pulse done"></span><span>Completed Batches</span><button class="btn-dl-all" id="dlAllBtn" onclick="downloadAllBatches()">⬇ Download All</button></div>`;
+    batchSec.innerHTML = completedBatchHeaderHtml();
     const activeSec = document.getElementById('active-section');
     if (activeSec) {
       mainPanel.insertBefore(batchSec, activeSec.nextSibling);
@@ -3186,7 +3339,7 @@ function restoreBatchCards() {
   if (!batchSec) {
     batchSec = document.createElement('div');
     batchSec.id = 'batch-section';
-    batchSec.innerHTML = `<div class="sec-title" style="margin-top:1rem;"><span class="pulse done"></span><span>Completed Batches</span><button class="btn-dl-all" id="dlAllBtn" onclick="downloadAllBatches()">⬇ Download All</button></div>`;
+    batchSec.innerHTML = completedBatchHeaderHtml();
     // Insert after the active section if it exists, otherwise append
     const activeSec = document.getElementById('active-section');
     if (activeSec) {

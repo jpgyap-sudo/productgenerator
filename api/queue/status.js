@@ -193,6 +193,8 @@ async function saveResultRow(row) {
 
 async function updateQueueStatuses(queueItems, rows) {
   for (const item of queueItems) {
+    if (item.status === 'stopped') continue;
+
     const itemRows = rows.filter(row => row.queue_item_id === item.id);
     if (itemRows.length === 0) continue;
 
