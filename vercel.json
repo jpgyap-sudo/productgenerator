@@ -10,6 +10,9 @@
     },
     "api/queue/status.js": {
       "maxDuration": 300
+    },
+    "api/fal-webhook.js": {
+      "maxDuration": 60
     }
   },
   "rewrites": [

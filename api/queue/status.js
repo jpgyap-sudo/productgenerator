@@ -162,6 +162,8 @@ async function reconcileFalJobs(rows, queueItems) {
   for (const row of rows) {
     // ── Improvement: Skip rows that are already done or errored ──
     // Webhook handler already updated these. No need to re-check.
+    // However, if the row is 'done' but has a CDN URL (not Supabase),
+    // we should attempt to mirror it to Supabase for persistence.
     if (row.status === 'done' || row.status === 'error') {
       nextRows.push(row);
       continue;
@@ -270,6 +272,7 @@ async function ensureRowsForActiveItems(rows, queueItems) {
         status_url: '',
         cancel_url: '',
         queue_position: null,
+        resolution: item.resolution || '1K',
         started_at: null,
         completed_at: null,
         created_at: now,
@@ -327,11 +330,15 @@ async function submitWaitingRow(row, item) {
         ? `https://${process.env.VERCEL_URL}/api/fal-webhook`
         : undefined;
 
+      // BUGFIX: Use item.resolution if available, otherwise default to '1K'
+      // The resolution is set during initial submission in submit.js
+      const resolution = item.resolution || '1K';
+
       const queued = await submitViewJob(
         view,
         item.description || '',
         item.image_url,
-        item.resolution || '1K',
+        resolution,
         attempt,
         webhookUrl ? { webhookUrl } : {}
       );
@@ -462,7 +469,9 @@ async function updateQueueStatuses(queueItems, rows) {
 
       // Auto-upload completed renders to Google Drive
       const hasDriveEnv = !!process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
-      const alreadyUploaded = !!(item.drive_folder_id || item.drive_folder_name);
+      // BUGFIX: Check for non-empty strings to avoid false positives
+      // from empty string defaults in the database schema
+      const alreadyUploaded = !!(item.drive_folder_id && item.drive_folder_id !== '') || !!(item.drive_folder_name && item.drive_folder_name !== '');
       console.log(`[STATUS] Item ${item.id} all done. hasDriveEnv=${hasDriveEnv}, alreadyUploaded=${alreadyUploaded}`);
 
       if (hasDriveEnv && !alreadyUploaded) {
@@ -501,9 +510,11 @@ async function updateQueueStatuses(queueItems, rows) {
       } else {
         console.log(`[STATUS] Skipped Drive upload: GOOGLE_SERVICE_ACCOUNT_JSON not set`);
       }
-    } else if (doneCount > 0 || errorCount > 0) {
+    } else if (errorCount > 0) {
       status = 'error';
-      subText = `${doneCount}/5 views generated`;
+      subText = errorCount === 5
+        ? 'All views failed'
+        : `${doneCount}/5 views generated, ${errorCount} failed`;
     }
 
     if (status !== item.status || subText !== item.sub_text) {
@@ -540,7 +551,9 @@ async function maybeUploadToDrive(itemId, itemsById) {
   }
 
   // Already uploaded — skip
-  if (item.drive_folder_id || item.drive_folder_name) {
+  // BUGFIX: Check for non-empty strings to avoid false positives
+  // from empty string defaults in the database schema
+  if ((item.drive_folder_id && item.drive_folder_id !== '') || (item.drive_folder_name && item.drive_folder_name !== '')) {
     console.log(`[MAYBE_UPLOAD] Item ${itemId} already uploaded to "${item.drive_folder_name}"`);
     return;
   }

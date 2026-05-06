@@ -126,7 +126,6 @@ async function processItem(itemId, resolution) {
         successCount++;
         try {
           const cdnUrl = result.value.cdnUrl;
-          const fileName = `renders/${itemId}_view${view.id}_${Date.now()}.jpg`;
 
           // ── Improvement: Use fal.ai CDN URL directly ──
           // Fal.ai serves results via their CDN (v3.fal.media).
@@ -138,11 +137,15 @@ async function processItem(itemId, resolution) {
           try {
             const imgRes = await fetch(cdnUrl);
             if (imgRes.ok) {
+              // BUGFIX: Detect content type from response to use correct extension
+              const contentType = imgRes.headers.get('content-type') || 'image/jpeg';
+              const ext = contentType.includes('png') ? 'png' : contentType.includes('webp') ? 'webp' : 'jpg';
+              const fileName = `renders/${itemId}_view${view.id}_${Date.now()}.${ext}`;
               const buffer = Buffer.from(await imgRes.arrayBuffer());
               const { error: uploadError } = await supabase.storage
                 .from(BUCKET_NAME)
                 .upload(fileName, buffer, {
-                  contentType: 'image/jpeg',
+                  contentType,
                   upsert: true
                 });
 

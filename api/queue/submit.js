@@ -60,7 +60,7 @@ export default async function handler(req) {
     const resultRows = [];
     for (const item of items) {
       for (const view of VIEWS) {
-        resultRows.push(waitingRow(item.id, view.id, now));
+        resultRows.push(waitingRow(item.id, view.id, now, resolution || '1K'));
       }
     }
 
@@ -181,7 +181,7 @@ async function submitDurableViewRow(item, view, resolution, now, webhookUrl) {
   return errorRow(item.id, view.id, lastError?.message || 'Failed to submit fal queue job', now);
 }
 
-function waitingRow(itemId, viewId, now) {
+function waitingRow(itemId, viewId, now, resolution = '1K') {
   return {
     queue_item_id: itemId,
     view_id: viewId,
@@ -193,6 +193,7 @@ function waitingRow(itemId, viewId, now) {
     status_url: '',
     cancel_url: '',
     queue_position: null,
+    resolution: resolution,
     started_at: null,
     completed_at: null,
     created_at: now,

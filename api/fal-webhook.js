@@ -205,7 +205,10 @@ async function maybeUploadToDrive(itemId) {
   const item = items[0];
 
   // Already uploaded — skip
-  if (item.drive_folder_id || item.drive_folder_name) {
+  // BUGFIX: Check for non-empty strings to avoid false positives
+  // from empty string defaults in the database schema
+  if ((item.drive_folder_id && item.drive_folder_id !== '') || (item.drive_folder_name && item.drive_folder_name !== '')) {
+    console.log(`[FAL-WEBHOOK] Item ${itemId} already uploaded to "${item.drive_folder_name}"`);
     return;
   }
 
