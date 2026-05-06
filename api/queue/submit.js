@@ -2,14 +2,10 @@
 // Starts durable render jobs for each product view and stores the
 // request/status URLs in Supabase so renders can survive tab closes/reloads.
 //
-// IMPROVEMENT: Now passes a webhook URL to fal.ai so results are delivered
-// server-side when complete, eliminating the need for client-side polling.
-// Fal.ai's queue guarantees: no dropped requests, auto-retry up to 10x,
-// automatic runner scaling, and model fallbacks.
-//
-// PROVIDER SUPPORT: Supports both 'fal' (default) and 'gemini' providers.
+// PROVIDER SUPPORT: Supports 'fal' (default), 'gemini', and 'openai'.
 // - fal: Uses fal.ai queue-based API with webhook support
 // - gemini: Uses Google Gemini API directly (synchronous, no queue/webhook)
+// - openai: Uses OpenAI GPT Image 2 API directly (synchronous, no queue/webhook)
 import { supabase, QUEUE_TABLE, RESULTS_TABLE } from '../../lib/supabase.js';
 import { VIEWS, submitViewJob, getAttemptCount } from '../../lib/fal.js';
 import { waitUntil } from '@vercel/functions';
@@ -137,6 +133,36 @@ async function submitDurableJobs(items, resolution, webhookUrl, provider = 'fal'
               // Fire-and-forget: trigger the worker asynchronously
               fetch(workerUrl, { method: 'POST' }).catch(err => {
                 console.error(`Failed to trigger Gemini worker for item ${item.id}:`, err.message);
+              });
+            }
+          })
+      );
+    } else if (provider === 'openai') {
+      // ── OpenAI provider: synchronous generation via background worker ──
+      // OpenAI GPT Image 2 API is synchronous (no queue), so we trigger the
+      // background worker directly. The worker calls generateOpenAIView().
+      const viewRows = VIEWS.map(view => waitingRow(item.id, view.id, now, resolution || '1K'));
+      allPromises.push(
+        upsertResultRows(viewRows)
+          .then(async () => {
+            // Save provider on the queue item so status.js reconciliation
+            // can identify OpenAI rows and skip fal.ai queue polling
+            await updateQueueItem(item.id, {
+              status: 'active',
+              sub_text: 'Generating with OpenAI...',
+              provider: 'openai',
+              updated_at: new Date().toISOString()
+            });
+
+            // Trigger background worker for OpenAI generation
+            const workerUrl = process.env.VERCEL_URL
+              ? `https://${process.env.VERCEL_URL}/api/process-item?ids=${item.id}&res=${resolution || '1K'}&provider=openai`
+              : undefined;
+
+            if (workerUrl) {
+              // Fire-and-forget: trigger the worker asynchronously
+              fetch(workerUrl, { method: 'POST' }).catch(err => {
+                console.error(`Failed to trigger OpenAI worker for item ${item.id}:`, err.message);
               });
             }
           })

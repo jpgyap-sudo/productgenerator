@@ -1,22 +1,19 @@
 // ═══════════════════════════════════════════════════════════════════
 //  POST /api/process-item — Background worker
 //  Called by submit.js via waitUntil(). Processes queue items by:
-//  1. Generating all 5 views in parallel via fal.ai queue-based API
-//     (uses fal.ai CDN URLs directly — no redundant download/upload)
+//  1. Generating all 5 views in parallel via the selected AI provider
 //  2. Saving results to Supabase (render_results table + storage)
 //  3. Updating queue item status
 //
-//  IMPROVEMENT: Now uses fal.ai CDN URLs directly instead of
-//  downloading images and re-uploading to Supabase. This eliminates
-//  the redundant data transfer and speeds up processing.
-//
-//  PROVIDER SUPPORT: Supports both 'fal' (default) and 'gemini' providers.
+//  PROVIDER SUPPORT: Supports 'fal' (default), 'gemini', and 'openai'.
 //  - fal: Uses fal.ai queue-based API with webhook support
 //  - gemini: Uses Google Gemini API directly (synchronous, no queue)
+//  - openai: Uses OpenAI GPT Image 2 API directly (synchronous, no queue)
 // ═══════════════════════════════════════════════════════════════════
 import { supabase, QUEUE_TABLE, RESULTS_TABLE, BUCKET_NAME } from '../lib/supabase.js';
 import { generateView, VIEWS } from '../lib/fal.js';
 import { generateGeminiView } from '../lib/gemini.js';
+import { generateOpenAIView } from '../lib/openai.js';
 import { uploadRendersToDrive } from '../lib/drive.js';
 
 export const config = {
@@ -125,7 +122,11 @@ async function processItem(itemId, resolution, provider = 'fal') {
     //     Returns fal.ai CDN URLs directly — no redundant download/upload.
     //   - 'gemini': Uses Google Gemini API directly (synchronous).
     //     Returns Supabase storage URLs (Gemini returns inline base64 images).
-    const generateFn = provider === 'gemini' ? generateGeminiView : generateView;
+    //   - 'openai': Uses OpenAI GPT Image 2 API directly (synchronous).
+    //     Returns Supabase storage URLs (OpenAI returns b64_json).
+    const generateFn = provider === 'gemini' ? generateGeminiView
+      : provider === 'openai' ? generateOpenAIView
+      : generateView;
     const results = await Promise.allSettled(
       VIEWS.map(view => generateFn(view, desc, imageUrl, resolution))
     );
@@ -149,11 +150,14 @@ async function processItem(itemId, resolution, provider = 'fal') {
           //   Supabase storage for redundancy, then store the Supabase URL.
           // gemini: generateGeminiView() already uploads to Supabase storage
           //   and returns the public URL directly. No mirroring needed.
+          // openai: generateOpenAIView() already uploads to Supabase storage
+          //   and returns the public URL directly. No mirroring needed.
           let publicUrl = cdnUrl;
 
-          // Only mirror to Supabase for fal.ai results (Gemini results are
-          // already stored in Supabase by generateGeminiView())
-          if (provider !== 'gemini') {
+          // Only mirror to Supabase for fal.ai results (Gemini and OpenAI
+          // results are already stored in Supabase by their respective
+          // generate functions)
+          if (provider !== 'gemini' && provider !== 'openai') {
             try {
               const imgRes = await fetch(cdnUrl);
               if (imgRes.ok) {

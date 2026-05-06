@@ -2,15 +2,10 @@
 // Polls Supabase and reconciles any durable render jobs that finished
 // while the browser was closed or reloading.
 //
-// IMPROVEMENT: With webhooks enabled, most fal.ai results are delivered
-// server-side via /api/fal-webhook. This endpoint now primarily serves as a
-// fallback reconciliation layer for any jobs that complete without a webhook
-// delivery (e.g., webhook timeout, network issues). Fal.ai retries webhooks
-// 10x over 2 hours, so this is a safety net.
-//
-// PROVIDER SUPPORT: Supports both 'fal' and 'gemini' providers.
+// PROVIDER SUPPORT: Supports 'fal' (default), 'gemini', and 'openai'.
 // - fal: Uses fal.ai queue-based API with webhook support (reconciliation polls fal.ai)
 // - gemini: Uses Google Gemini API directly (synchronous, no queue to poll)
+// - openai: Uses OpenAI GPT Image 2 API directly (synchronous, no queue to poll)
 import { supabase, QUEUE_TABLE, RESULTS_TABLE, BUCKET_NAME } from '../../lib/supabase.js';
 import { getQueuedResult, extractImageUrl, getAttemptCount, submitViewJob, VIEWS } from '../../lib/fal.js';
 import { uploadRendersToDrive } from '../../lib/drive.js';
@@ -103,6 +98,12 @@ export default async function handler(req) {
         imageUrl: item.image_url || '',
         status: item.status,
         description: item.description || '',
+        driveFolderId: item.drive_folder_id || '',
+        driveFolderName: item.drive_folder_name || '',
+        driveUploadStatus: item.drive_upload_status || '',
+        driveUploadDone: item.drive_upload_done || 0,
+        driveUploadTotal: item.drive_upload_total || 0,
+        driveUploadError: item.drive_upload_error || '',
         updatedAt: item.updated_at
       })),
       renderResults: groupResults(rows),
@@ -156,13 +157,16 @@ async function reconcileFalJobs(rows, queueItems) {
       continue;
     }
 
-    // ── Gemini provider: skip reconciliation ──
-    // Gemini is synchronous and handled by the background worker
-    // (process-item.js). The worker updates the DB directly when done.
+    // ── Gemini / OpenAI providers: skip reconciliation ──
+    // Both Gemini and OpenAI are synchronous and handled by the background
+    // worker (process-item.js). The worker updates the DB directly when done.
     // No fal.ai queue to poll. The provider is stored on the queue item,
     // not on the render result row.
     const queueItem = itemsById.get(row.queue_item_id);
-    if (queueItem && (queueItem.provider === 'gemini' || queueItem.sub_text === 'Generating with Gemini...')) {
+    if (queueItem && (
+      queueItem.provider === 'gemini' || queueItem.sub_text === 'Generating with Gemini...' ||
+      queueItem.provider === 'openai' || queueItem.sub_text === 'Generating with OpenAI...'
+    )) {
       nextRows.push(row);
       continue;
     }
@@ -255,11 +259,14 @@ async function ensureRowsForActiveItems(rows, queueItems) {
   const missingRows = [];
   for (const item of queueItems) {
     if (item.status !== 'active') continue;
-    // Skip Gemini items — their render rows are created by submit.js
-    // before the background worker is triggered. If no rows exist yet,
-    // the worker will create them. Don't create waiting rows here that
-    // would confuse the reconciliation logic.
-    if (item.provider === 'gemini' || item.sub_text === 'Generating with Gemini...') continue;
+    // Skip Gemini and OpenAI items — their render rows are created by
+    // submit.js before the background worker is triggered. If no rows
+    // exist yet, the worker will create them. Don't create waiting rows
+    // here that would confuse the reconciliation logic.
+    if (
+      item.provider === 'gemini' || item.sub_text === 'Generating with Gemini...' ||
+      item.provider === 'openai' || item.sub_text === 'Generating with OpenAI...'
+    ) continue;
     const itemRows = rowsByItemId.get(item.id) || [];
     if (itemRows.length > 0) continue;
 

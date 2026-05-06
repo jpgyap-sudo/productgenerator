@@ -1037,6 +1037,7 @@ textarea:focus { outline: none; border-color: var(--text-secondary); }
         <div class="q-btns" id="providerBtns">
           <button class="q-btn active" data-provider="fal">fal.ai<br><span class="price">Nano Banana 2</span></button>
           <button class="q-btn" data-provider="gemini">Gemini 3<br><span class="price">Flash / Pro</span></button>
+          <button class="q-btn" data-provider="openai">OpenAI<br><span class="price">GPT Image 2</span></button>
         </div>
         <div class="res-note" id="providerNote">fal.ai — Nano Banana 2 / GPT Image 2. Requires fal.ai API key.</div>
       </div>
@@ -1273,7 +1274,7 @@ const ENV_API_KEY = (function(){
 let queue = [];
 let pendingItems = [];
 let nb2Res = '0.5K';
-let provider = 'fal'; // 'fal' or 'gemini'
+let provider = 'fal'; // 'fal', 'gemini', or 'openai'
 let nextId = 1;
 let darkMode = false;
 let parallelism = 1;
@@ -2071,6 +2072,8 @@ async function loadState() {
         const note = document.getElementById('providerNote');
         if (provider === 'gemini') {
           note.textContent = 'Gemini 3 — gemini-3.1-flash-image-preview (views 1-4) & gemini-3-pro-image-preview (view 5). GEMINI_API_KEY set on server.';
+        } else if (provider === 'openai') {
+          note.textContent = 'OpenAI — GPT Image 2 (HD, natural style). OPENAI_API_KEY set on server.';
         }
       }
       if (state.darkMode !== undefined) {
@@ -2351,8 +2354,10 @@ document.querySelectorAll('.q-btn[data-provider]').forEach(btn => {
     const note = document.getElementById('providerNote');
     if (provider === 'fal') {
       note.textContent = 'fal.ai — Nano Banana 2 / GPT Image 2. Requires fal.ai API key.';
-    } else {
+    } else if (provider === 'gemini') {
       note.textContent = 'Gemini 3 — gemini-3.1-flash-image-preview (views 1-4) & gemini-3-pro-image-preview (view 5). GEMINI_API_KEY set on server.';
+    } else if (provider === 'openai') {
+      note.textContent = 'OpenAI — GPT Image 2 (HD, natural style). OPENAI_API_KEY set on server.';
     }
     await saveState();
   });
