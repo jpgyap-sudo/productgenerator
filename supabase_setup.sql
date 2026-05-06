@@ -12,6 +12,8 @@ CREATE TABLE IF NOT EXISTS public.product_queue (
   status        TEXT DEFAULT 'wait',
   description   TEXT DEFAULT '',
   sub_text      TEXT DEFAULT '',
+  drive_folder_id   TEXT DEFAULT '',
+  drive_folder_name TEXT DEFAULT '',
   updated_at    TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -87,7 +89,13 @@ CREATE POLICY "Allow all on render_results"
   USING (true)
   WITH CHECK (true);
 
--- ── 4. STORAGE BUCKET ──────────────────────────────────────────────
+-- ── 4. DRIVE FOLDER COUNTER ──────────────────────────────────────────
+-- Initializes the counter for Google Drive folder naming (HA01, HA02, ...)
+INSERT INTO public.app_config (key, value, updated_at)
+VALUES ('drive_folder_counter', '1', NOW())
+ON CONFLICT (key) DO NOTHING;
+
+-- ── 5. STORAGE BUCKET ──────────────────────────────────────────────
 -- Creates a public bucket for product images.
 -- You can also create this manually: Storage → Create bucket → "product_images" → Public
 INSERT INTO storage.buckets (id, name, public)

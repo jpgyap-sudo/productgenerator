@@ -7,6 +7,9 @@
     },
     "api/queue/submit.js": {
       "maxDuration": 300
+    },
+    "api/queue/status.js": {
+      "maxDuration": 300
     }
   },
   "rewrites": [

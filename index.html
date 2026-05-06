@@ -3770,7 +3770,7 @@ async function pollStatus() {
       method: 'GET',
       headers: { 'Cache-Control': 'no-cache' }
     });
-    if (!res.ok) return;
+    if (!res.ok) return null;
     const data = await res.json();
 
     // Update queue items from server data
@@ -3887,9 +3887,12 @@ async function pollStatus() {
       .filter(q => q.status === 'active' || q.status === 'generating')
       .map(q => q.id);
 
+    return data;
+
   } catch (e) {
     // Silently handle poll errors — will retry on next interval
     console.warn('Poll error:', e);
+    return null;
   }
 }
 
@@ -3910,6 +3913,21 @@ function stopPolling() {
 }
 
 // ── MAIN LOOP ──────────────────────────────────────────────────────
+async function reconcileServerProcessingOnLoad() {
+  if (isPolling || queue.some(q => q.status === STATUS.ACTIVE)) return;
+  if (!queue.some(q => q.status === STATUS.WAIT)) return;
+
+  const data = await pollStatus();
+  const activeItems = data?.queue?.filter(q => q.status === 'active' || q.status === 'generating') || [];
+  if (activeItems.length === 0) return;
+
+  startBtn.disabled = true;
+  stopBtn.style.display = 'block';
+  stopBtn.disabled = false;
+  stopBtn.textContent = 'â¹ Stop';
+  startPolling();
+}
+
 stopBtn.addEventListener('click', () => {
   // Signal client-side processing to stop
   clientStopRequested = true;
@@ -3969,6 +3987,20 @@ startBtn.addEventListener('click', async () => {
 
   // Create active card for the first item
   const firstItem = itemsToProcess[0];
+  for (const item of itemsToProcess) {
+    item.status = STATUS.ACTIVE;
+    item.interruptedOnLoad = false;
+    const badge = document.getElementById(`qbadge-${item.id}`);
+    const el = document.getElementById(`qi-${item.id}`);
+    if (badge && el) {
+      const sc = STATUS_CLASS[STATUS.ACTIVE];
+      const sl = STATUS_LABEL[STATUS.ACTIVE];
+      el.className = `q-item ${sc.item}`;
+      badge.className = `q-badge ${sc.badge}`;
+      badge.textContent = sl;
+    }
+  }
+  await saveState();
   createActiveCard(firstItem);
 
   // Try server-side first; fall back to client-side if server unavailable
@@ -3980,25 +4012,18 @@ startBtn.addEventListener('click', async () => {
     addQueueLogEntry('start', '', `Queue started — ${itemsToProcess.length} item(s) submitted to server`);
     setActiveProg('Submitted to server — waiting for processing to begin...');
     await submitToServer(itemIds);
-    // Mark items as active locally
-    for (const item of itemsToProcess) {
-      item.status = STATUS.ACTIVE;
-      const badge = document.getElementById(`qbadge-${item.id}`);
-      const el = document.getElementById(`qi-${item.id}`);
-      if (badge && el) {
-        const sc = STATUS_CLASS[STATUS.ACTIVE];
-        const sl = STATUS_LABEL[STATUS.ACTIVE];
-        el.className = `q-item ${sc.item}`;
-        badge.className = `q-badge ${sc.badge}`;
-        badge.textContent = sl;
-      }
-    }
     setStatus(`Processing ${itemsToProcess.length} item(s) on server...`);
     await saveState();
     // Start polling for status updates
     startPolling();
   } catch (e) {
     if (serverAttempted) {
+      for (const item of itemsToProcess) {
+        item.status = STATUS.WAIT;
+        item.interruptedOnLoad = false;
+      }
+      renderQueue();
+      await saveState();
       // Server unavailable — fall back to client-side processing
       toast('Server endpoints unavailable — processing client-side', 'info');
       addQueueLogEntry('info', '', 'Server unavailable — falling back to client-side processing');
@@ -4084,6 +4109,7 @@ window.addEventListener('beforeunload', function(e) {
   restoreInterruptedActiveCard();
   // Restore batch cards for completed items (they don't survive page reload)
   await restoreBatchCards();
+  await reconcileServerProcessingOnLoad();
   restoreQueuedPreviewCard();
 })();
 </script>

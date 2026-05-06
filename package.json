@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.39.0",
-    "@vercel/functions": "^3.5.0"
+    "@vercel/functions": "^3.5.0",
+    "googleapis": "^140.0.0"
   }
 }

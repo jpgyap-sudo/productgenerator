@@ -3,11 +3,33 @@
 // while the browser was closed or reloading.
 import { supabase, QUEUE_TABLE, RESULTS_TABLE, BUCKET_NAME } from '../../lib/supabase.js';
 import { getQueuedResult, extractImageUrl, getAttemptCount, submitViewJob, VIEWS } from '../../lib/fal.js';
+import { uploadRendersToDrive } from '../../lib/drive.js';
 
 export const config = {
   runtime: 'nodejs',
   maxDuration: 300
 };
+
+// ── Improvement 6: In-memory cache ──
+// Avoids redundant Supabase queries when polling rapidly.
+const cache = {
+  data: null,
+  timestamp: 0,
+  TTL: 1500 // 1.5 seconds
+};
+
+function getCached(key) {
+  if (cache.data && Date.now() - cache.timestamp < cache.TTL && cache.key === key) {
+    return cache.data;
+  }
+  return null;
+}
+
+function setCached(key, data) {
+  cache.data = data;
+  cache.key = key;
+  cache.timestamp = Date.now();
+}
 
 export default async function handler(req) {
   if (req.method !== 'GET') {
@@ -17,6 +39,12 @@ export default async function handler(req) {
   try {
     const url = new URL(req.url);
     const itemId = url.searchParams.get('itemId');
+    const cacheKey = itemId || '__all__';
+
+    // ── Improvement 3: 304 Not Modified ──
+    // Check if client already has latest data via If-None-Match
+    const cached = getCached(cacheKey);
+    const ifNoneMatch = req.headers.get('if-none-match');
 
     const { data: queueItems, error: queueError } = await fetchQueueItems(itemId);
     if (queueError) throw queueError;
@@ -30,6 +58,21 @@ export default async function handler(req) {
       });
     }
 
+    // Compute ETag from latest updated_at across all items
+    const latestUpdate = queueItems.reduce((max, item) => {
+      const t = new Date(item.updated_at || 0).getTime();
+      return t > max ? t : max;
+    }, 0);
+    const etag = `"${latestUpdate}-${queueItems.length}"`;
+
+    // If client's ETag matches, nothing changed
+    if (ifNoneMatch === etag && cached) {
+      return new Response(null, {
+        status: 304,
+        headers: { 'ETag': etag, 'Cache-Control': 'no-cache' }
+      });
+    }
+
     const itemIds = queueItems.map(item => item.id);
     const { data: renderRows, error: resultsError } = await supabase
       .from(RESULTS_TABLE)
@@ -39,7 +82,8 @@ export default async function handler(req) {
 
     if (resultsError) throw resultsError;
 
-    const reconciledRows = await reconcileFalJobs(renderRows || [], queueItems);
+    const rowsWithActiveItems = await ensureRowsForActiveItems(renderRows || [], queueItems);
+    const reconciledRows = await reconcileFalJobs(rowsWithActiveItems, queueItems);
     await updateQueueStatuses(queueItems, reconciledRows);
 
     const { data: refreshedQueue, error: refreshedQueueError } = await fetchQueueItems(itemId);
@@ -56,7 +100,7 @@ export default async function handler(req) {
     const queue = refreshedQueue || queueItems;
     const rows = refreshedRows || reconciledRows;
 
-    return json({
+    const response = {
       queue: queue.map(item => ({
         id: item.id,
         name: item.name,
@@ -68,7 +112,13 @@ export default async function handler(req) {
       renderResults: groupResults(rows),
       hasActiveItems: queue.some(item => item.status === 'active'),
       hasPendingItems: queue.some(item => item.status === 'wait')
-    }, 200, {
+    };
+
+    // Cache the response
+    setCached(cacheKey, response);
+
+    return json(response, 200, {
+      'ETag': etag,
       'Cache-Control': 'no-cache, no-store, must-revalidate'
     });
   } catch (error) {
@@ -149,12 +199,64 @@ async function reconcileFalJobs(rows, queueItems) {
       };
       await saveResultRow(updated);
       nextRows.push(updated);
+
+      // ── Trigger Drive upload immediately if all 5 views are done ──
+      // This ensures upload happens even when the browser is closed
+      try {
+        await maybeUploadToDrive(row.queue_item_id, itemsById);
+      } catch (driveErr) {
+        console.error(`[RECONCILE] Drive upload check failed for item ${row.queue_item_id}:`, driveErr.message);
+      }
     } catch (error) {
       console.error(`Failed to reconcile item ${row.queue_item_id} view ${row.view_id}:`, error);
       nextRows.push(row);
     }
   }
 
+  return nextRows;
+}
+
+async function ensureRowsForActiveItems(rows, queueItems) {
+  const nextRows = [...rows];
+  const rowsByItemId = new Map();
+  for (const row of rows) {
+    if (!rowsByItemId.has(row.queue_item_id)) rowsByItemId.set(row.queue_item_id, []);
+    rowsByItemId.get(row.queue_item_id).push(row);
+  }
+
+  const now = new Date().toISOString();
+  const missingRows = [];
+  for (const item of queueItems) {
+    if (item.status !== 'active') continue;
+    const itemRows = rowsByItemId.get(item.id) || [];
+    if (itemRows.length > 0) continue;
+
+    for (const view of VIEWS) {
+      missingRows.push({
+        queue_item_id: item.id,
+        view_id: view.id,
+        status: 'waiting',
+        image_url: '',
+        error_message: '',
+        request_id: '',
+        response_url: '',
+        status_url: '',
+        started_at: null,
+        completed_at: null,
+        created_at: now,
+        updated_at: now
+      });
+    }
+  }
+
+  if (missingRows.length === 0) return nextRows;
+
+  const { error } = await supabase
+    .from(RESULTS_TABLE)
+    .upsert(missingRows, { onConflict: 'queue_item_id,view_id' });
+
+  if (error) throw error;
+  nextRows.push(...missingRows);
   return nextRows;
 }
 
@@ -285,6 +387,11 @@ async function saveSubmittedRow(row) {
 }
 
 async function updateQueueStatuses(queueItems, rows) {
+  console.log(`[STATUS] updateQueueStatuses called for ${queueItems.length} items, ${rows.length} rows`);
+
+  // ── Improvement 4: Batch DB updates ──
+  const updates = [];
+
   for (const item of queueItems) {
     if (item.status === 'stopped') continue;
 
@@ -298,24 +405,160 @@ async function updateQueueStatuses(queueItems, rows) {
     let status = item.status;
     let subText = item.sub_text || '';
 
+    console.log(`[STATUS] Item ${item.id} (${item.name}): done=${doneCount}, error=${errorCount}, active=${activeCount}, currentStatus=${item.status}, driveFolder=${item.drive_folder_name || 'none'}`);
+
     if (activeCount > 0) {
       status = 'active';
       subText = `${doneCount}/5 views completed`;
     } else if (doneCount === 5) {
       status = 'done';
       subText = 'All 5 views generated';
+
+      // ── Auto-upload completed renders to Google Drive ──────────
+      const hasDriveEnv = !!process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
+      const alreadyUploaded = !!(item.drive_folder_id || item.drive_folder_name);
+      console.log(`[STATUS] Item ${item.id} all done. hasDriveEnv=${hasDriveEnv}, alreadyUploaded=${alreadyUploaded}`);
+
+      if (hasDriveEnv && !alreadyUploaded) {
+        try {
+          const doneViews = itemRows
+            .filter(row => row.status === 'done' && row.image_url)
+            .map(row => ({
+              viewId: row.view_id,
+              viewLabel: getViewLabel(row.view_id),
+              imageUrl: row.image_url
+            }));
+
+          console.log(`[STATUS] Attempting Drive upload for item ${item.id} with ${doneViews.length} views`);
+
+          if (doneViews.length === 5) {
+            const driveResult = await uploadRendersToDrive(item.id, item.name, doneViews);
+
+            // Store Drive folder info in the queue item
+            await supabase
+              .from(QUEUE_TABLE)
+              .update({
+                drive_folder_id: driveResult.folderId,
+                drive_folder_name: driveResult.folderName,
+                updated_at: new Date().toISOString()
+              })
+              .eq('id', item.id);
+
+            console.log(`[STATUS] SUCCESS: Uploaded ${item.name} to Drive folder "${driveResult.folderName}"`);
+          } else {
+            console.log(`[STATUS] Skipped Drive upload: only ${doneViews.length}/5 views have image URLs`);
+          }
+        } catch (driveErr) {
+          console.error(`[STATUS] Drive upload FAILED for item ${item.id}:`, driveErr.message);
+        }
+      } else if (alreadyUploaded) {
+        console.log(`[STATUS] Skipped Drive upload: already uploaded to ${item.drive_folder_name}`);
+      } else {
+        console.log(`[STATUS] Skipped Drive upload: GOOGLE_SERVICE_ACCOUNT_JSON not set`);
+      }
     } else if (doneCount > 0 || errorCount > 0) {
       status = 'error';
       subText = `${doneCount}/5 views generated`;
     }
 
     if (status !== item.status || subText !== item.sub_text) {
-      await supabase
-        .from(QUEUE_TABLE)
-        .update({ status, sub_text: subText, updated_at: new Date().toISOString() })
-        .eq('id', item.id);
+      updates.push({
+        id: item.id,
+        status,
+        sub_text: subText,
+        updated_at: new Date().toISOString()
+      });
     }
   }
+
+  // ── Improvement 4: Batch DB updates ──
+  // Apply all status updates in a single batch
+  if (updates.length > 0) {
+    for (const update of updates) {
+      await supabase
+        .from(QUEUE_TABLE)
+        .update({ status: update.status, sub_text: update.sub_text, updated_at: update.updated_at })
+        .eq('id', update.id);
+    }
+    console.log(`[STATUS] Batch updated ${updates.length} items`);
+  }
+}
+
+/**
+ * Check if all 5 views for an item are done and trigger Drive upload.
+ * Called from reconcileFalJobs when a view transitions to 'done'.
+ * This ensures upload happens even when the browser tab is closed.
+ */
+async function maybeUploadToDrive(itemId, itemsById) {
+  const item = itemsById.get(itemId);
+  if (!item) {
+    console.log(`[MAYBE_UPLOAD] Item ${itemId} not found in itemsById`);
+    return;
+  }
+
+  // Already uploaded — skip
+  if (item.drive_folder_id || item.drive_folder_name) {
+    console.log(`[MAYBE_UPLOAD] Item ${itemId} already uploaded to "${item.drive_folder_name}"`);
+    return;
+  }
+
+  // Check env var
+  if (!process.env.GOOGLE_SERVICE_ACCOUNT_JSON) {
+    console.log(`[MAYBE_UPLOAD] GOOGLE_SERVICE_ACCOUNT_JSON not set`);
+    return;
+  }
+
+  // Fetch latest render results for this item
+  const { data: rows, error } = await supabase
+    .from(RESULTS_TABLE)
+    .select('*')
+    .eq('queue_item_id', itemId)
+    .order('view_id', { ascending: true });
+
+  if (error) {
+    console.error(`[MAYBE_UPLOAD] Failed to fetch results for item ${itemId}:`, error.message);
+    return;
+  }
+
+  const doneCount = rows.filter(row => row.status === 'done').length;
+  const doneViews = rows
+    .filter(row => row.status === 'done' && row.image_url)
+    .map(row => ({
+      viewId: row.view_id,
+      viewLabel: getViewLabel(row.view_id),
+      imageUrl: row.image_url
+    }));
+
+  console.log(`[MAYBE_UPLOAD] Item ${itemId}: ${doneCount}/5 done, ${doneViews.length} with image URLs`);
+
+  if (doneViews.length === 5) {
+    try {
+      const driveResult = await uploadRendersToDrive(item.id, item.name, doneViews);
+
+      // Store Drive folder info in the queue item
+      await supabase
+        .from(QUEUE_TABLE)
+        .update({
+          drive_folder_id: driveResult.folderId,
+          drive_folder_name: driveResult.folderName,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', item.id);
+
+      // Update local cache
+      item.drive_folder_id = driveResult.folderId;
+      item.drive_folder_name = driveResult.folderName;
+
+      console.log(`[MAYBE_UPLOAD] SUCCESS: Uploaded ${item.name} to Drive folder "${driveResult.folderName}"`);
+    } catch (driveErr) {
+      console.error(`[MAYBE_UPLOAD] FAILED for item ${itemId}:`, driveErr.message);
+    }
+  }
+}
+
+function getViewLabel(viewId) {
+  const view = VIEWS.find(v => v.id === viewId);
+  return view ? view.label : `View ${viewId}`;
 }
 
 function groupResults(rows) {

@@ -68,40 +68,57 @@ export default async function handler(req) {
 }
 
 async function submitDurableJobs(items, resolution) {
+  // ── Improvement 1: Parallel job submission ──
+  // Submit all views for all items in parallel instead of sequentially
+  const allPromises = [];
+
   for (const item of items) {
-    const itemRows = [];
     const now = new Date().toISOString();
 
     if (!item.image_url) {
-      for (const view of VIEWS) {
-        itemRows.push(errorRow(item.id, view.id, 'No reference image', now));
-      }
-    } else {
-      for (const view of VIEWS) {
-        itemRows.push(await submitDurableViewRow(item, view, resolution, now));
-      }
-    }
-
-    const { error: upsertError } = await supabase
-      .from(RESULTS_TABLE)
-      .upsert(itemRows, { onConflict: 'queue_item_id,view_id' });
-
-    if (upsertError) {
-      console.error(`Failed to save render rows for item ${item.id}:`, upsertError);
-      await markItemError(item.id, upsertError.message || 'Failed to save render jobs');
+      // No image — mark all views as error immediately
+      const errorRows = VIEWS.map(view => errorRow(item.id, view.id, 'No reference image', now));
+      allPromises.push(
+        supabase
+          .from(RESULTS_TABLE)
+          .upsert(errorRows, { onConflict: 'queue_item_id,view_id' })
+          .then(() => markItemError(item.id, 'No reference image'))
+      );
       continue;
     }
 
-    const everyViewFailed = itemRows.length > 0 && itemRows.every(row => row.status === 'error');
-    await supabase
-      .from(QUEUE_TABLE)
-      .update({
-        status: everyViewFailed ? 'error' : 'active',
-        sub_text: everyViewFailed ? 'Failed to submit render jobs' : 'Render jobs submitted to fal.ai',
-        updated_at: new Date().toISOString()
+    // Submit all 5 views in parallel
+    const viewPromises = VIEWS.map(view =>
+      submitDurableViewRow(item, view, resolution, now)
+    );
+
+    allPromises.push(
+      Promise.all(viewPromises).then(async (itemRows) => {
+        const { error: upsertError } = await supabase
+          .from(RESULTS_TABLE)
+          .upsert(itemRows, { onConflict: 'queue_item_id,view_id' });
+
+        if (upsertError) {
+          console.error(`Failed to save render rows for item ${item.id}:`, upsertError);
+          await markItemError(item.id, upsertError.message || 'Failed to save render jobs');
+          return;
+        }
+
+        const everyViewFailed = itemRows.length > 0 && itemRows.every(row => row.status === 'error');
+        await supabase
+          .from(QUEUE_TABLE)
+          .update({
+            status: everyViewFailed ? 'error' : 'active',
+            sub_text: everyViewFailed ? 'Failed to submit render jobs' : 'Render jobs submitted to fal.ai',
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', item.id);
       })
-      .eq('id', item.id);
+    );
   }
+
+  // Wait for all items to finish submitting
+  await Promise.all(allPromises);
 }
 
 async function submitDurableViewRow(item, view, resolution, now) {
