@@ -181,9 +181,12 @@ async function reconcileFalJobs(rows, queueItems) {
     }
 
     // ── Gemini provider: skip reconciliation ──
-    // Gemini is synchronous and handled by the background worker.
-    // The worker updates the DB directly when done. No queue to poll.
-    if (row.provider === 'gemini') {
+    // Gemini is synchronous and handled by the background worker
+    // (process-item.js). The worker updates the DB directly when done.
+    // No fal.ai queue to poll. The provider is stored on the queue item,
+    // not on the render result row.
+    const queueItem = itemsById.get(row.queue_item_id);
+    if (queueItem && queueItem.provider === 'gemini') {
       nextRows.push(row);
       continue;
     }
@@ -276,6 +279,11 @@ async function ensureRowsForActiveItems(rows, queueItems) {
   const missingRows = [];
   for (const item of queueItems) {
     if (item.status !== 'active') continue;
+    // Skip Gemini items — their render rows are created by submit.js
+    // before the background worker is triggered. If no rows exist yet,
+    // the worker will create them. Don't create waiting rows here that
+    // would confuse the reconciliation logic.
+    if (item.provider === 'gemini') continue;
     const itemRows = rowsByItemId.get(item.id) || [];
     if (itemRows.length > 0) continue;
 

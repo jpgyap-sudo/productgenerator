@@ -17,6 +17,7 @@
 import { supabase, QUEUE_TABLE, RESULTS_TABLE, BUCKET_NAME } from '../lib/supabase.js';
 import { generateView, VIEWS } from '../lib/fal.js';
 import { generateGeminiView } from '../lib/gemini.js';
+import { uploadRendersToDrive } from '../lib/drive.js';
 
 export const config = {
   runtime: 'nodejs',
@@ -138,42 +139,46 @@ async function processItem(itemId, resolution, provider = 'fal') {
       const result = results[i];
 
       if (result.status === 'fulfilled' && result.value) {
-        // Success — save the fal.ai CDN URL to Supabase
+        // Success — save the result URL to Supabase
         successCount++;
         try {
           const cdnUrl = result.value.cdnUrl;
 
-          // ── Improvement: Use fal.ai CDN URL directly ──
-          // Fal.ai serves results via their CDN (v3.fal.media).
-          // We store the CDN URL and optionally mirror to Supabase.
-          // This is faster than downloading + re-uploading.
+          // ── Provider-specific URL handling ──
+          // fal.ai: Returns CDN URLs (v3.fal.media). We optionally mirror to
+          //   Supabase storage for redundancy, then store the Supabase URL.
+          // gemini: generateGeminiView() already uploads to Supabase storage
+          //   and returns the public URL directly. No mirroring needed.
           let publicUrl = cdnUrl;
 
-          // Optionally mirror to Supabase storage for redundancy
-          try {
-            const imgRes = await fetch(cdnUrl);
-            if (imgRes.ok) {
-              // BUGFIX: Detect content type from response to use correct extension
-              const contentType = imgRes.headers.get('content-type') || 'image/jpeg';
-              const ext = contentType.includes('png') ? 'png' : contentType.includes('webp') ? 'webp' : 'jpg';
-              const fileName = `renders/${itemId}_view${view.id}_${Date.now()}.${ext}`;
-              const buffer = Buffer.from(await imgRes.arrayBuffer());
-              const { error: uploadError } = await supabase.storage
-                .from(BUCKET_NAME)
-                .upload(fileName, buffer, {
-                  contentType,
-                  upsert: true
-                });
-
-              if (!uploadError) {
-                const { data: { publicUrl: pubUrl } } = supabase.storage
+          // Only mirror to Supabase for fal.ai results (Gemini results are
+          // already stored in Supabase by generateGeminiView())
+          if (provider !== 'gemini') {
+            try {
+              const imgRes = await fetch(cdnUrl);
+              if (imgRes.ok) {
+                // BUGFIX: Detect content type from response to use correct extension
+                const contentType = imgRes.headers.get('content-type') || 'image/jpeg';
+                const ext = contentType.includes('png') ? 'png' : contentType.includes('webp') ? 'webp' : 'jpg';
+                const fileName = `renders/${itemId}_view${view.id}_${Date.now()}.${ext}`;
+                const buffer = Buffer.from(await imgRes.arrayBuffer());
+                const { error: uploadError } = await supabase.storage
                   .from(BUCKET_NAME)
-                  .getPublicUrl(fileName);
-                publicUrl = pubUrl;
+                  .upload(fileName, buffer, {
+                    contentType,
+                    upsert: true
+                  });
+
+                if (!uploadError) {
+                  const { data: { publicUrl: pubUrl } } = supabase.storage
+                    .from(BUCKET_NAME)
+                    .getPublicUrl(fileName);
+                  publicUrl = pubUrl;
+                }
               }
+            } catch (mirrorErr) {
+              console.warn(`Mirror to Supabase failed for item ${itemId} view ${view.id}, using CDN URL`);
             }
-          } catch (mirrorErr) {
-            console.warn(`Mirror to Supabase failed for item ${itemId} view ${view.id}, using CDN URL`);
           }
 
           // Update render_results row
@@ -224,6 +229,58 @@ async function processItem(itemId, resolution, provider = 'fal') {
       : `${successCount}/5 views generated`;
     await updateItemStatus(itemId, finalStatus, statusText);
 
+    // Step 5: Trigger Drive upload if all 5 views completed
+    if (successCount === 5) {
+      try {
+        const hasDriveEnv = !!process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
+        if (hasDriveEnv) {
+          // Fetch the item to check if already uploaded
+          const { data: updatedItems } = await supabase
+            .from(QUEUE_TABLE)
+            .select('*')
+            .eq('id', itemId);
+
+          if (updatedItems && updatedItems.length > 0) {
+            const updatedItem = updatedItems[0];
+            const alreadyUploaded = !!(updatedItem.drive_folder_id && updatedItem.drive_folder_id !== '')
+              || !!(updatedItem.drive_folder_name && updatedItem.drive_folder_name !== '');
+
+            if (!alreadyUploaded) {
+              // Fetch all done views
+              const { data: doneRows } = await supabase
+                .from(RESULTS_TABLE)
+                .select('*')
+                .eq('queue_item_id', itemId)
+                .eq('status', 'done');
+
+              if (doneRows && doneRows.length === 5) {
+                const doneViews = doneRows.map(row => ({
+                  viewId: row.view_id,
+                  viewLabel: getViewLabel(row.view_id),
+                  imageUrl: row.image_url
+                }));
+
+                const driveResult = await uploadRendersToDrive(itemId, updatedItem.name, doneViews);
+
+                await supabase
+                  .from(QUEUE_TABLE)
+                  .update({
+                    drive_folder_id: driveResult.folderId,
+                    drive_folder_name: driveResult.folderName,
+                    updated_at: new Date().toISOString()
+                  })
+                  .eq('id', itemId);
+
+                console.log(`[PROCESS] SUCCESS: Uploaded item ${itemId} to Drive folder "${driveResult.folderName}"`);
+              }
+            }
+          }
+        }
+      } catch (driveErr) {
+        console.error(`[PROCESS] Drive upload failed for item ${itemId}:`, driveErr.message);
+      }
+    }
+
   } catch (error) {
     console.error(`Error processing item ${itemId}:`, error);
     await updateItemStatus(itemId, 'error', error.message || 'Processing failed');
@@ -267,4 +324,12 @@ async function updateAllViewStatuses(itemId, status, errorMessage) {
   if (error) {
     console.error(`Failed to update view statuses for item ${itemId}:`, error);
   }
+}
+
+/**
+ * Get a human-readable label for a view ID.
+ */
+function getViewLabel(viewId) {
+  const view = VIEWS.find(v => v.id === viewId);
+  return view ? view.label : `View ${viewId}`;
 }

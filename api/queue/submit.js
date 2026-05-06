@@ -125,11 +125,14 @@ async function submitDurableJobs(items, resolution, webhookUrl, provider = 'fal'
           .from(RESULTS_TABLE)
           .upsert(viewRows, { onConflict: 'queue_item_id,view_id' })
           .then(async () => {
+            // Save provider on the queue item so status.js reconciliation
+            // can identify Gemini rows and skip fal.ai queue polling
             await supabase
               .from(QUEUE_TABLE)
               .update({
                 status: 'active',
                 sub_text: 'Generating with Gemini...',
+                provider: 'gemini',
                 updated_at: new Date().toISOString()
               })
               .eq('id', item.id);
@@ -172,6 +175,7 @@ async function submitDurableJobs(items, resolution, webhookUrl, provider = 'fal'
             .update({
               status: everyViewFailed ? 'error' : 'active',
               sub_text: everyViewFailed ? 'Failed to submit render jobs' : 'Render jobs submitted to fal.ai',
+              provider: 'fal',
               updated_at: new Date().toISOString()
             })
             .eq('id', item.id);
