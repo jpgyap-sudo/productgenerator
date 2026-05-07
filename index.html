@@ -1881,10 +1881,13 @@ const API_BASE_CANDIDATES = (() => {
 
 async function fetchApi(path, options = {}) {
   let lastNetworkError = null;
+  const attemptedUrls = [];
 
   for (const base of API_BASE_CANDIDATES) {
+    const url = `${base}${path}`;
+    attemptedUrls.push(url);
     try {
-      const res = await fetch(`${base}${path}`, options);
+      const res = await fetch(url, options);
       if (res.status === 404 && base !== API_BASE_CANDIDATES[API_BASE_CANDIDATES.length - 1]) {
         continue;
       }
@@ -1897,7 +1900,7 @@ async function fetchApi(path, options = {}) {
   const detail = window.location.protocol === 'https:'
     ? 'Backend route is not reachable from this HTTPS origin. Make sure Caddy/proxy is serving the updated VPS app and restart the Node/PM2 process.'
     : 'Backend route is not reachable. Make sure the VPS app is running on port 3000 and was restarted after the latest changes.';
-  throw new Error(`${detail} Last network error: ${formatError(lastNetworkError, 'Failed to fetch')}`);
+  throw new Error(`${detail} Tried: ${attemptedUrls.join(', ')}. Last network error: ${formatError(lastNetworkError, 'Failed to fetch')}`);
 }
 let darkMode = false;
 let parallelism = 1;
