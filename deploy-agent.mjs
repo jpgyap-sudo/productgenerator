@@ -81,6 +81,13 @@ function runCapture(cmd) {
   }
 }
 
+function commandExists(command) {
+  const checkCmd = process.platform === 'win32'
+    ? `where ${command}`
+    : `command -v ${command}`;
+  return Boolean(runCapture(checkCmd));
+}
+
 function prompt(question) {
   const rl = createInterface({ input: process.stdin, output: process.stdout });
   return new Promise(resolve => rl.question(question, answer => { rl.close(); resolve(answer); }));
@@ -230,15 +237,21 @@ ${color(C.bold, 'Config:')}
     // ── Step 4 (or 3): Rsync files to VPS ──
     step(deployStepOffset, TOTAL_STEPS, 'Syncing files to VPS...');
 
-    const excludeArgs = CONFIG.rsyncExcludes.map(e => `--exclude='${e}'`).join(' ');
-
     if (!flags.dryRun) {
       try {
-        const rsyncCmd = `rsync -avz --delete ${excludeArgs} -e "ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new" ./ ${CONFIG.sshHost}:${CONFIG.vpsPath}/`;
-        run(rsyncCmd);
-        ok('Files synced to VPS');
+        if (commandExists('rsync')) {
+          const excludeArgs = CONFIG.rsyncExcludes.map(e => `--exclude='${e}'`).join(' ');
+          const rsyncCmd = `rsync -avz --delete ${excludeArgs} -e "ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new" ./ ${CONFIG.sshHost}:${CONFIG.vpsPath}/`;
+          run(rsyncCmd);
+          ok('Files synced to VPS with rsync');
+        } else {
+          warn('rsync not found; using git archive over SSH fallback');
+          const archiveCmd = `git archive --format=tar HEAD | ssh ${CONFIG.sshHost} "mkdir -p ${CONFIG.vpsPath} && tar -xf - -C ${CONFIG.vpsPath}"`;
+          run(archiveCmd);
+          ok('Committed files synced to VPS with git archive');
+        }
       } catch (e) {
-        fail(`Rsync failed: ${e.message}`);
+        fail(`File sync failed: ${e.message}`);
         process.exit(1);
       }
     } else {
