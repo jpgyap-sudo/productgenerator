@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Product Image Studio</title>
 <meta name="description" content="AI-powered product photography studio — generate professional product views from a single product image using OpenAI or Gemini"/>
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://unpkg.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; connect-src 'self' https://fal.run https://queue.fal.run https://api.fal.ai https://*.fal.ai https://v3.fal.media https://fal.media https://*.fal.media https://*.supabase.co wss://*.supabase.co https://generativelanguage.googleapis.com; font-src 'self' data:;"/>
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://unpkg.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; connect-src 'self' https://fal.run https://queue.fal.run https://api.fal.ai https://*.fal.ai https://v3.fal.media https://fal.media https://*.fal.media https://*.supabase.co wss://*.supabase.co https://generativelanguage.googleapis.com https://api.stability.ai; font-src 'self' data:;"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 <style>
@@ -1611,6 +1611,7 @@ textarea:focus { outline: none; border-color: var(--text-secondary); }
         <div class="q-btns" id="providerBtns">
           <button class="q-btn active" data-provider="gemini">Gemini 3<br><span class="price">Flash / Pro</span></button>
           <button class="q-btn" data-provider="openai">OpenAI<br><span class="price">GPT Image</span></button>
+          <button class="q-btn" data-provider="stability">Stability AI<br><span class="price">SDXL</span></button>
         </div>
         <div class="res-note" id="providerNote">Gemini 3 — gemini-3.1-flash-image-preview for all 4 views. GEMINI_API_KEY set on server.</div>
       </div>
@@ -2096,7 +2097,7 @@ const ENV_API_KEY = (function(){
 let queue = [];
 let pendingItems = [];
 let nb2Res = '0.5K';
-let provider = 'gemini'; // 'gemini' or 'openai'
+let provider = 'gemini'; // 'gemini', 'openai', or 'stability'
 let nextId = 1;
 
 // ── VPS Backend Configuration ──
@@ -2636,13 +2637,15 @@ function getDriveStateText(item) {
 
 function getRenderProvider(item = {}) {
   const itemProvider = (item.provider || '').toLowerCase();
-  return itemProvider === 'fal' ? 'openai' : itemProvider;
+  if (itemProvider === 'fal') return 'openai';
+  return itemProvider;
 }
 
 function normalizeRenderProvider(value = '') {
   const text = String(value || '').toLowerCase();
   if (text.includes('gemini')) return 'gemini';
   if (text.includes('openai') || text.includes('gpt-image') || text.includes('gpt image')) return 'openai';
+  if (text.includes('stability') || text.includes('sdxl')) return 'stability';
   if (text.includes('fal')) return 'openai';
   return '';
 }
@@ -2666,13 +2669,14 @@ function inferRenderProvider(item = {}, viewResults = [], previous = {}) {
   const metadataProvider = normalizeRenderProvider(metadata);
   if (metadataProvider) return metadataProvider;
 
-  if (['openai', 'gemini'].includes(provider)) return provider;
+  if (['openai', 'gemini', 'stability'].includes(provider)) return provider;
   return '';
 }
 
 function inferRenderApiModel(providerName = '') {
   if (providerName === 'openai') return 'OpenAI GPT Image';
   if (providerName === 'gemini') return 'gemini-3.1-flash-image-preview / gemini-3-pro-image-preview';
+  if (providerName === 'stability') return 'Stability AI SDXL';
   return '';
 }
 
@@ -2680,6 +2684,7 @@ function getBatchApiText(item = {}) {
   const itemProvider = getRenderProvider(item);
   if (itemProvider === 'gemini') return 'Rendered with Gemini 3: Flash for product views, Pro for interior scene';
   if (itemProvider === 'openai') return `Rendered with OpenAI GPT Image${item.apiModel ? ` (${item.apiModel})` : ''}`;
+  if (itemProvider === 'stability') return `Rendered with Stability AI SDXL${item.apiModel ? ` (${item.apiModel})` : ''}`;
   return 'Rendered API not recorded';
 }
 
@@ -2687,6 +2692,7 @@ function getViewApiText(item = {}, viewId) {
   const itemProvider = getRenderProvider(item);
   if (itemProvider === 'gemini') return Number(viewId) === 4 ? 'Gemini 3 Pro' : 'Gemini 3 Flash';
   if (itemProvider === 'openai') return item.apiModel || 'OpenAI GPT Image';
+  if (itemProvider === 'stability') return item.apiModel || 'Stability AI SDXL';
   return '';
 }
 
@@ -2943,6 +2949,7 @@ completedRefreshBtn?.addEventListener('click', renderCompletedPanel);
     supabase: { icon: '☁️', name: 'Supabase' },
     openai: { icon: '🤖', name: 'OpenAI' },
     gemini: { icon: '🔮', name: 'Gemini' },
+    stability: { icon: '🎨', name: 'Stability AI' },
     drive: { icon: '📁', name: 'Google Drive' }
   };
 
@@ -2962,6 +2969,7 @@ completedRefreshBtn?.addEventListener('click', renderCompletedPanel);
           supabase: { ok: false, latencyMs: 0, error: err.message },
           openai: { ok: false, latencyMs: 0, error: err.message },
           gemini: { ok: false, latencyMs: 0, error: err.message },
+          stability: { ok: false, latencyMs: 0, error: err.message },
           drive: { ok: false, latencyMs: 0, error: err.message }
         }
       };
@@ -3503,6 +3511,8 @@ async function loadState() {
           note.textContent = 'Gemini 3 — gemini-3.1-flash-image-preview for all 4 views. GEMINI_API_KEY set on server.';
         } else if (provider === 'openai') {
           note.textContent = 'OpenAI — GPT Image edit. OPENAI_API_KEY set on server.';
+        } else if (provider === 'stability') {
+          note.textContent = 'Stability AI — SDXL image-to-image. STABILITY_API_KEY set on server.';
         }
       }
       if (state.darkMode !== undefined) {
@@ -3967,6 +3977,8 @@ document.querySelectorAll('.q-btn[data-provider]').forEach(btn => {
       note.textContent = 'Gemini 3 — gemini-3.1-flash-image-preview for all 4 views. GEMINI_API_KEY set on server.';
     } else if (provider === 'openai') {
       note.textContent = 'OpenAI — GPT Image edit. OPENAI_API_KEY set on server.';
+    } else if (provider === 'stability') {
+      note.textContent = 'Stability AI — SDXL image-to-image. STABILITY_API_KEY set on server.';
     }
     await saveState();
   });

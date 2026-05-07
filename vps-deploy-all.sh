@@ -1292,6 +1292,7 @@ read -p "  SUPABASE_URL (e.g., https://xxxxx.supabase.co): " SUPABASE_URL
 read -p "  SUPABASE_SERVICE_ROLE_KEY (your service role key): " SUPABASE_SERVICE_ROLE_KEY
 read -p "  OPENAI_API_KEY (sk-...): " OPENAI_API_KEY
 read -p "  GEMINI_API_KEY (AIza...): " GEMINI_API_KEY
+read -p "  STABILITY_API_KEY (sk-..., optional): " STABILITY_API_KEY
 read -p "  GOOGLE_SERVICE_ACCOUNT_JSON (optional, paste full JSON): " GOOGLE_SERVICE_ACCOUNT_JSON
 read -p "  FAL_API_KEY (optional): " FAL_API_KEY
 
@@ -1306,6 +1307,9 @@ OPENAI_API_KEY=${OPENAI_API_KEY}
 
 # Google Gemini 3
 GEMINI_API_KEY=${GEMINI_API_KEY}
+
+# Stability AI (SDXL — optional)
+STABILITY_API_KEY=${STABILITY_API_KEY}
 
 # Google Drive (optional — for auto-upload to Drive)
 GOOGLE_SERVICE_ACCOUNT_JSON=${GOOGLE_SERVICE_ACCOUNT_JSON}
