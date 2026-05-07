@@ -86,14 +86,17 @@ export default async function handler(req, res) {
     const rows = refreshedRows || rowsWithActiveItems;
 
     const response = {
-      queue: queue.map(item => ({
+      queue: queue.map(item => {
+        const itemProvider = inferQueueProvider(item);
+        return {
         id: item.id,
         name: item.name,
         imageUrl: item.image_url || '',
         status: item.status,
         description: item.description || '',
-        provider: item.provider || '',
-        apiModel: getBatchApiModel(item.provider),
+        provider: itemProvider,
+        apiModel: getBatchApiModel(itemProvider),
+        subText: item.sub_text || '',
         driveFolderId: item.drive_folder_id || '',
         driveFolderName: item.drive_folder_name || '',
         driveUploadStatus: item.drive_upload_status || '',
@@ -101,7 +104,8 @@ export default async function handler(req, res) {
         driveUploadTotal: item.drive_upload_total || 0,
         driveUploadError: item.drive_upload_error || '',
         updatedAt: item.updated_at
-      })),
+        };
+      }),
       renderResults: groupResults(rows),
       hasActiveItems: queue.some(item => item.status === 'active'),
       hasPendingItems: queue.some(item => item.status === 'wait')
@@ -117,6 +121,22 @@ export default async function handler(req, res) {
 function getBatchApiModel(provider) {
   if (provider === 'openai') return OPENAI_IMAGE_MODEL;
   if (provider === 'gemini') return 'gemini-3.1-flash-image-preview / gemini-3-pro-image-preview';
+  return '';
+}
+
+function inferQueueProvider(item = {}) {
+  const provider = String(item.provider || '').toLowerCase();
+  if (provider === 'openai' || provider === 'gemini' || provider === 'fal') return provider;
+
+  const text = [
+    item.sub_text,
+    item.description,
+    item.resolution
+  ].filter(Boolean).join(' ').toLowerCase();
+
+  if (text.includes('gemini')) return 'gemini';
+  if (text.includes('openai') || text.includes('gpt-image') || text.includes('gpt image')) return 'openai';
+  if (text.includes('fal')) return 'fal';
   return '';
 }
 
@@ -188,6 +208,7 @@ async function updateQueueStatuses(queueItems, rows) {
 
   for (const item of queueItems) {
     if (item.status === 'stopped') continue;
+    const inferredProvider = inferQueueProvider(item);
 
     const itemRows = rows.filter(row => row.queue_item_id === item.id);
     if (itemRows.length === 0) continue;
@@ -229,11 +250,12 @@ async function updateQueueStatuses(queueItems, rows) {
         : `${doneCount}/4 views generated, ${totalErrorCount} failed`;
     }
 
-    if (status !== item.status || subText !== item.sub_text) {
+    if (status !== item.status || subText !== item.sub_text || (inferredProvider && inferredProvider !== item.provider)) {
       updates.push({
         id: item.id,
         status,
         sub_text: subText,
+        provider: inferredProvider || item.provider,
         updated_at: new Date().toISOString()
       });
     }
@@ -241,9 +263,15 @@ async function updateQueueStatuses(queueItems, rows) {
 
   if (updates.length > 0) {
     for (const update of updates) {
+      const updateData = {
+        status: update.status,
+        sub_text: update.sub_text,
+        updated_at: update.updated_at
+      };
+      if (update.provider) updateData.provider = update.provider;
       await supabase
         .from(QUEUE_TABLE)
-        .update({ status: update.status, sub_text: update.sub_text, updated_at: update.updated_at })
+        .update(updateData)
         .eq('id', update.id);
     }
   }

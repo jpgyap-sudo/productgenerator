@@ -2279,6 +2279,9 @@ function archiveCompletedItem(item, viewResults = []) {
   if (!item || !viewResults?.length) return;
   const hasAnyImage = viewResults.some(r => r.status === 'done' && r.imageUrl);
   if (!hasAnyImage && item.status !== STATUS.ERROR) return;
+  const previous = getCompletedArchive().find(entry => Number(entry.id) === Number(item.id));
+  const archivedProvider = inferRenderProvider(item, viewResults, previous);
+  const archivedApiModel = item.apiModel || previous?.apiModel || inferRenderApiModel(archivedProvider);
 
   const archive = getCompletedArchive().filter(entry => Number(entry.id) !== Number(item.id));
   archive.unshift({
@@ -2286,8 +2289,8 @@ function archiveCompletedItem(item, viewResults = []) {
     name: item.name || `Item ${item.id}`,
     imageUrl: item.dataUrl || item.supabaseUrl || item.imageUrl || '',
     status: item.status || STATUS.DONE,
-    provider: item.provider || '',
-    apiModel: item.apiModel || '',
+    provider: archivedProvider,
+    apiModel: archivedApiModel,
     updatedAt: item.updatedAt || new Date().toISOString(),
     driveFolderId: item.driveFolderId || '',
     driveFolderName: item.driveFolderName || '',
@@ -2318,6 +2321,44 @@ function getRenderProvider(item = {}) {
   return (item.provider || '').toLowerCase();
 }
 
+function normalizeRenderProvider(value = '') {
+  const text = String(value || '').toLowerCase();
+  if (text.includes('gemini')) return 'gemini';
+  if (text.includes('openai') || text.includes('gpt-image') || text.includes('gpt image')) return 'openai';
+  if (text.includes('fal')) return 'fal';
+  return '';
+}
+
+function inferRenderProvider(item = {}, viewResults = [], previous = {}) {
+  const directProvider = normalizeRenderProvider(item.provider || previous.provider);
+  if (directProvider) return directProvider;
+
+  const metadata = [
+    item.apiModel,
+    previous.apiModel,
+    item.subText,
+    item.sub_text,
+    item.description,
+    previous.subText,
+    previous.sub_text,
+    previous.description,
+    ...viewResults.flatMap(r => [r.apiModel, r.provider, r.responseUrl, r.statusUrl, r.imageUrl])
+  ].filter(Boolean).join(' ');
+
+  const metadataProvider = normalizeRenderProvider(metadata);
+  if (metadataProvider) return metadataProvider;
+
+  if (['openai', 'gemini', 'fal'].includes(provider)) return provider;
+  return '';
+}
+
+function inferRenderApiModel(providerName = '') {
+  if (providerName === 'openai') return 'OpenAI GPT Image';
+  if (providerName === 'gemini') return 'gemini-3.1-flash-image-preview / gemini-3-pro-image-preview';
+  if (providerName === 'fal') return 'fal.ai';
+  return '';
+}
+
 function getBatchApiText(item = {}) {
   const itemProvider = getRenderProvider(item);
   if (itemProvider === 'gemini') return 'Rendered with Gemini 3: Flash for product views, Pro for interior scene';
@@ -2336,22 +2377,42 @@ function getViewApiText(item = {}, viewId) {
 
 function getMergedCompletedRecords() {
   const records = new Map();
+  const archiveRepair = [];
+  let archiveNeedsRepair = false;
   for (const entry of getCompletedArchive()) {
-    records.set(Number(entry.id), { item: entry, viewResults: entry.viewResults || [], source: 'archive' });
+    const viewResults = entry.viewResults || [];
+    const inferredProvider = inferRenderProvider(entry, viewResults);
+    const repairedEntry = {
+      ...entry,
+      provider: inferredProvider,
+      apiModel: entry.apiModel || inferRenderApiModel(inferredProvider)
+    };
+    archiveRepair.push(repairedEntry);
+    if ((repairedEntry.provider || '') !== (entry.provider || '') || (repairedEntry.apiModel || '') !== (entry.apiModel || '')) {
+      archiveNeedsRepair = true;
+    }
+    records.set(Number(entry.id), {
+      item: repairedEntry,
+      viewResults,
+      source: 'archive'
+    });
   }
+  if (archiveNeedsRepair) saveCompletedArchive(archiveRepair);
 
   for (const item of queue) {
     if (![STATUS.DONE, STATUS.PARTIAL, STATUS.ERROR, STATUS.STOPPED].includes(item.status)) continue;
     const viewResults = lastPollRenderResults[item.id] || records.get(Number(item.id))?.viewResults || [];
     const liveHasImages = viewResults.some(r => r.status === 'done' && r.imageUrl);
     const previous = records.get(Number(item.id));
+    const mergedProvider = inferRenderProvider(item, viewResults, previous?.item);
+    const mergedApiModel = item.apiModel || previous?.item?.apiModel || inferRenderApiModel(mergedProvider);
     records.set(Number(item.id), {
       item: {
         ...(previous?.item || {}),
         ...item,
         imageUrl: item.dataUrl || item.supabaseUrl || previous?.item?.imageUrl || '',
-        provider: item.provider || previous?.item?.provider || '',
-        apiModel: item.apiModel || previous?.item?.apiModel || '',
+        provider: mergedProvider,
+        apiModel: mergedApiModel,
         updatedAt: item.updatedAt || previous?.item?.updatedAt || ''
       },
       viewResults: liveHasImages ? viewResults : (previous?.viewResults || viewResults),
@@ -2723,6 +2784,7 @@ async function loadQueueFromSupabase() {
           desc: row.description || '',
           brand: row.brand || '',
           provider: row.provider || '',
+          subText: row.sub_text || '',
           driveFolderId: row.drive_folder_id || '',
           driveFolderName: row.drive_folder_name || '',
           driveUploadStatus: row.drive_upload_status || '',
@@ -2806,6 +2868,7 @@ async function saveState() {
         brand: q.brand || '',
         provider: q.provider || '',
         apiModel: q.apiModel || '',
+        subText: q.subText || '',
         driveFolderId: q.driveFolderId || '',
         driveFolderName: q.driveFolderName || '',
         driveUploadStatus: q.driveUploadStatus || '',
@@ -5089,7 +5152,9 @@ async function pollStatus() {
             supabaseUrl: serverItem.imageUrl || '',
             status: serverItem.status || STATUS.WAIT,
             desc: serverItem.description || '',
-            provider: serverItem.provider || ''
+            provider: serverItem.provider || '',
+            apiModel: serverItem.apiModel || '',
+            subText: serverItem.subText || ''
           };
           queue.push(localItem);
           queue.sort((a, b) => a.id - b.id);
@@ -5099,6 +5164,7 @@ async function pollStatus() {
           localItem.status = serverItem.status;
           localItem.provider = serverItem.provider || localItem.provider || '';
           localItem.apiModel = serverItem.apiModel || localItem.apiModel || '';
+          localItem.subText = serverItem.subText || localItem.subText || '';
           localItem.supabaseUrl = serverItem.imageUrl || localItem.supabaseUrl;
           localItem.driveFolderId = serverItem.driveFolderId || '';
           localItem.driveFolderName = serverItem.driveFolderName || '';
@@ -5445,6 +5511,7 @@ window.addEventListener('beforeunload', function(e) {
         brand: q.brand || '',
         provider: q.provider || '',
         apiModel: q.apiModel || '',
+        subText: q.subText || '',
         driveFolderId: q.driveFolderId || '',
         driveFolderName: q.driveFolderName || '',
         driveUploadStatus: q.driveUploadStatus || '',
