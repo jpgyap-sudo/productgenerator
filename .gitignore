@@ -14,3 +14,4 @@ plans/
 .env.*.local
 logs/
 vps-env.txt
+vps-assets/

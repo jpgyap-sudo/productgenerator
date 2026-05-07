@@ -3,6 +3,10 @@
 // This avoids browser-side fetch/CORS failures that can create empty ZIP files.
 import AdmZip from 'adm-zip';
 import { VIEWS } from '../../lib/fal.js';
+import {
+  createRenderZipOnVps,
+  readPublicAsset
+} from '../../lib/vps-storage.js';
 
 const MAX_IMAGES = 20;
 const MAX_IMAGE_BYTES = 25 * 1024 * 1024;
@@ -14,6 +18,7 @@ export default async function handler(req, res) {
   }
 
   const name = sanitizeName(req.body?.name || 'renders');
+  const itemId = req.body?.itemId ? Number(req.body.itemId) : null;
   const files = Array.isArray(req.body?.files) ? req.body.files : [];
   const viewResults = Array.isArray(req.body?.viewResults) ? req.body.viewResults : [];
   const targets = files.length
@@ -38,6 +43,23 @@ export default async function handler(req, res) {
 
   if (!targets.length) {
     return res.status(400).json({ error: 'No completed render images found to zip' });
+  }
+
+  if (itemId && Number.isFinite(itemId)) {
+    try {
+      const zipResult = await createRenderZipOnVps(itemId, name, targets.map(target => ({
+        viewId: target.viewId,
+        imageUrl: target.imageUrl
+      })));
+      res.setHeader('Content-Type', 'application/zip');
+      res.setHeader('Content-Disposition', `attachment; filename="${name}_renders.zip"`);
+      res.setHeader('Content-Length', String(zipResult.buffer.length));
+      res.setHeader('X-Zip-Image-Count', String(zipResult.added));
+      res.setHeader('X-Zip-Url', zipResult.publicUrl);
+      return res.end(zipResult.buffer);
+    } catch (error) {
+      console.warn(`[DOWNLOAD-ZIP] Failed to use VPS zip storage for item ${itemId}:`, error.message);
+    }
   }
 
   const zip = new AdmZip();
@@ -77,8 +99,11 @@ export default async function handler(req, res) {
 }
 
 async function fetchImage(url) {
+  const localBuffer = await readPublicAsset(url);
+  if (localBuffer) return localBuffer;
+
   if (!/^https?:\/\//i.test(String(url || ''))) {
-    throw new Error('Image URL must be http or https');
+    throw new Error('Image URL must be http or https, or a VPS asset path');
   }
 
   const controller = new AbortController();

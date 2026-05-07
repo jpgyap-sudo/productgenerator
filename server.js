@@ -18,10 +18,17 @@ import { VIEWS } from './lib/fal.js';
 import { generateGeminiView } from './lib/gemini.js';
 import { generateOpenAIView } from './lib/openai.js';
 import { uploadRendersToDrive } from './lib/drive.js';
+import {
+  VPS_ASSET_ROOT,
+  createRenderZipOnVps,
+  saveRenderImageToVps
+} from './lib/vps-storage.js';
+import { saveCompletedBatch } from './lib/completed-batches.js';
 
 // ── Import API handlers (adapted for Express) ──
 import submitHandler from './api/queue/submit.js';
 import statusHandler from './api/queue/status.js';
+import completedHandler from './api/queue/completed.js';
 import downloadZipHandler from './api/queue/download-zip.js';
 import uploadDriveHandler from './api/queue/upload-drive.js';
 import webhookHandler from './api/fal-webhook.js';
@@ -80,6 +87,16 @@ app.get('/api/queue/status', async (req, res) => {
   }
 });
 
+app.all('/api/queue/completed', async (req, res) => {
+  try {
+    const result = await completedHandler(req, res);
+    if (!res.headersSent) res.json(result);
+  } catch (err) {
+    console.error('[COMPLETED] Error:', err);
+    if (!res.headersSent) res.status(500).json({ error: err.message });
+  }
+});
+
 app.post('/api/queue/upload-drive', async (req, res) => {
   try {
     const result = await uploadDriveHandler(req, res);
@@ -132,6 +149,9 @@ app.post('/api/agent/submit', async (req, res) => {
 });
 
 // ── Serve static frontend ──
+app.use('/vps-assets', express.static(VPS_ASSET_ROOT, {
+  maxAge: '5m'
+}));
 app.use(express.static('.'));
 
 // ═══════════════════════════════════════════════════════════════════
@@ -322,16 +342,18 @@ async function processItem(itemId, provider = 'openai') {
 
       if (result.status === 'fulfilled' && result.value) {
         try {
-          const publicUrl = result.value.cdnUrl;
-          if (!publicUrl) {
+          const generatedUrl = result.value.cdnUrl;
+          if (!generatedUrl) {
             throw new Error('Generator returned no image URL');
           }
+
+          const stored = await saveRenderImageToVps(generatedUrl, itemId, view, item.name);
 
           const { error: saveError } = await supabase
             .from(RESULTS_TABLE)
             .update({
               status: 'done',
-              image_url: publicUrl,
+              image_url: stored.publicUrl,
               error_message: '',
               completed_at: new Date().toISOString(),
               updated_at: new Date().toISOString()
@@ -378,8 +400,58 @@ async function processItem(itemId, provider = 'openai') {
       : `${successCount}/4 views generated`;
     await updateItemStatus(itemId, finalStatus, statusText);
 
-    // Trigger Drive upload if all 4 views completed
+    // Store the completed batch ZIP on the VPS and trigger Drive upload if all 4 views completed
     if (successCount === 4) {
+      const { data: doneRows } = await supabase
+        .from(RESULTS_TABLE)
+        .select('*')
+        .eq('queue_item_id', itemId)
+        .eq('status', 'done');
+
+      if (doneRows && doneRows.length === 4) {
+        let zipUrl = '';
+        try {
+          const zipResult = await createRenderZipOnVps(itemId, item.name, doneRows.map(row => ({
+            viewId: row.view_id,
+            imageUrl: row.image_url
+          })));
+          zipUrl = zipResult.publicUrl;
+          console.log(`[WORKER] Stored VPS ZIP for item ${itemId}: ${zipResult.publicUrl}`);
+        } catch (zipErr) {
+          console.warn(`[WORKER] Failed to store VPS ZIP for item ${itemId}:`, zipErr.message);
+        }
+
+        try {
+          await saveCompletedBatch({
+            id: itemId,
+            name: item.name,
+            imageUrl: item.image_url || '',
+            status: finalStatus,
+            provider,
+            apiModel: provider === 'gemini'
+              ? 'gemini-3.1-flash-image-preview / gemini-3-pro-image-preview'
+              : process.env.OPENAI_IMAGE_MODEL || 'gpt-image-1.5',
+            updatedAt: new Date().toISOString(),
+            driveFolderId: item.drive_folder_id || '',
+            driveFolderName: item.drive_folder_name || '',
+            driveUploadStatus: item.drive_upload_status || '',
+            driveUploadDone: item.drive_upload_done || 0,
+            driveUploadTotal: item.drive_upload_total || 0,
+            driveUploadError: item.drive_upload_error || '',
+            zipUrl,
+            viewResults: doneRows.map(row => ({
+              viewId: row.view_id,
+              status: row.status,
+              imageUrl: row.image_url,
+              errorMessage: row.error_message || null,
+              completedAt: row.completed_at || null
+            }))
+          });
+        } catch (storeErr) {
+          console.warn(`[WORKER] Failed to save completed batch index for item ${itemId}:`, storeErr.message);
+        }
+      }
+
       await triggerDriveUpload(item);
     }
 

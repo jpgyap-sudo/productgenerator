@@ -11,6 +11,7 @@
 // ═══════════════════════════════════════════════════════════════════
 import { supabase, QUEUE_TABLE, RESULTS_TABLE, BUCKET_NAME } from '../../lib/supabase.js';
 import { VIEWS } from '../../lib/fal.js';
+import { renderZipPublicUrl } from '../../lib/vps-storage.js';
 
 const OPENAI_IMAGE_MODEL = process.env.OPENAI_IMAGE_MODEL || 'gpt-image-1.5';
 
@@ -103,6 +104,7 @@ export default async function handler(req, res) {
         driveUploadDone: item.drive_upload_done || 0,
         driveUploadTotal: item.drive_upload_total || 0,
         driveUploadError: item.drive_upload_error || '',
+        zipUrl: renderZipPublicUrl(item.id, item.name),
         updatedAt: item.updated_at
         };
       }),

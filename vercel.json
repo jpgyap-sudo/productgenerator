@@ -3,6 +3,10 @@
   "outputDirectory": ".",
   "rewrites": [
     {
+      "source": "/vps-assets/(.*)",
+      "destination": "http://104.248.225.250:3000/vps-assets/$1"
+    },
+    {
       "source": "/api/(.*)",
       "destination": "http://104.248.225.250:3000/api/$1"
     }

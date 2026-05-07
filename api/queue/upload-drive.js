@@ -49,6 +49,7 @@ export default async function handler(req, res) {
         alreadyUploaded: true,
         folderId: item.drive_folder_id || '',
         folderName: item.drive_folder_name || '',
+        folderUrl: item.drive_folder_url || '',
         message: `Already uploaded to Google Drive${item.drive_folder_name ? `: ${item.drive_folder_name}` : ''}`
       });
     }
@@ -93,6 +94,7 @@ export default async function handler(req, res) {
         drive_upload_error: progress.status === 'error' ? progress.message || 'Drive upload incomplete' : '',
         drive_folder_id: progress.folderId || item.drive_folder_id || '',
         drive_folder_name: progress.folderName || item.drive_folder_name || '',
+        drive_folder_url: progress.folderUrl || item.drive_folder_url || '',
         updated_at: new Date().toISOString()
       })
     });
@@ -101,6 +103,7 @@ export default async function handler(req, res) {
     await updateDriveUploadState(itemId, {
       drive_folder_id: driveResult.folderId,
       drive_folder_name: driveResult.folderName,
+      drive_folder_url: driveResult.folderUrl || '',
       drive_upload_status: success ? 'done' : 'error',
       drive_upload_done: driveResult.files.length,
       drive_upload_total: doneViews.length,
@@ -112,6 +115,7 @@ export default async function handler(req, res) {
       success,
       folderId: driveResult.folderId,
       folderName: driveResult.folderName,
+      folderUrl: driveResult.folderUrl || '',
       uploaded: driveResult.files.length,
       total: doneViews.length,
       message: success
@@ -172,6 +176,7 @@ async function handleArchiveFallback(req, res, itemId) {
     success,
     folderId: driveResult.folderId,
     folderName: driveResult.folderName,
+    folderUrl: driveResult.folderUrl || '',
     uploaded: driveResult.files.length,
     total: doneViews.length,
     fromArchive: true,

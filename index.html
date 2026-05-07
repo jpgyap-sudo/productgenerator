@@ -1911,6 +1911,8 @@ let pollInterval = null;
 let isPolling = false;
 let processingItemIds = []; // IDs currently being processed on the server
 let lastPollRenderResults = {}; // render_results from most recent poll, keyed by queue_item_id
+let vpsCompletedArchive = []; // completed batch index loaded from VPS
+const completedVpsSaveKeys = new Map();
 
 function recoverInterruptedStatus(item) {
   if (item.status !== STATUS.ACTIVE) return item.status || STATUS.WAIT;
@@ -2274,6 +2276,63 @@ function saveCompletedArchive(items) {
   }
 }
 
+async function loadCompletedArchiveFromVps() {
+  try {
+    const res = await fetchApi('/api/queue/completed', {
+      method: 'GET',
+      headers: { 'Cache-Control': 'no-cache' }
+    });
+    if (!res.ok) return [];
+    const data = await res.json();
+    vpsCompletedArchive = Array.isArray(data.completedBatches) ? data.completedBatches : [];
+    return vpsCompletedArchive;
+  } catch (e) {
+    console.warn('VPS completed batch load failed:', e);
+    return [];
+  }
+}
+
+function saveCompletedBatchToVps(entry) {
+  const key = JSON.stringify({
+    id: entry.id,
+    updatedAt: entry.updatedAt,
+    viewUrls: (entry.viewResults || []).map(r => r.imageUrl)
+  });
+  if (completedVpsSaveKeys.get(Number(entry.id)) === key) return;
+  completedVpsSaveKeys.set(Number(entry.id), key);
+
+  fetchApi('/api/queue/completed', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(entry)
+  }).then(async res => {
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    if (data.batch) {
+      vpsCompletedArchive = [data.batch, ...vpsCompletedArchive.filter(v => Number(v.id) !== Number(data.batch.id))].slice(0, 500);
+    }
+  }).catch(e => {
+    completedVpsSaveKeys.delete(Number(entry.id));
+    console.warn('VPS completed batch save failed:', e);
+  });
+}
+
+function deleteCompletedBatchFromVps(id) {
+  return fetchApi('/api/queue/completed', {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id })
+  }).catch(e => console.warn('VPS completed batch delete failed:', e));
+}
+
+function clearCompletedBatchesFromVps(ids) {
+  return fetchApi('/api/queue/completed', {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(Array.isArray(ids) && ids.length ? { ids } : { clearAll: true })
+  }).catch(e => console.warn('VPS completed batch clear failed:', e));
+}
+
 function archiveCompletedItem(item, viewResults = []) {
   if (!item || !viewResults?.length) return;
   const hasAnyImage = viewResults.some(r => r.status === 'done' && r.imageUrl);
@@ -2283,7 +2342,7 @@ function archiveCompletedItem(item, viewResults = []) {
   const archivedApiModel = item.apiModel || previous?.apiModel || inferRenderApiModel(archivedProvider);
 
   const archive = getCompletedArchive().filter(entry => Number(entry.id) !== Number(item.id));
-  archive.unshift({
+  const entry = {
     id: item.id,
     name: item.name || `Item ${item.id}`,
     imageUrl: item.dataUrl || item.supabaseUrl || item.imageUrl || '',
@@ -2297,6 +2356,7 @@ function archiveCompletedItem(item, viewResults = []) {
     driveUploadDone: item.driveUploadDone || 0,
     driveUploadTotal: item.driveUploadTotal || 0,
     driveUploadError: item.driveUploadError || '',
+    zipUrl: item.zipUrl || '',
     viewResults: viewResults.map(r => ({
       viewId: r.viewId,
       status: r.status,
@@ -2304,8 +2364,11 @@ function archiveCompletedItem(item, viewResults = []) {
       errorMessage: r.errorMessage || null,
       completedAt: r.completedAt || null
     }))
-  });
+  };
+  archive.unshift(entry);
   saveCompletedArchive(archive);
+  vpsCompletedArchive = [entry, ...vpsCompletedArchive.filter(v => Number(v.id) !== Number(entry.id))].slice(0, 500);
+  saveCompletedBatchToVps(entry);
 }
 
 function getDriveStateText(item) {
@@ -2398,6 +2461,20 @@ function getMergedCompletedRecords() {
   }
   if (archiveNeedsRepair) saveCompletedArchive(archiveRepair);
 
+  for (const entry of vpsCompletedArchive) {
+    const viewResults = entry.viewResults || [];
+    const inferredProvider = inferRenderProvider(entry, viewResults);
+    records.set(Number(entry.id), {
+      item: {
+        ...entry,
+        provider: inferredProvider,
+        apiModel: entry.apiModel || inferRenderApiModel(inferredProvider)
+      },
+      viewResults,
+      source: 'vps'
+    });
+  }
+
   for (const item of queue) {
     if (![STATUS.DONE, STATUS.PARTIAL, STATUS.ERROR, STATUS.STOPPED].includes(item.status)) continue;
     const viewResults = lastPollRenderResults[item.id] || records.get(Number(item.id))?.viewResults || [];
@@ -2428,6 +2505,7 @@ async function renderCompletedPanel() {
   completedList.innerHTML = '<div class="completed-empty">Loading completed batches...</div>';
 
   if (supaConnected) await pollStatus();
+  await loadCompletedArchiveFromVps();
 
   const records = getMergedCompletedRecords();
   if (!records.length) {
@@ -2493,13 +2571,13 @@ function createCompletedHistoryCard(item, viewResults = [], source = 'archive') 
     grid.appendChild(slot);
   });
 
-  card.querySelector(`#hzip-${item.id}`)?.addEventListener('click', e => downloadHistoryZip(item.name || `Item_${item.id}`, viewResults, e.currentTarget));
+  card.querySelector(`#hzip-${item.id}`)?.addEventListener('click', e => downloadHistoryZip(item.id, item.name || `Item_${item.id}`, viewResults, e.currentTarget));
   card.querySelector(`#hregen-${item.id}`)?.addEventListener('click', () => retryItemFromHistory(item.id));
   card.querySelector(`#hdrive-${item.id}`)?.addEventListener('click', () => uploadBatchToDrive(item.id));
   return card;
 }
 
-async function downloadRenderZipFromServer(name, viewResults, btn = null) {
+async function downloadRenderZipFromServer(itemId, name, viewResults, btn = null) {
   const doneResults = viewResults.filter(r => r.status === 'done' && r.imageUrl);
   if (!doneResults.length) {
     toast('No stored render images to zip', 'info');
@@ -2510,7 +2588,7 @@ async function downloadRenderZipFromServer(name, viewResults, btn = null) {
     const res = await fetchApi('/api/queue/download-zip', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, viewResults: doneResults })
+      body: JSON.stringify({ itemId, name, viewResults: doneResults })
     });
 
     if (!res.ok) {
@@ -2547,13 +2625,13 @@ function sanitizeDownloadName(name) {
   return String(name || 'renders').trim().replace(/[^a-z0-9._-]+/gi, '_').replace(/^_+|_+$/g, '') || 'renders';
 }
 
-async function downloadHistoryZip(name, viewResults, btn = null) {
+async function downloadHistoryZip(itemId, name, viewResults, btn = null) {
   if (btn) {
     btn.textContent = 'Zipping...';
     btn.disabled = true;
   }
   try {
-    await downloadRenderZipFromServer(name, viewResults, btn);
+    await downloadRenderZipFromServer(itemId, name, viewResults, btn);
   } finally {
     if (btn) {
       btn.textContent = '⬇ ZIP';
@@ -3635,6 +3713,8 @@ async function deleteCompletedBatch(id) {
   // Soft-delete: archive the item instead of hard-deleting from Supabase
   // so Drive upload still works from the Completed panel
   await archiveQueueItemInSupabase(id);
+  await deleteCompletedBatchFromVps(id);
+  vpsCompletedArchive = vpsCompletedArchive.filter(entry => Number(entry.id) !== Number(id));
 
   const batchSection = document.getElementById('batch-section');
   if (batchSection && !batchSection.querySelector('[id^="bc-"]')) {
@@ -4524,7 +4604,7 @@ async function dlZipFromUrls(itemId, name, viewResults) {
     return;
   }
   try {
-    await downloadRenderZipFromServer(name, doneResults, btn);
+    await downloadRenderZipFromServer(itemId, name, doneResults, btn);
   } finally {
     btn.textContent = 'â¬‡ ZIP';
     btn.disabled = false;
@@ -5197,7 +5277,8 @@ async function pollStatus() {
             desc: serverItem.description || '',
             provider: serverItem.provider || '',
             apiModel: serverItem.apiModel || '',
-            subText: serverItem.subText || ''
+            subText: serverItem.subText || '',
+            zipUrl: serverItem.zipUrl || ''
           };
           queue.push(localItem);
           queue.sort((a, b) => a.id - b.id);
@@ -5208,6 +5289,7 @@ async function pollStatus() {
           localItem.provider = serverItem.provider || localItem.provider || '';
           localItem.apiModel = serverItem.apiModel || localItem.apiModel || '';
           localItem.subText = serverItem.subText || localItem.subText || '';
+          localItem.zipUrl = serverItem.zipUrl || localItem.zipUrl || '';
           localItem.supabaseUrl = serverItem.imageUrl || localItem.supabaseUrl;
           localItem.driveFolderId = serverItem.driveFolderId || '';
           localItem.driveFolderName = serverItem.driveFolderName || '';
