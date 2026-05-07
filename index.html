@@ -1096,6 +1096,86 @@ textarea:focus { outline: none; border-color: var(--text-secondary); }
 .drive-state.done { color: var(--success); background: var(--success-bg); border-color: var(--success-border); }
 .drive-state.error { color: var(--error); background: var(--error-bg); border-color: var(--error-border); }
 
+/* ── MONITOR PANEL ───────────────────────────────────────────── */
+.monitor-panel {
+  max-width: 900px;
+  margin: 0 auto;
+}
+.monitor-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+.monitor-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px;
+  transition: background var(--transition), border-color var(--transition);
+}
+.monitor-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.monitor-card-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+.monitor-badge {
+  font-size: 10px;
+  padding: 2px 8px;
+  border-radius: 99px;
+  font-weight: 600;
+}
+.monitor-badge.ok {
+  background: var(--success-bg);
+  color: var(--success);
+  border: 1px solid var(--success-border);
+}
+.monitor-badge.err {
+  background: var(--error-bg);
+  color: var(--error);
+  border: 1px solid var(--error-border);
+}
+.monitor-badge.pending {
+  background: var(--warning-bg);
+  color: var(--warning-text);
+  border: 1px solid #e6c952;
+}
+.monitor-card-latency {
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+}
+.monitor-card-error {
+  font-size: 10px;
+  color: var(--error);
+  margin-top: 4px;
+  word-break: break-word;
+  line-height: 1.4;
+}
+.monitor-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 12px;
+  padding: 8px 0;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.monitor-timestamp {
+  font-family: monospace;
+}
+.monitor-summary {
+  font-weight: 600;
+}
+.monitor-summary.all-ok { color: var(--success); }
+.monitor-summary.has-err { color: var(--error); }
+
 /* ── LOG PANEL ───────────────────────────────────────────────── */
 .bulk-upload-panel {
   max-width: 1280px;
@@ -1420,6 +1500,7 @@ textarea:focus { outline: none; border-color: var(--text-secondary); }
     <button class="tb-btn" id="bulkUploadToggle" title="Bulk upload PDF + ZIP workflow" aria-label="Bulk Upload">Bulk Upload</button>
     <button class="tb-btn" id="bulkRenderToggle" title="Review bulk items before rendering" aria-label="Bulk Render">Bulk Render</button>
     <button class="tb-btn" id="completedToggle" title="Completed render history" aria-label="Completed Batches">✓ Completed</button>
+    <button class="tb-btn" id="monitorToggle" title="API health monitoring" aria-label="API Monitor">📡 Monitor</button>
     <button class="tb-btn" id="featureToggle" title="View & edit product feature prompts" aria-label="Product Features">📋 Features</button>
     <button class="tb-btn" id="aboutToggle" title="How to use & AI specifications" aria-label="About">ℹ️ About</button>
     <button class="sidebar-toggle" id="sidebarToggle" title="Toggle sidebar" aria-label="Toggle sidebar">☰</button>
@@ -1678,6 +1759,22 @@ textarea:focus { outline: none; border-color: var(--text-secondary); }
       <div class="feature-foot">
         <button class="btn-start" id="featureResetBtn" style="width:auto;padding:6px 16px;font-size:12px;margin:0;">↺ Reset to Defaults</button>
         <span class="feature-hint">💡 <strong>Tip:</strong> Be specific about material, color, shape, and style. The more detail you add, the more accurate the AI output will be.</span>
+      </div>
+    </div>
+
+    <!-- ── API MONITOR PANEL ──────────────────────────────────── -->
+    <div class="monitor-panel" id="monitorPanel" style="display:none;">
+      <div class="sec-title">
+        <span>📡 API Monitor</span>
+        <span style="font-size:11px;font-weight:400;color:var(--text-secondary);margin-left:auto;">Health checks for all configured external services</span>
+        <button class="btn-dl-all" id="monitorRefreshBtn" type="button" style="margin-left:8px;">Refresh</button>
+      </div>
+      <div class="monitor-grid" id="monitorGrid">
+        <!-- populated by JS -->
+      </div>
+      <div class="monitor-foot">
+        <span class="monitor-timestamp" id="monitorTimestamp">Last checked: —</span>
+        <span class="monitor-summary" id="monitorSummary"></span>
       </div>
     </div>
 
@@ -2116,6 +2213,12 @@ const completedToggle = document.getElementById('completedToggle');
 const completedPanel = document.getElementById('completedPanel');
 const completedList = document.getElementById('completedList');
 const completedRefreshBtn = document.getElementById('completedRefreshBtn');
+const monitorToggle = document.getElementById('monitorToggle');
+const monitorPanel = document.getElementById('monitorPanel');
+const monitorGrid = document.getElementById('monitorGrid');
+const monitorTimestamp = document.getElementById('monitorTimestamp');
+const monitorSummary = document.getElementById('monitorSummary');
+const monitorRefreshBtn = document.getElementById('monitorRefreshBtn');
 
 // ── PENDING ELEMENTS ────────────────────────────────────────────────
 const pendingArea = document.getElementById('pendingArea');
@@ -2796,7 +2899,10 @@ queueLogToggle.addEventListener('click', () => {
   completedPanel.style.display = 'none';
   completedToggle.classList.remove('active');
   completedPanelOpen = false;
-  // Only toggle welcomeState if there's no active section showing
+  monitorPanel.style.display = 'none';
+  monitorToggle?.classList.remove('active');
+  monitorPanelOpen = false;
+  if (monitorInterval) { clearInterval(monitorInterval); monitorInterval = null; }
   if (!document.getElementById('active-section')) {
     welcomeState.style.display = isHidden ? 'none' : 'flex';
   }
@@ -2824,9 +2930,104 @@ completedToggle.addEventListener('click', async () => {
   aboutPanelOpen = false;
 
   if (completedPanelOpen) await renderCompletedPanel();
+  monitorPanel.style.display = 'none';
+  monitorToggle?.classList.remove('active');
+  monitorPanelOpen = false;
+  if (monitorInterval) { clearInterval(monitorInterval); monitorInterval = null; }
 });
 
 completedRefreshBtn?.addEventListener('click', renderCompletedPanel);
+
+  // ── API MONITOR TOGGLE ─────────────────────────────────────────────
+  const SERVICE_LABELS = {
+    supabase: { icon: '☁️', name: 'Supabase' },
+    openai: { icon: '🤖', name: 'OpenAI' },
+    gemini: { icon: '🔮', name: 'Gemini' },
+    drive: { icon: '📁', name: 'Google Drive' }
+  };
+
+  let monitorInterval = null;
+  let monitorPanelOpen = false;
+
+  async function fetchMonitorStatus() {
+    try {
+      const res = await fetchApi('/api/monitor');
+      if (!res.ok) throw new Error('Server returned ' + res.status);
+      return await res.json();
+    } catch (err) {
+      return {
+        timestamp: new Date().toISOString(),
+        allOk: false,
+        services: {
+          supabase: { ok: false, latencyMs: 0, error: err.message },
+          openai: { ok: false, latencyMs: 0, error: err.message },
+          gemini: { ok: false, latencyMs: 0, error: err.message },
+          drive: { ok: false, latencyMs: 0, error: err.message }
+        }
+      };
+    }
+  }
+
+  function renderMonitorStatus(data) {
+    if (!monitorGrid) return;
+    const ts = data.timestamp ? new Date(data.timestamp).toLocaleTimeString() : '—';
+    if (monitorTimestamp) monitorTimestamp.textContent = 'Last checked: ' + ts;
+    const okCount = Object.values(data.services).filter(s => s.ok).length;
+    const totalCount = Object.keys(data.services).length;
+    if (monitorSummary) {
+      if (data.allOk) {
+        monitorSummary.textContent = '✅ All ' + totalCount + ' services operational';
+        monitorSummary.className = 'monitor-summary all-ok';
+      } else {
+        monitorSummary.textContent = '⚠️ ' + okCount + '/' + totalCount + ' services operational';
+        monitorSummary.className = 'monitor-summary has-err';
+      }
+    }
+    monitorGrid.innerHTML = '';
+    for (const [key, svc] of Object.entries(data.services)) {
+      const info = SERVICE_LABELS[key] || { icon: '🔌', name: key };
+      const card = document.createElement('div');
+      card.className = 'monitor-card';
+      const badgeClass = svc.ok ? 'ok' : 'err';
+      const badgeText = svc.ok ? '✓ OK' : '✗ ERR';
+      card.innerHTML = '<div class="monitor-card-head"><span class="monitor-card-name">' + info.icon + ' ' + info.name + '</span><span class="monitor-badge ' + badgeClass + '">' + badgeText + '</span></div><div class="monitor-card-latency">⏱ ' + svc.latencyMs + 'ms</div>' + (svc.error ? '<div class="monitor-card-error">' + svc.error.replace(/</g,'<').replace(/>/g,'>') + '</div>' : '');
+      monitorGrid.appendChild(card);
+    }
+  }
+
+  monitorToggle?.addEventListener('click', () => {
+    monitorPanelOpen = !monitorPanelOpen;
+    monitorToggle.classList.toggle('active', monitorPanelOpen);
+    monitorPanel.style.display = monitorPanelOpen ? 'block' : 'none';
+    welcomeState.style.display = monitorPanelOpen ? 'none' : 'flex';
+    hideWorkspacePanels();
+    document.getElementById('queueLogPanel').style.display = 'none';
+    document.getElementById('logPanel').style.display = 'none';
+    document.getElementById('featurePanel').style.display = 'none';
+    document.getElementById('aboutPanel').style.display = 'none';
+    completedPanel.style.display = 'none';
+    completedToggle.classList.remove('active');
+    featureToggle.classList.remove('active');
+    if (aboutToggle) aboutToggle.classList.remove('active');
+    featurePanelOpen = false;
+    aboutPanelOpen = false;
+    completedPanelOpen = false;
+    if (monitorInterval) { clearInterval(monitorInterval); monitorInterval = null; }
+    if (monitorPanelOpen) {
+      fetchMonitorStatus().then(renderMonitorStatus);
+      monitorInterval = setInterval(async () => {
+        const data = await fetchMonitorStatus();
+        renderMonitorStatus(data);
+      }, 15000);
+    }
+  });
+
+  monitorRefreshBtn?.addEventListener('click', async () => {
+    if (monitorPanelOpen) {
+      const data = await fetchMonitorStatus();
+      renderMonitorStatus(data);
+    }
+  });
 
 logToggle.addEventListener('click', () => {
   const isHidden = logPanel.style.display === 'none';
@@ -2834,6 +3035,10 @@ logToggle.addEventListener('click', () => {
   completedPanel.style.display = 'none';
   completedToggle.classList.remove('active');
   completedPanelOpen = false;
+  monitorPanel.style.display = 'none';
+  monitorToggle?.classList.remove('active');
+  monitorPanelOpen = false;
+  if (monitorInterval) { clearInterval(monitorInterval); monitorInterval = null; }
   // Only toggle welcomeState if there's no active section showing
   if (!document.getElementById('active-section')) {
     welcomeState.style.display = isHidden ? 'none' : 'flex';
@@ -3412,6 +3617,10 @@ function showBulkUploadPanel() {
   featurePanelOpen = false;
   aboutPanelOpen = false;
   welcomeState.style.display = 'none';
+  monitorPanel.style.display = 'none';
+  monitorToggle?.classList.remove('active');
+  monitorPanelOpen = false;
+  if (monitorInterval) { clearInterval(monitorInterval); monitorInterval = null; }
 }
 
 function hideBulkUploadPanel() {
@@ -3441,6 +3650,10 @@ function showBulkRenderPanel() {
   aboutPanelOpen = false;
   welcomeState.style.display = 'none';
   renderPendingList();
+  monitorPanel.style.display = 'none';
+  monitorToggle?.classList.remove('active');
+  monitorPanelOpen = false;
+  if (monitorInterval) { clearInterval(monitorInterval); monitorInterval = null; }
 }
 
 function hideBulkRenderPanel() {
@@ -3608,6 +3821,10 @@ featureToggle.addEventListener('click', () => {
   if (aboutToggle) aboutToggle.classList.remove('active');
   aboutPanelOpen = false;
   if (featurePanelOpen) renderFeatureGrid();
+  monitorPanel.style.display = 'none';
+  monitorToggle?.classList.remove('active');
+  monitorPanelOpen = false;
+  if (monitorInterval) { clearInterval(monitorInterval); monitorInterval = null; }
 });
 
 featureResetBtn.addEventListener('click', resetFeaturePrompts);
@@ -3634,6 +3851,10 @@ aboutToggle.addEventListener('click', () => {
   completedToggle.classList.remove('active');
   featurePanelOpen = false;
   completedPanelOpen = false;
+  monitorPanel.style.display = 'none';
+  monitorToggle?.classList.remove('active');
+  monitorPanelOpen = false;
+  if (monitorInterval) { clearInterval(monitorInterval); monitorInterval = null; }
 });
 
 // ── READY CHECK ───────────────────────────────────────────────────
@@ -5496,19 +5717,35 @@ async function submitToServer(itemIds) {
   try {
     // Collect brand references for each item from the queue
     const brands = {};
+    const items = [];
     for (const item of queue) {
       if (itemIds.includes(item.id) && item.brand) {
         brands[item.id] = item.brand;
+      }
+      if (itemIds.includes(item.id)) {
+        const imageData = item.dataUrl && item.dataUrl.startsWith('data:') ? item.dataUrl : '';
+        items.push({
+          id: item.id,
+          name: item.name || `Item ${item.id}`,
+          imageUrl: item.supabaseUrl || (item.dataUrl && !item.dataUrl.startsWith('data:') ? item.dataUrl : ''),
+          imageData,
+          description: item.desc || '',
+          brand: item.brand || '',
+          provider: item.provider || provider || 'openai',
+          driveFolderName: item.driveFolderName || ''
+        });
       }
     }
     const res = await fetchApi('/api/queue/submit', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ itemIds, resolution: nb2Res, provider, brands })
+      body: JSON.stringify({ itemIds, items, resolution: nb2Res, provider, brands })
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      throw new Error(err.error || `Server error ${res.status}`);
+      const submitError = new Error(err.error || `Server error ${res.status}`);
+      submitError.status = res.status;
+      throw submitError;
     }
     const data = await res.json();
     queue.forEach(item => {
@@ -5520,7 +5757,6 @@ async function submitToServer(itemIds) {
     const msg = formatError(e);
     setStatus(`Server submission failed: ${msg}`);
     addQueueLogEntry('error', '', `Server submission failed: ${msg}`);
-    toast(`Server error: ${msg}`, 'error');
     throw e;
   }
 }
@@ -5860,9 +6096,17 @@ startBtn.addEventListener('click', async () => {
       }
       renderQueue();
       await saveState();
-      toast('Server endpoints unavailable. Please try again after the VPS is reachable.', 'error');
-      addQueueLogEntry('error', '', 'Server unavailable — client-side fal.ai fallback is disabled');
-      setStatus('Server unavailable. Queue is paused.');
+      const msg = formatError(e);
+      const isMissingItems = e?.status === 404 || /No items found/i.test(msg);
+      if (isMissingItems) {
+        toast(`Server could not find the queued item data: ${msg}`, 'error');
+        addQueueLogEntry('error', '', `Server queue data missing - ${msg}`);
+        setStatus('Queue data missing. Queue is paused.');
+      } else {
+        toast(`Server submission failed: ${msg}`, 'error');
+        addQueueLogEntry('error', '', `Server unavailable - ${msg}`);
+        setStatus('Server unavailable. Queue is paused.');
+      }
       checkReady();
     } else {
       // Some other error before server attempt

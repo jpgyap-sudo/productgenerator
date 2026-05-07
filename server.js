@@ -17,6 +17,7 @@ import { supabase, QUEUE_TABLE, RESULTS_TABLE } from './lib/supabase.js';
 import { VIEWS } from './lib/fal.js';
 import { generateGeminiView } from './lib/gemini.js';
 import { generateOpenAIView } from './lib/openai.js';
+import { generateStabilityView } from './lib/stability.js';
 import { uploadRendersToDrive, getNextFolderCounter, getNextFolderCounterFallback, isSupabaseConnectionError } from './lib/drive.js';
 import {
   VPS_ASSET_ROOT,
@@ -34,6 +35,7 @@ import uploadDriveHandler from './api/queue/upload-drive.js';
 import webhookHandler from './api/fal-webhook.js';
 import agentProcessHandler from './api/agent/process.js';
 import agentSubmitHandler from './api/agent/submit.js';
+import monitorHandler from './api/monitor.js';
 
 const PORT = process.env.PORT || 3000;
 const POLL_INTERVAL_MS = 5000; // Check for new jobs every 5 seconds
@@ -57,6 +59,16 @@ app.use((req, res, next) => {
 // ── Health check ──
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', uptime: process.uptime(), memory: process.memoryUsage().rss });
+});
+
+// ── API Monitoring ──
+app.get('/api/monitor', async (req, res) => {
+  try {
+    await monitorHandler(req, res);
+  } catch (err) {
+    console.error('[MONITOR] Error:', err);
+    if (!res.headersSent) res.status(500).json({ error: err.message });
+  }
 });
 
 // ── API Routes ──
@@ -219,11 +231,20 @@ async function processNextBatch() {
     console.log(`[WORKER] Starting item ${item.id} ("${item.name}") with provider: ${provider}`);
 
     // Mark as active
+    const providerLabel = provider.startsWith('stability')
+      ? provider.includes('cheap') || provider.includes('mini')
+        ? 'Stability AI (cheap/mini)'
+        : 'Stability AI'
+      : provider === 'gemini'
+        ? 'Gemini'
+        : provider.includes('cheap') || provider.includes('mini')
+          ? 'OpenAI (cheap/mini)'
+          : 'OpenAI';
     await supabase
       .from(QUEUE_TABLE)
       .update({
         status: 'active',
-        sub_text: `Generating 4 views with ${provider === 'gemini' ? 'Gemini' : 'OpenAI'}...`,
+        sub_text: `Generating 4 views with ${providerLabel}...`,
         provider,
         updated_at: new Date().toISOString()
       })
@@ -243,11 +264,13 @@ async function processNextBatch() {
 
 /**
  * Detect provider from item sub_text or default to openai.
+ * Preserves sub-variants like 'openai-cheap', 'openai-mini', 'stability', 'stability-cheap'.
  */
 function detectProvider(item) {
   if (!item.sub_text) return null;
   const t = item.sub_text.toLowerCase();
   if (t.includes('gemini')) return 'gemini';
+  if (t.includes('stability')) return 'stability';
   if (t.includes('openai')) return 'openai';
   return null;
 }
@@ -321,16 +344,54 @@ async function processItem(itemId, provider = 'openai') {
 
   try {
     // Mark all views as generating
-    const providerLabel = provider === 'gemini' ? 'Gemini' : 'OpenAI';
+    const providerLabel = provider.startsWith('stability')
+      ? provider.includes('cheap') || provider.includes('mini')
+        ? 'Stability AI (cheap/mini)'
+        : 'Stability AI'
+      : provider === 'gemini'
+        ? 'Gemini'
+        : provider.includes('cheap') || provider.includes('mini')
+          ? 'OpenAI (cheap/mini)'
+          : 'OpenAI';
     await updateItemStatus(itemId, 'active', `Generating 4 views with ${providerLabel}...`);
     await updateAllViewStatuses(itemId, 'generating', null);
 
     // Generate all 4 views in parallel
-    const generateFn = provider === 'gemini' ? generateGeminiView : generateOpenAIView;
+    const isStability = provider.startsWith('stability');
+    const isGemini = provider === 'gemini';
+    const generateFn = isStability
+      ? generateStabilityView
+      : isGemini
+        ? generateGeminiView
+        : generateOpenAIView;
     const brand = item.brand || '';
-    const results = await Promise.allSettled(
-      VIEWS.map(view => generateFn(view, desc, imageUrl, item.resolution || '1K', brand))
+    // Pass the provider string as options.provider so the generate function can
+    // resolve the model (e.g., 'openai-cheap' → dall-e-2, 'stability-cheap' → sdxl-turbo)
+    const genOptions = { provider };
+    let results = await Promise.allSettled(
+      VIEWS.map(view => generateFn(view, desc, imageUrl, item.resolution || '1K', brand, genOptions))
     );
+
+    // If Gemini failed due to quota, retry with OpenAI
+    if (provider === 'gemini') {
+      const geminiFailCount = results.filter(r => r.status === 'rejected').length;
+      if (geminiFailCount > 0) {
+        const isQuotaError = results.some(r =>
+          r.status === 'rejected' &&
+          /quota|rate.limi|resource.exhausted|too.many.request/i.test(r.reason?.message || '')
+        );
+        if (isQuotaError) {
+          console.log(`[WORKER] Gemini quota exceeded for item ${itemId}, retrying with OpenAI...`);
+          const fallbackResults = await Promise.allSettled(
+            VIEWS.map((view, i) => {
+              if (results[i].status === 'fulfilled') return Promise.resolve(results[i].value);
+              return generateOpenAIView(view, desc, imageUrl, item.resolution || '1K', brand, { provider: 'openai' });
+            })
+          );
+          results = fallbackResults;
+        }
+      }
+    }
 
     // Save results
     let successCount = 0;

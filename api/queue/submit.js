@@ -13,8 +13,87 @@
 //  - gemini: Uses Google Gemini API (synchronous)
 //  - fal: Deprecated on VPS — use openai or gemini instead
 // ═══════════════════════════════════════════════════════════════════
-import { supabase, QUEUE_TABLE, RESULTS_TABLE } from '../../lib/supabase.js';
+import { supabase, QUEUE_TABLE, RESULTS_TABLE, BUCKET_NAME } from '../../lib/supabase.js';
 import { VIEWS } from '../../lib/fal.js';
+
+function parseDataUrl(dataUrl) {
+  const match = /^data:([^;,]+);base64,(.+)$/i.exec(String(dataUrl || ''));
+  if (!match) return null;
+  return {
+    mimeType: match[1],
+    buffer: Buffer.from(match[2], 'base64')
+  };
+}
+
+function imageExtension(mimeType) {
+  if (mimeType.includes('png')) return 'png';
+  if (mimeType.includes('webp')) return 'webp';
+  return 'jpg';
+}
+
+async function uploadSubmittedImage(itemId, imageData) {
+  const parsed = parseDataUrl(imageData);
+  if (!parsed) return '';
+
+  const ext = imageExtension(parsed.mimeType);
+  const fileName = `queue/${itemId}_${Date.now()}.${ext}`;
+  const { error } = await supabase.storage
+    .from(BUCKET_NAME)
+    .upload(fileName, parsed.buffer, {
+      contentType: parsed.mimeType,
+      upsert: true
+    });
+
+  if (error) {
+    throw new Error(`Failed to upload queued reference image: ${error.message}`);
+  }
+
+  const { data: { publicUrl } } = supabase.storage
+    .from(BUCKET_NAME)
+    .getPublicUrl(fileName);
+
+  return publicUrl;
+}
+
+async function upsertSubmittedItems(itemIds, submittedItems, activeProvider, resolution) {
+  if (!Array.isArray(submittedItems) || submittedItems.length === 0) return;
+
+  const wantedIds = new Set(itemIds.map(id => Number(id)));
+  const now = new Date().toISOString();
+  const rows = [];
+
+  for (const submitted of submittedItems) {
+    const id = Number(submitted?.id);
+    if (!Number.isFinite(id) || !wantedIds.has(id)) continue;
+
+    let imageUrl = submitted.imageUrl || '';
+    if (!imageUrl && submitted.imageData) {
+      imageUrl = await uploadSubmittedImage(id, submitted.imageData);
+    }
+
+    rows.push({
+      id,
+      name: submitted.name || `Item ${id}`,
+      image_url: imageUrl,
+      status: 'active',
+      sub_text: `Queued for ${activeProvider === 'gemini' ? 'Gemini' : 'OpenAI'} processing...`,
+      description: submitted.description || '',
+      brand: submitted.brand || '',
+      provider: activeProvider,
+      resolution: resolution || '1K',
+      drive_folder_name: submitted.driveFolderName || '',
+      updated_at: now
+    });
+  }
+
+  if (rows.length === 0) return;
+
+  const { error } = await supabase
+    .from(QUEUE_TABLE)
+    .upsert(rows, { onConflict: 'id', ignoreDuplicates: false });
+
+  if (error) throw error;
+}
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -23,7 +102,7 @@ export default async function handler(req, res) {
 
   try {
     const body = req.body || {};
-    const { itemIds, resolution, provider, brands } = body;
+    const { itemIds, items: submittedItems, resolution, provider, brands } = body;
 
     if (!Array.isArray(itemIds) || itemIds.length === 0) {
       return res.status(400).json({ error: 'itemIds array is required' });
@@ -32,12 +111,20 @@ export default async function handler(req, res) {
     // Default to openai if no provider specified
     const activeProvider = provider || 'openai';
 
-    // Validate provider
-    if (activeProvider !== 'openai' && activeProvider !== 'gemini') {
+    // Validate provider — accept 'openai', 'openai-cheap', 'openai-mini', 'gemini',
+    // 'stability', 'stability-cheap', 'stability-mini'
+    const isValidProvider = activeProvider === 'gemini'
+      || activeProvider === 'openai'
+      || activeProvider.startsWith('openai-')
+      || activeProvider === 'stability'
+      || activeProvider.startsWith('stability-');
+    if (!isValidProvider) {
       return res.status(400).json({
-        error: `Unsupported provider: "${activeProvider}". Use "openai" or "gemini".`
+        error: `Unsupported provider: "${activeProvider}". Use "openai", "openai-cheap", "openai-mini", "gemini", "stability", "stability-cheap", or "stability-mini".`
       });
     }
+
+    await upsertSubmittedItems(itemIds, submittedItems, activeProvider, resolution);
 
     const { data: items, error: fetchError } = await supabase
       .from(QUEUE_TABLE)
