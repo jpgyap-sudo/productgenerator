@@ -11,7 +11,7 @@
 // ═══════════════════════════════════════════════════════════════════
 import { supabase, RESULTS_TABLE, QUEUE_TABLE, BUCKET_NAME } from '../lib/supabase.js';
 import { extractImageUrl, VIEWS } from '../lib/fal.js';
-import { uploadRendersToDrive } from '../lib/drive.js';
+import { uploadRendersToDrive, getNextFolderCounter } from '../lib/drive.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -207,6 +207,16 @@ async function maybeUploadToDrive(itemId) {
 
   if (doneViews.length === 4) {
     try {
+      // Generate sequential folder name with counter prefix
+      const counter = await getNextFolderCounter();
+      const safeName = (item.name || `Item_${itemId}`)
+        .replace(/[^a-zA-Z0-9\s_-]/g, '')
+        .replace(/\s+/g, '_')
+        .replace(/_+/g, '_')
+        .replace(/^_|_$/g, '')
+        .substring(0, 55);
+      const folderName = `${String(counter).padStart(3, '0')}_${safeName}`;
+
       await updateDriveUploadState(item.id, {
         drive_upload_status: 'uploading',
         drive_upload_done: 0,
@@ -216,7 +226,7 @@ async function maybeUploadToDrive(itemId) {
       });
 
       const driveResult = await uploadRendersToDrive(item.id, item.name, doneViews, {
-        folderName: item.drive_folder_name || '',
+        folderName,
         onProgress: progress => updateDriveUploadState(item.id, {
           drive_upload_status: progress.status,
           drive_upload_done: progress.uploaded,
@@ -224,6 +234,7 @@ async function maybeUploadToDrive(itemId) {
           drive_upload_error: progress.status === 'error' ? progress.message || 'Drive upload incomplete' : '',
           drive_folder_id: progress.folderId || item.drive_folder_id || '',
           drive_folder_name: progress.folderName || item.drive_folder_name || '',
+          drive_folder_url: progress.folderUrl || item.drive_folder_url || '',
           updated_at: new Date().toISOString()
         })
       });
@@ -231,6 +242,7 @@ async function maybeUploadToDrive(itemId) {
       await updateDriveUploadState(item.id, {
         drive_folder_id: driveResult.folderId,
         drive_folder_name: driveResult.folderName,
+        drive_folder_url: driveResult.folderUrl || '',
         drive_upload_status: driveResult.files.length === doneViews.length ? 'done' : 'error',
         drive_upload_done: driveResult.files.length,
         drive_upload_total: doneViews.length,
@@ -238,7 +250,7 @@ async function maybeUploadToDrive(itemId) {
         updated_at: new Date().toISOString()
       });
 
-      console.log(`[FAL-WEBHOOK] SUCCESS: Uploaded ${item.name} to Drive folder "${driveResult.folderName}"`);
+      console.log(`[FAL-WEBHOOK] SUCCESS: Uploaded ${item.name} to Drive folder "${driveResult.folderName}" (URL: ${driveResult.folderUrl || 'N/A'})`);
     } catch (driveErr) {
       await updateDriveUploadState(item.id, {
         drive_upload_status: 'error',

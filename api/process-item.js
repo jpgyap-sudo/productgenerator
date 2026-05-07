@@ -331,6 +331,16 @@ async function processItem(itemId, resolution, provider = 'fal') {
                   imageUrl: row.image_url
                 }));
 
+                // Generate sequential folder name with counter prefix
+                const counter = await getNextFolderCounter();
+                const safeName = (updatedItem.name || `Item_${itemId}`)
+                  .replace(/[^a-zA-Z0-9\s_-]/g, '')
+                  .replace(/\s+/g, '_')
+                  .replace(/_+/g, '_')
+                  .replace(/^_|_$/g, '')
+                  .substring(0, 55);
+                const folderName = `${String(counter).padStart(3, '0')}_${safeName}`;
+
                 await updateDriveUploadState(itemId, {
                   drive_upload_status: 'uploading',
                   drive_upload_done: 0,
@@ -340,7 +350,7 @@ async function processItem(itemId, resolution, provider = 'fal') {
                 });
 
                 const driveResult = await uploadRendersToDrive(itemId, updatedItem.name, doneViews, {
-                  folderName: updatedItem.drive_folder_name || '',
+                  folderName,
                   onProgress: progress => updateDriveUploadState(itemId, {
                     drive_upload_status: progress.status,
                     drive_upload_done: progress.uploaded,
@@ -348,6 +358,7 @@ async function processItem(itemId, resolution, provider = 'fal') {
                     drive_upload_error: progress.status === 'error' ? progress.message || 'Drive upload incomplete' : '',
                     drive_folder_id: progress.folderId || updatedItem.drive_folder_id || '',
                     drive_folder_name: progress.folderName || updatedItem.drive_folder_name || '',
+                    drive_folder_url: progress.folderUrl || updatedItem.drive_folder_url || '',
                     updated_at: new Date().toISOString()
                   })
                 });
@@ -355,6 +366,7 @@ async function processItem(itemId, resolution, provider = 'fal') {
                 await updateDriveUploadState(itemId, {
                   drive_folder_id: driveResult.folderId,
                   drive_folder_name: driveResult.folderName,
+                  drive_folder_url: driveResult.folderUrl || '',
                   drive_upload_status: driveResult.files.length === doneViews.length ? 'done' : 'error',
                   drive_upload_done: driveResult.files.length,
                   drive_upload_total: doneViews.length,
@@ -362,7 +374,7 @@ async function processItem(itemId, resolution, provider = 'fal') {
                   updated_at: new Date().toISOString()
                 });
 
-                console.log(`[PROCESS] SUCCESS: Uploaded item ${itemId} to Drive folder "${driveResult.folderName}"`);
+                console.log(`[PROCESS] SUCCESS: Uploaded item ${itemId} to Drive folder "${driveResult.folderName}" (URL: ${driveResult.folderUrl || 'N/A'})`);
               }
             }
           }
