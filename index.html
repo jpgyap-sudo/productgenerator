@@ -4,7 +4,7 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Product Image Studio</title>
-<meta name="description" content="AI-powered product photography studio — generate 5 professional views from a single product image using fal.ai or Gemini"/>
+<meta name="description" content="AI-powered product photography studio — generate professional product views from a single product image using OpenAI or Gemini"/>
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://unpkg.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; connect-src 'self' https://fal.run https://queue.fal.run https://api.fal.ai https://*.fal.ai https://v3.fal.media https://fal.media https://*.fal.media https://*.supabase.co wss://*.supabase.co https://generativelanguage.googleapis.com; font-src 'self' data:;"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
@@ -1414,9 +1414,9 @@ textarea:focus { outline: none; border-color: var(--text-secondary); }
     <span class="pill">⚡ AI Studio</span>
   </div>
   <div class="topbar-right">
-    <label for="apiKey">fal.ai Key</label>
-    <input type="password" id="apiKey" placeholder="Paste your fal.ai key..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-secure="true"/>
-    <button class="api-save-btn" id="apiKeySave" type="button" disabled>Save</button>
+    <label for="apiKey" hidden>fal.ai Key</label>
+    <input type="password" id="apiKey" hidden placeholder="Paste your fal.ai key..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-secure="true"/>
+    <button class="api-save-btn" id="apiKeySave" type="button" hidden disabled>Save</button>
     <button class="tb-btn" id="bulkUploadToggle" title="Bulk upload PDF + ZIP workflow" aria-label="Bulk Upload">Bulk Upload</button>
     <button class="tb-btn" id="bulkRenderToggle" title="Review bulk items before rendering" aria-label="Bulk Render">Bulk Render</button>
     <button class="tb-btn" id="completedToggle" title="Completed render history" aria-label="Completed Batches">✓ Completed</button>
@@ -1528,11 +1528,10 @@ textarea:focus { outline: none; border-color: var(--text-secondary); }
           <button class="setting-edit-btn" id="providerEditBtn" type="button">Edit</button>
         </div>
         <div class="q-btns" id="providerBtns">
-          <button class="q-btn active" data-provider="fal">fal.ai<br><span class="price">Nano Banana 2</span></button>
-          <button class="q-btn" data-provider="gemini">Gemini 3<br><span class="price">Flash / Pro</span></button>
+          <button class="q-btn active" data-provider="gemini">Gemini 3<br><span class="price">Flash / Pro</span></button>
           <button class="q-btn" data-provider="openai">OpenAI<br><span class="price">GPT Image</span></button>
         </div>
-        <div class="res-note" id="providerNote">fal.ai — Nano Banana 2 / GPT Image 2. Requires fal.ai API key.</div>
+        <div class="res-note" id="providerNote">Gemini 3 — gemini-3.1-flash-image-preview for all 4 views. GEMINI_API_KEY set on server.</div>
       </div>
 
       <div class="block">
@@ -1701,7 +1700,7 @@ textarea:focus { outline: none; border-color: var(--text-secondary); }
               <li><strong>Add Description</strong> — (Optional) Describe materials, colors, and style to help the AI preserve key details from the reference image.</li>
               <li><strong>Set Brand Reference</strong> — (Optional) Enter a furniture brand name (e.g. Minotti, Poliform) so the AI matches the brand's design language and aesthetic.</li>
               <li><strong>Choose Resolution</strong> — Select output resolution: 0.5K (512px, fastest), 1K (1024px, recommended), 2K, or 4K.</li>
-              <li><strong>Select AI Provider</strong> — Choose between Gemini 3 (Flash/Pro), OpenAI GPT Image, or fal.ai Nano Banana 2.</li>
+              <li><strong>Select AI Provider</strong> — Choose between OpenAI GPT Image or Gemini 3 (Flash/Pro).</li>
               <li><strong>Add to Queue</strong> — Click "Add Selected to Queue" to add items. Toggle <strong>Auto-Queue</strong> to start rendering immediately after adding.</li>
               <li><strong>Start Queue</strong> — Click "▶ Start Queue" to begin processing. The background worker on the VPS processes up to 5 items concurrently.</li>
               <li><strong>Download Results</strong> — Once complete, each batch card shows all 4 generated views. Click individual images to preview & download, or use "Download All" to get a ZIP.</li>
@@ -1737,17 +1736,6 @@ textarea:focus { outline: none; border-color: var(--text-secondary); }
                   <span class="spec-tag">Best for: Photorealistic renders, e-commerce quality</span>
                 </div>
                 <div class="about-spec-note">Uses image-to-image editing API. Brand reference is included in the prompt to guide style and material choices.</div>
-              </div>
-              <div class="about-spec">
-                <div class="about-spec-name">fal.ai — Nano Banana 2</div>
-                <div class="about-spec-detail">
-                  <span class="spec-tag">Provider: fal.ai</span>
-                  <span class="spec-tag">Model: Nano Banana 2 (SD-based)</span>
-                  <span class="spec-tag">Capability: Fast inference image generation</span>
-                  <span class="spec-tag">Max Resolution: 4K</span>
-                  <span class="spec-tag">Best for: Rapid prototyping, drafts, budget-friendly batch processing</span>
-                </div>
-                <div class="about-spec-note">Requires a fal.ai API key. Fastest option for draft-quality renders. Pricing scales with resolution (0.5K: $0.06/img → 4K: $0.16/img).</div>
               </div>
             </div>
           </div>
@@ -2011,7 +1999,7 @@ const ENV_API_KEY = (function(){
 let queue = [];
 let pendingItems = [];
 let nb2Res = '0.5K';
-let provider = 'openai'; // 'openai' or 'gemini' (fal is deprecated on VPS)
+let provider = 'gemini'; // 'gemini' or 'openai'
 let nextId = 1;
 
 // ── VPS Backend Configuration ──
@@ -2546,14 +2534,15 @@ function getDriveStateText(item) {
 }
 
 function getRenderProvider(item = {}) {
-  return (item.provider || '').toLowerCase();
+  const itemProvider = (item.provider || '').toLowerCase();
+  return itemProvider === 'fal' ? 'openai' : itemProvider;
 }
 
 function normalizeRenderProvider(value = '') {
   const text = String(value || '').toLowerCase();
   if (text.includes('gemini')) return 'gemini';
   if (text.includes('openai') || text.includes('gpt-image') || text.includes('gpt image')) return 'openai';
-  if (text.includes('fal')) return 'fal';
+  if (text.includes('fal')) return 'openai';
   return '';
 }
 
@@ -2576,14 +2565,13 @@ function inferRenderProvider(item = {}, viewResults = [], previous = {}) {
   const metadataProvider = normalizeRenderProvider(metadata);
   if (metadataProvider) return metadataProvider;
 
-  if (['openai', 'gemini', 'fal'].includes(provider)) return provider;
+  if (['openai', 'gemini'].includes(provider)) return provider;
   return '';
 }
 
 function inferRenderApiModel(providerName = '') {
   if (providerName === 'openai') return 'OpenAI GPT Image';
   if (providerName === 'gemini') return 'gemini-3.1-flash-image-preview / gemini-3-pro-image-preview';
-  if (providerName === 'fal') return 'fal.ai';
   return '';
 }
 
@@ -2591,7 +2579,6 @@ function getBatchApiText(item = {}) {
   const itemProvider = getRenderProvider(item);
   if (itemProvider === 'gemini') return 'Rendered with Gemini 3: Flash for product views, Pro for interior scene';
   if (itemProvider === 'openai') return `Rendered with OpenAI GPT Image${item.apiModel ? ` (${item.apiModel})` : ''}`;
-  if (itemProvider === 'fal') return 'Rendered with fal.ai';
   return 'Rendered API not recorded';
 }
 
@@ -2599,7 +2586,6 @@ function getViewApiText(item = {}, viewId) {
   const itemProvider = getRenderProvider(item);
   if (itemProvider === 'gemini') return Number(viewId) === 4 ? 'Gemini 3 Pro' : 'Gemini 3 Flash';
   if (itemProvider === 'openai') return item.apiModel || 'OpenAI GPT Image';
-  if (itemProvider === 'fal') return 'fal.ai';
   return '';
 }
 
@@ -3305,7 +3291,7 @@ async function loadState() {
         document.getElementById('resNote').textContent = NB2_NOTES[nb2Res] || '';
       }
       if (state.provider) {
-        provider = state.provider;
+        provider = state.provider === 'fal' ? 'gemini' : state.provider;
         document.querySelectorAll('.q-btn[data-provider]').forEach(b => {
           b.classList.toggle('active', b.dataset.provider === provider);
         });
@@ -3657,9 +3643,8 @@ function checkReady() {
   const hasQueueItems = queue.some(q => q.status === STATUS.WAIT);
   const hasPendingItems = pendingItems.length > 0;
   // Description is optional — the reference image is the primary source.
-  // Only API key + pending/queue items are required to start.
+  // Provider API keys are configured on the server.
   startBtn.disabled = !(
-    getApiKey().length > 10 &&
     (hasQueueItems || hasPendingItems) &&
     !isPolling
   );
@@ -3759,9 +3744,7 @@ document.querySelectorAll('.q-btn[data-provider]').forEach(btn => {
     document.querySelectorAll('.q-btn[data-provider]').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     const note = document.getElementById('providerNote');
-    if (provider === 'fal') {
-      note.textContent = 'fal.ai — Nano Banana 2 / GPT Image 2. Requires fal.ai API key.';
-    } else if (provider === 'gemini') {
+    if (provider === 'gemini') {
       note.textContent = 'Gemini 3 — gemini-3.1-flash-image-preview for all 4 views. GEMINI_API_KEY set on server.';
     } else if (provider === 'openai') {
       note.textContent = 'OpenAI — GPT Image edit. OPENAI_API_KEY set on server.';
@@ -5879,11 +5862,10 @@ startBtn.addEventListener('click', async () => {
       }
       renderQueue();
       await saveState();
-      // Server unavailable — fall back to client-side processing
-      toast('Server endpoints unavailable — processing client-side', 'info');
-      addQueueLogEntry('info', '', 'Server unavailable — falling back to client-side processing');
-      setStatus(`Processing ${itemsToProcess.length} item(s) client-side...`);
-      await processQueueClientSide();
+      toast('Server endpoints unavailable. Please try again after the VPS is reachable.', 'error');
+      addQueueLogEntry('error', '', 'Server unavailable — client-side fal.ai fallback is disabled');
+      setStatus('Server unavailable. Queue is paused.');
+      checkReady();
     } else {
       // Some other error before server attempt
       startBtn.disabled = false;
