@@ -49,43 +49,53 @@ The JSON looks like this:
 
 ---
 
-## Step 4: Share Your Google Drive Root Folder
+## Step 4: Create a Shared Drive & Share with Service Account
+
+> ⚠️ **Why a Shared Drive?** Service accounts don't have their own storage quota. By using a Shared Drive, the service account can upload files using the shared drive's storage.
 
 1. Open [Google Drive](https://drive.google.com/)
-2. Navigate to your root/"My Drive" folder
-3. Right-click → **Share**
-4. Paste the **`client_email`** from the JSON key file (e.g. `product-generator-drive@your-project-id.iam.gserviceaccount.com`)
-5. Set permission to **Editor**
-6. Uncheck "Notify people" (optional)
-7. Click **Share**
+2. On the left sidebar, click **Shared drives**
+3. Click the **+** button to create a new Shared Drive
+4. Name it something like `ProductGenerator` or `ProductRenders`
+5. Click **Create**
+6. Open the Shared Drive you just created
+7. Click the **Share** button at the top
+8. Add the service account email (from the JSON key, e.g. `product-generator-drive@your-project-id.iam.gserviceaccount.com`)
+9. Set permission to **Editor**
+10. Click **Share**
 
-> ⚠️ The folders (HA01, HA02...) will be created at the root level of your Drive. If you want them inside a specific folder instead, share that subfolder with the service account instead.
+### Get the Shared Drive ID
+
+1. Open the Shared Drive in your browser
+2. The URL will look like: `https://drive.google.com/drive/u/0/folders/THIS_IS_THE_ID`
+3. Copy that ID (the long string after `/folders/`)
 
 ---
 
-## Step 5: Set the Environment Variable in Vercel
+## Step 5: Set Environment Variables
 
-### Option A: Using Vercel CLI
+### On VPS (PM2)
 
-```bash
-# Install Vercel CLI if you haven't already
-npm i -g vercel
+Add to `/root/productgenerator/.env`:
 
-# Login
-vercel login
-
-# Add the secret (paste the ENTIRE JSON as a single line)
-vercel secrets add google-service-account-json '{"type":"service_account","project_id":"...",...}'
+```
+GOOGLE_SERVICE_ACCOUNT_JSON='{"type":"service_account","project_id":"...",...}'
+DRIVE_SHARED_DRIVE_ID='your-shared-drive-id-here'
 ```
 
-### Option B: Using Vercel Dashboard
+Then restart PM2:
+
+```bash
+pm2 restart product-image-studio
+```
+
+### On Vercel (if applicable)
 
 1. Go to your project on [Vercel Dashboard](https://vercel.com/)
 2. Go to **Settings → Environment Variables**
-3. Add a new variable:
-   - **Name**: `GOOGLE_SERVICE_ACCOUNT_JSON`
-   - **Value**: Paste the entire JSON key content
-   - **Environments**: Production (and Preview if desired)
+3. Add:
+   - **Name**: `GOOGLE_SERVICE_ACCOUNT_JSON` — Paste the entire JSON key content
+   - **Name**: `DRIVE_SHARED_DRIVE_ID` — Paste the Shared Drive ID
 4. Click **Save**
 
 ---
