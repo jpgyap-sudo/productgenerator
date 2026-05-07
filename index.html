@@ -406,7 +406,15 @@ textarea:focus { outline: none; border-color: var(--text-secondary); }
   width: 100%; resize: vertical; min-height: 32px;
   font-family: inherit;
 }
+.q-brand-edit {
+  font-size: 10px; line-height: 1.4; padding: 4px 6px;
+  border: 1px solid var(--border-light); border-radius: 4px;
+  background: var(--surface); color: var(--text);
+  width: 100%; box-sizing: border-box; margin-bottom: 6px;
+  font-family: inherit;
+}
 .q-desc-edit:focus { outline: none; border-color: var(--accent); }
+.q-brand-edit:focus { outline: none; border-color: var(--accent); }
 .q-actions { display: flex; gap: 2px; flex-shrink: 0; }
 .q-btn-sm {
   background: none; border: none; color: var(--text-dim);
@@ -4002,6 +4010,7 @@ function renderPendingList() {
       <div class="q-info">
         <div class="q-name">${escHtml(item.name)}</div>
         <div class="q-desc-wrap">
+          <input class="q-brand-edit" id="pbrand-${item.id}" type="text" value="${escHtml(item.brand || '')}" placeholder="Brand reference for this image (optional)" oninput="updatePendingBrand(${item.id},this.value)"/>
           <textarea class="q-desc-edit" id="pdesc-${item.id}" style="display:block;width:100%;" placeholder="Enter description for this image (optional)..." oninput="updatePendingDesc(${item.id},this.value)">${escHtml(item.desc || '')}</textarea>
         </div>
       </div>
@@ -4018,6 +4027,11 @@ function renderPendingList() {
 function updatePendingDesc(id, val) {
   const item = pendingItems.find(p => p.id === id);
   if (item) item.desc = val;
+}
+
+function updatePendingBrand(id, val) {
+  const item = pendingItems.find(p => p.id === id);
+  if (item) item.brand = val.trim();
 }
 
 function removePendingItem(id) {
