@@ -17,8 +17,8 @@
 // ═══════════════════════════════════════════════════════════════════
 
 import { execSync } from 'child_process';
-import { existsSync, readFileSync } from 'fs';
 import { createInterface } from 'readline';
+import { setTimeout as sleep } from 'timers/promises';
 
 // ── Configuration ──────────────────────────────────────────────────
 const CONFIG = {
@@ -47,15 +47,6 @@ const CONFIG = {
     'fal_docs.html',
     'fix_env.py',
     'product_studio_queue*',
-    'deepseek.js',
-    'drive.js',
-    'fal-webhook.js',
-    'process-item.js',
-    'process.js',
-    'status.js',
-    'submit.js',
-    'supabase.js',
-    'upload-drive.js',
   ],
 
   // Health check
@@ -266,7 +257,7 @@ ${color(C.bold, 'Config:')}
 
         // Wait for startup
         console.log(`  ${color(C.dim, 'Waiting 3s for app to start...')}`);
-        run('sleep 3', { silent: true });
+        await sleep(3000);
 
         // Health check
         const httpCode = runCapture(`ssh ${CONFIG.sshHost} "curl -s -o /dev/null -w '%{http_code}' ${CONFIG.healthEndpoint}"`);
