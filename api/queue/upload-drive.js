@@ -1,11 +1,12 @@
 // POST /api/queue/upload-drive
 // Manually uploads a completed queue item's render_results images to Google Drive.
-// Supports two modes:
+// Supports three modes:
 //   1. Live mode: itemId references an existing product_queue row
 //   2. Archive fallback: if itemId not found, uses viewResults + itemName from request body
+//   3. Supabase fallback: if Supabase is unreachable, uses viewResults + itemName from request body
 import { supabase, QUEUE_TABLE, RESULTS_TABLE } from '../../lib/supabase.js';
 import { VIEWS } from '../../lib/fal.js';
-import { uploadRendersToDrive } from '../../lib/drive.js';
+import { uploadRendersToDrive, isSupabaseConnectionError } from '../../lib/drive.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -23,11 +24,23 @@ export default async function handler(req, res) {
 
   try {
     // ── Try to find the queue item in Supabase ──
-    const { data: items, error: itemError } = await supabase
-      .from(QUEUE_TABLE)
-      .select('*')
-      .eq('id', itemId)
-      .limit(1);
+    let items, itemError;
+    try {
+      const result = await supabase
+        .from(QUEUE_TABLE)
+        .select('*')
+        .eq('id', itemId)
+        .limit(1);
+      items = result.data;
+      itemError = result.error;
+      if (itemError && isSupabaseConnectionError(itemError)) throw itemError;
+    } catch (supaErr) {
+      if (isSupabaseConnectionError(supaErr)) {
+        console.log(`[UPLOAD-DRIVE] Supabase unreachable for item ${itemId}, falling back to archive fallback`);
+        return await handleArchiveFallback(req, res, itemId);
+      }
+      throw supaErr;
+    }
 
     if (itemError) throw itemError;
     const item = items?.[0];
@@ -54,12 +67,24 @@ export default async function handler(req, res) {
       });
     }
 
-    const { data: rows, error: rowsError } = await supabase
-      .from(RESULTS_TABLE)
-      .select('*')
-      .eq('queue_item_id', itemId)
-      .eq('status', 'done')
-      .order('view_id', { ascending: true });
+    let rows, rowsError;
+    try {
+      const result = await supabase
+        .from(RESULTS_TABLE)
+        .select('*')
+        .eq('queue_item_id', itemId)
+        .eq('status', 'done')
+        .order('view_id', { ascending: true });
+      rows = result.data;
+      rowsError = result.error;
+      if (rowsError && isSupabaseConnectionError(rowsError)) throw rowsError;
+    } catch (supaErr) {
+      if (isSupabaseConnectionError(supaErr)) {
+        console.log(`[UPLOAD-DRIVE] Supabase unreachable for results of item ${itemId}, falling back to archive fallback`);
+        return await handleArchiveFallback(req, res, itemId);
+      }
+      throw supaErr;
+    }
 
     if (rowsError) throw rowsError;
 

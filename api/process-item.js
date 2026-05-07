@@ -14,7 +14,7 @@ import { supabase, QUEUE_TABLE, RESULTS_TABLE, BUCKET_NAME } from '../lib/supaba
 import { generateView, VIEWS } from '../lib/fal.js';
 import { generateGeminiView } from '../lib/gemini.js';
 import { generateOpenAIView } from '../lib/openai.js';
-import { uploadRendersToDrive, getNextFolderCounter } from '../lib/drive.js';
+import { uploadRendersToDrive, getNextFolderCounter, getNextFolderCounterFallback, isSupabaseConnectionError } from '../lib/drive.js';
 import { createRenderZipOnVps, saveRenderImageToVps } from '../lib/vps-storage.js';
 import { saveCompletedBatch } from '../lib/completed-batches.js';
 
@@ -317,23 +317,104 @@ async function processItem(itemId, resolution, provider = 'fal') {
               || !!(updatedItem.drive_folder_name && updatedItem.drive_folder_name !== '');
 
             if (!alreadyUploaded) {
-              // Fetch all done views
-              const { data: doneRows } = await supabase
-                .from(RESULTS_TABLE)
-                .select('*')
-                .eq('queue_item_id', itemId)
-                .eq('status', 'done');
+              // ── Try Supabase first, fall back to local storage on connection error ──
+              let doneRows, supabaseFailed = false;
+              try {
+                const result = await supabase
+                  .from(RESULTS_TABLE)
+                  .select('*')
+                  .eq('queue_item_id', itemId)
+                  .eq('status', 'done');
+                doneRows = result.data;
+                if (result.error && isSupabaseConnectionError(result.error)) throw result.error;
+              } catch (supaErr) {
+                if (isSupabaseConnectionError(supaErr)) {
+                  console.log(`[PROCESS] Supabase unreachable for item ${itemId}, falling back to local storage`);
+                  supabaseFailed = true;
+                } else {
+                  throw supaErr;
+                }
+              }
 
-              if (doneRows && doneRows.length === 4) {
-                const doneViews = doneRows.map(row => ({
-                  viewId: row.view_id,
-                  viewLabel: getViewLabel(row.view_id),
-                  imageUrl: row.image_url
-                }));
+              if (!supabaseFailed) {
+                // Normal Supabase path
+                if (doneRows && doneRows.length === 4) {
+                  const doneViews = doneRows.map(row => ({
+                    viewId: row.view_id,
+                    viewLabel: getViewLabel(row.view_id),
+                    imageUrl: row.image_url
+                  }));
 
-                // Generate sequential folder name with counter prefix
-                const counter = await getNextFolderCounter();
-                const safeName = (updatedItem.name || `Item_${itemId}`)
+                  const counter = await getNextFolderCounter();
+                  const safeName = (updatedItem.name || `Item_${itemId}`)
+                    .replace(/[^a-zA-Z0-9\s_-]/g, '')
+                    .replace(/\s+/g, '_')
+                    .replace(/_+/g, '_')
+                    .replace(/^_|_$/g, '')
+                    .substring(0, 55);
+                  const folderName = `${String(counter).padStart(3, '0')}_${safeName}`;
+
+                  await updateDriveUploadState(itemId, {
+                    drive_upload_status: 'uploading',
+                    drive_upload_done: 0,
+                    drive_upload_total: doneViews.length,
+                    drive_upload_error: '',
+                    updated_at: new Date().toISOString()
+                  });
+
+                  const driveResult = await uploadRendersToDrive(itemId, updatedItem.name, doneViews, {
+                    folderName,
+                    onProgress: progress => updateDriveUploadState(itemId, {
+                      drive_upload_status: progress.status,
+                      drive_upload_done: progress.uploaded,
+                      drive_upload_total: progress.total,
+                      drive_upload_error: progress.status === 'error' ? progress.message || 'Drive upload incomplete' : '',
+                      drive_folder_id: progress.folderId || updatedItem.drive_folder_id || '',
+                      drive_folder_name: progress.folderName || updatedItem.drive_folder_name || '',
+                      drive_folder_url: progress.folderUrl || updatedItem.drive_folder_url || '',
+                      updated_at: new Date().toISOString()
+                    })
+                  });
+
+                  await updateDriveUploadState(itemId, {
+                    drive_folder_id: driveResult.folderId,
+                    drive_folder_name: driveResult.folderName,
+                    drive_folder_url: driveResult.folderUrl || '',
+                    drive_upload_status: driveResult.files.length === doneViews.length ? 'done' : 'error',
+                    drive_upload_done: driveResult.files.length,
+                    drive_upload_total: doneViews.length,
+                    drive_upload_error: driveResult.files.length === doneViews.length ? '' : 'Some files failed to upload',
+                    updated_at: new Date().toISOString()
+                  });
+
+                  console.log(`[PROCESS] SUCCESS: Uploaded item ${itemId} to Drive folder "${driveResult.folderName}" (URL: ${driveResult.folderUrl || 'N/A'})`);
+                }
+              } else {
+                // ── SUPABASE FALLBACK PATH: Use local completed-batches.json ──
+                const { listCompletedBatches, saveCompletedBatch } = await import('../lib/completed-batches.js');
+                const batches = await listCompletedBatches();
+                const batch = batches.find(b => Number(b.id) === Number(itemId));
+
+                if (!batch || !Array.isArray(batch.viewResults) || batch.viewResults.length < 4) {
+                  console.log(`[PROCESS] Item ${itemId} not found in local batches or incomplete, skipping Drive upload fallback`);
+                  return;
+                }
+
+                const doneViews = batch.viewResults
+                  .filter(r => r.status === 'done' && r.imageUrl)
+                  .map(r => ({
+                    viewId: r.viewId,
+                    viewLabel: getViewLabel(r.viewId),
+                    imageUrl: r.imageUrl
+                  }));
+
+                if (doneViews.length !== 4) {
+                  console.log(`[PROCESS] Item ${itemId} has ${doneViews.length}/4 done views locally, skipping Drive upload fallback`);
+                  return;
+                }
+
+                const counter = await getNextFolderCounterFallback();
+                const safeName = (updatedItem.name || batch.name || `Item_${itemId}`)
                   .replace(/[^a-zA-Z0-9\s_-]/g, '')
                   .replace(/\s+/g, '_')
                   .replace(/_+/g, '_')
@@ -341,50 +422,38 @@ async function processItem(itemId, resolution, provider = 'fal') {
                   .substring(0, 55);
                 const folderName = `${String(counter).padStart(3, '0')}_${safeName}`;
 
-                await updateDriveUploadState(itemId, {
-                  drive_upload_status: 'uploading',
-                  drive_upload_done: 0,
-                  drive_upload_total: doneViews.length,
-                  drive_upload_error: '',
-                  updated_at: new Date().toISOString()
-                });
+                console.log(`[PROCESS] Drive upload fallback: uploading ${doneViews.length} views for item ${itemId} to "${folderName}"`);
 
-                const driveResult = await uploadRendersToDrive(itemId, updatedItem.name, doneViews, {
+                const driveResult = await uploadRendersToDrive(itemId, updatedItem.name || batch.name, doneViews, {
                   folderName,
-                  onProgress: progress => updateDriveUploadState(itemId, {
-                    drive_upload_status: progress.status,
-                    drive_upload_done: progress.uploaded,
-                    drive_upload_total: progress.total,
-                    drive_upload_error: progress.status === 'error' ? progress.message || 'Drive upload incomplete' : '',
-                    drive_folder_id: progress.folderId || updatedItem.drive_folder_id || '',
-                    drive_folder_name: progress.folderName || updatedItem.drive_folder_name || '',
-                    drive_folder_url: progress.folderUrl || updatedItem.drive_folder_url || '',
-                    updated_at: new Date().toISOString()
-                  })
+                  onProgress: progress => {
+                    console.log(`[PROCESS] Drive fallback progress: ${progress.status} ${progress.uploaded}/${progress.total}`);
+                  }
                 });
 
-                await updateDriveUploadState(itemId, {
-                  drive_folder_id: driveResult.folderId,
-                  drive_folder_name: driveResult.folderName,
-                  drive_folder_url: driveResult.folderUrl || '',
-                  drive_upload_status: driveResult.files.length === doneViews.length ? 'done' : 'error',
-                  drive_upload_done: driveResult.files.length,
-                  drive_upload_total: doneViews.length,
-                  drive_upload_error: driveResult.files.length === doneViews.length ? '' : 'Some files failed to upload',
-                  updated_at: new Date().toISOString()
+                const success = driveResult.files.length === doneViews.length;
+                await saveCompletedBatch({
+                  id: itemId,
+                  name: updatedItem.name || batch.name || `Item ${itemId}`,
+                  status: 'done',
+                  provider: batch.provider || '',
+                  apiModel: batch.apiModel || '',
+                  driveFolderId: driveResult.folderId,
+                  driveFolderName: driveResult.folderName,
+                  driveFolderUrl: driveResult.folderUrl || '',
+                  driveUploadStatus: success ? 'done' : 'error',
+                  driveUploadDone: driveResult.files.length,
+                  driveUploadTotal: doneViews.length,
+                  driveUploadError: success ? '' : 'Some files failed to upload',
+                  viewResults: batch.viewResults
                 });
 
-                console.log(`[PROCESS] SUCCESS: Uploaded item ${itemId} to Drive folder "${driveResult.folderName}" (URL: ${driveResult.folderUrl || 'N/A'})`);
+                console.log(`[PROCESS] SUCCESS (fallback): Uploaded item ${itemId} to Drive folder "${driveResult.folderName}" (URL: ${driveResult.folderUrl || 'N/A'})`);
               }
             }
           }
         }
       } catch (driveErr) {
-        await updateDriveUploadState(itemId, {
-          drive_upload_status: 'error',
-          drive_upload_error: driveErr.message || 'Drive upload failed',
-          updated_at: new Date().toISOString()
-        });
         console.error(`[PROCESS] Drive upload failed for item ${itemId}:`, driveErr.message);
       }
     }

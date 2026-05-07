@@ -1147,17 +1147,52 @@ textarea:focus { outline: none; border-color: var(--text-secondary); }
 .bulk-upload-panel #agentSection .upload-box .icon { font-size: 34px; }
 .bulk-upload-panel #agentProductInfo { max-height: 520px; overflow: auto; }
 .bulk-upload-panel .agent-product-row { padding: 12px !important; margin-bottom: 10px !important; }
-#bulkPendingMount .q-list { padding: 0; }
-#bulkPendingMount #pendingArea > .block:first-child,
-#bulkPendingMount #pendingArea > .block:last-child { display: none; }
-#bulkPendingMount .q-item { min-height: 76px; align-items: flex-start; padding: 10px; }
-#bulkPendingMount .q-thumb { width: 64px; height: 64px; }
-#bulkPendingMount .q-name { font-size: 13px; white-space: normal; }
-#bulkPendingMount .q-desc-text,
-#bulkPendingMount .q-desc-edit { font-size: 12px; }
+.bulk-upload-empty {
+  min-height: 360px;
+  display: grid;
+  place-items: center;
+  color: var(--text-muted);
+  text-align: center;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  background: var(--surface-2);
+  padding: 18px;
+}
+.bulk-render-panel {
+  max-width: 1180px;
+  margin: 0 auto;
+}
+.bulk-render-shell {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.bulk-render-body {
+  padding: 18px;
+  min-height: 560px;
+}
+.bulk-render-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.bulk-render-actions .btn-start { width: auto; min-width: 190px; margin: 0; }
+#bulkRenderPendingMount .q-list { padding: 0; }
+#bulkRenderPendingMount #pendingArea > .block:first-child,
+#bulkRenderPendingMount #pendingArea > .block:last-child { display: none; }
+#bulkRenderPendingMount .q-item { min-height: 82px; align-items: flex-start; padding: 12px; }
+#bulkRenderPendingMount .q-thumb { width: 72px; height: 72px; }
+#bulkRenderPendingMount .q-name { font-size: 13px; white-space: normal; }
+#bulkRenderPendingMount .q-desc-text,
+#bulkRenderPendingMount .q-desc-edit { font-size: 12px; }
 @media (max-width: 980px) {
   .bulk-layout { grid-template-columns: 1fr; }
   .bulk-stage { border-right: none; border-bottom: 1px solid var(--border-light); }
+  .bulk-render-actions { align-items: stretch; flex-direction: column; }
+  .bulk-render-actions .btn-start { width: 100%; }
 }
 
 .log-panel {
@@ -1375,6 +1410,7 @@ textarea:focus { outline: none; border-color: var(--text-secondary); }
     <input type="password" id="apiKey" placeholder="Paste your fal.ai key..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-secure="true"/>
     <button class="api-save-btn" id="apiKeySave" type="button" disabled>Save</button>
     <button class="tb-btn" id="bulkUploadToggle" title="Bulk upload PDF + ZIP workflow" aria-label="Bulk Upload">Bulk Upload</button>
+    <button class="tb-btn" id="bulkRenderToggle" title="Review bulk items before rendering" aria-label="Bulk Render">Bulk Render</button>
     <button class="tb-btn" id="completedToggle" title="Completed render history" aria-label="Completed Batches">✓ Completed</button>
     <button class="tb-btn" id="featureToggle" title="View & edit product feature prompts" aria-label="Product Features">📋 Features</button>
     <button class="tb-btn" id="aboutToggle" title="How to use & AI specifications" aria-label="About">ℹ️ About</button>
@@ -1594,11 +1630,32 @@ textarea:focus { outline: none; border-color: var(--text-secondary); }
           <div class="bulk-stage" id="bulkAgentMount"></div>
           <div class="bulk-review">
             <div class="bulk-review-head">
-              <span class="lbl">Bulk Queue Review</span>
-              <button class="btn-start" id="bulkStartBtn" type="button" disabled>Add Selected to Queue</button>
+              <span class="lbl">Extraction Review</span>
+              <button class="btn-start" id="bulkOpenRenderBtn" type="button">Open Bulk Render</button>
             </div>
-            <div id="bulkPendingMount"></div>
+            <div class="bulk-upload-empty">
+              Analyze the catalog and ZIP on the left, then add selected extracted products to the Bulk Render page for the final queue review.
+            </div>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="bulk-render-panel" id="bulkRenderPanel" style="display:none;">
+      <div class="bulk-render-shell">
+        <div class="bulk-hero">
+          <div>
+            <span class="bulk-kicker">Queue review</span>
+            <h2>Bulk Render</h2>
+          </div>
+          <button class="btn-clear" id="bulkRenderClose" type="button">Close</button>
+        </div>
+        <div class="bulk-render-body">
+          <div class="bulk-render-actions">
+            <span class="lbl">Ready to add to render queue</span>
+            <button class="btn-start" id="bulkStartBtn" type="button" disabled>Add Selected to Queue</button>
+          </div>
+          <div id="bulkRenderPendingMount"></div>
         </div>
       </div>
     </div>
@@ -2763,8 +2820,7 @@ completedToggle.addEventListener('click', async () => {
   completedToggle.classList.toggle('active', completedPanelOpen);
   completedPanel.style.display = completedPanelOpen ? 'block' : 'none';
   welcomeState.style.display = completedPanelOpen ? 'none' : 'flex';
-  if (bulkUploadPanel) bulkUploadPanel.style.display = 'none';
-  bulkUploadToggle?.classList.remove('active');
+  hideWorkspacePanels();
 
   featurePanel.style.display = 'none';
   document.getElementById('aboutPanel').style.display = 'none';
@@ -3327,19 +3383,59 @@ dmToggle.addEventListener('click', async () => {
 // ── PRODUCT FEATURE PANEL ─────────────────────────────────────────
 const featureToggle = document.getElementById('featureToggle');
 const bulkUploadToggle = document.getElementById('bulkUploadToggle');
+const bulkRenderToggle = document.getElementById('bulkRenderToggle');
 const bulkUploadPanel = document.getElementById('bulkUploadPanel');
 const bulkUploadClose = document.getElementById('bulkUploadClose');
+const bulkRenderPanel = document.getElementById('bulkRenderPanel');
+const bulkRenderClose = document.getElementById('bulkRenderClose');
 const bulkAgentMount = document.getElementById('bulkAgentMount');
-const bulkPendingMount = document.getElementById('bulkPendingMount');
+const bulkRenderPendingMount = document.getElementById('bulkRenderPendingMount');
 const bulkStartBtn = document.getElementById('bulkStartBtn');
+const bulkOpenRenderBtn = document.getElementById('bulkOpenRenderBtn');
 const featurePanel = document.getElementById('featurePanel');
 const featureGrid = document.getElementById('featureGrid');
 const featureResetBtn = document.getElementById('featureResetBtn');
 
+function hideWorkspacePanels() {
+  if (bulkUploadPanel) bulkUploadPanel.style.display = 'none';
+  if (bulkRenderPanel) bulkRenderPanel.style.display = 'none';
+  bulkUploadToggle?.classList.remove('active');
+  bulkRenderToggle?.classList.remove('active');
+}
+
 function showBulkUploadPanel() {
   if (!bulkUploadPanel) return;
+  hideWorkspacePanels();
   bulkUploadPanel.style.display = 'block';
   if (bulkUploadToggle) bulkUploadToggle.classList.add('active');
+  completedPanel.style.display = 'none';
+  featurePanel.style.display = 'none';
+  document.getElementById('aboutPanel').style.display = 'none';
+  queueLogPanel.style.display = 'none';
+  logPanel.style.display = 'none';
+  completedToggle.classList.remove('active');
+  featureToggle.classList.remove('active');
+  if (aboutToggle) aboutToggle.classList.remove('active');
+  completedPanelOpen = false;
+  featurePanelOpen = false;
+  aboutPanelOpen = false;
+  welcomeState.style.display = 'none';
+}
+
+function hideBulkUploadPanel() {
+  if (!bulkUploadPanel) return;
+  bulkUploadPanel.style.display = 'none';
+  if (bulkUploadToggle) bulkUploadToggle.classList.remove('active');
+  if (!document.getElementById('active-section')) {
+    welcomeState.style.display = 'flex';
+  }
+}
+
+function showBulkRenderPanel() {
+  if (!bulkRenderPanel) return;
+  hideWorkspacePanels();
+  bulkRenderPanel.style.display = 'block';
+  bulkRenderToggle?.classList.add('active');
   completedPanel.style.display = 'none';
   featurePanel.style.display = 'none';
   document.getElementById('aboutPanel').style.display = 'none';
@@ -3355,10 +3451,10 @@ function showBulkUploadPanel() {
   renderPendingList();
 }
 
-function hideBulkUploadPanel() {
-  if (!bulkUploadPanel) return;
-  bulkUploadPanel.style.display = 'none';
-  if (bulkUploadToggle) bulkUploadToggle.classList.remove('active');
+function hideBulkRenderPanel() {
+  if (!bulkRenderPanel) return;
+  bulkRenderPanel.style.display = 'none';
+  bulkRenderToggle?.classList.remove('active');
   if (!document.getElementById('active-section')) {
     welcomeState.style.display = 'flex';
   }
@@ -3371,6 +3467,13 @@ bulkUploadToggle?.addEventListener('click', () => {
 });
 
 bulkUploadClose?.addEventListener('click', hideBulkUploadPanel);
+bulkRenderToggle?.addEventListener('click', () => {
+  const isOpen = bulkRenderPanel?.style.display !== 'none';
+  if (isOpen) hideBulkRenderPanel();
+  else showBulkRenderPanel();
+});
+bulkRenderClose?.addEventListener('click', hideBulkRenderPanel);
+bulkOpenRenderBtn?.addEventListener('click', showBulkRenderPanel);
 bulkStartBtn?.addEventListener('click', () => confirmAddBtn.click());
 
 /** Default prompts for each view (same as VIEWS array) */
@@ -3502,8 +3605,7 @@ featureToggle.addEventListener('click', () => {
   featureToggle.classList.toggle('active', featurePanelOpen);
   featurePanel.style.display = featurePanelOpen ? 'block' : 'none';
   welcomeState.style.display = featurePanelOpen ? 'none' : 'flex';
-  if (bulkUploadPanel) bulkUploadPanel.style.display = 'none';
-  bulkUploadToggle?.classList.remove('active');
+  hideWorkspacePanels();
   // Hide other panels
   document.getElementById('queueLogPanel').style.display = 'none';
   document.getElementById('logPanel').style.display = 'none';
@@ -3530,8 +3632,7 @@ aboutToggle.addEventListener('click', () => {
   aboutToggle.classList.toggle('active', aboutPanelOpen);
   aboutPanel.style.display = aboutPanelOpen ? 'block' : 'none';
   welcomeState.style.display = aboutPanelOpen ? 'none' : 'flex';
-  if (bulkUploadPanel) bulkUploadPanel.style.display = 'none';
-  bulkUploadToggle?.classList.remove('active');
+  hideWorkspacePanels();
   // Hide other panels
   document.getElementById('queueLogPanel').style.display = 'none';
   document.getElementById('logPanel').style.display = 'none';
@@ -3702,6 +3803,7 @@ async function addFiles(files) {
   if (added > 0) {
     toast(`Added ${added} image${added > 1 ? 's' : ''} — add description & confirm`, 'info');
     renderPendingList();
+    showBulkRenderPanel();
   }
 }
 
@@ -5875,8 +5977,8 @@ function initUploadAgent() {
     bulkAgentMount.appendChild(existingAgentSection);
     existingAgentSection.style.display = 'block';
   }
-  if (bulkPendingMount && existingPendingArea && existingPendingArea.parentElement !== bulkPendingMount) {
-    bulkPendingMount.appendChild(existingPendingArea);
+  if (bulkRenderPendingMount && existingPendingArea && existingPendingArea.parentElement !== bulkRenderPendingMount) {
+    bulkRenderPendingMount.appendChild(existingPendingArea);
     existingPendingArea.style.display = 'block';
   }
 
@@ -6293,6 +6395,7 @@ function initUploadAgent() {
       checkReady();
       await saveState();
       toast(`Added ${products.length} product${products.length > 1 ? 's' : ''} to Bulk Queue review`, 'success');
+      showBulkRenderPanel();
 
       agentResult.style.display = 'none';
       agentResultData = null;

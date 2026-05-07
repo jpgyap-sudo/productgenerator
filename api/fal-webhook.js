@@ -11,7 +11,7 @@
 // ═══════════════════════════════════════════════════════════════════
 import { supabase, RESULTS_TABLE, QUEUE_TABLE, BUCKET_NAME } from '../lib/supabase.js';
 import { extractImageUrl, VIEWS } from '../lib/fal.js';
-import { uploadRendersToDrive, getNextFolderCounter } from '../lib/drive.js';
+import { uploadRendersToDrive, getNextFolderCounter, getNextFolderCounterFallback, isSupabaseConnectionError } from '../lib/drive.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -161,12 +161,26 @@ async function copyImageToStorage(imageUrl, itemId, viewId) {
 }
 
 async function maybeUploadToDrive(itemId) {
-  const { data: items, error: fetchError } = await supabase
-    .from(QUEUE_TABLE)
-    .select('*')
-    .eq('id', itemId);
+  // ── Try Supabase first ──
+  let items, fetchError;
+  try {
+    const result = await supabase
+      .from(QUEUE_TABLE)
+      .select('*')
+      .eq('id', itemId);
+    items = result.data;
+    fetchError = result.error;
+    if (fetchError && isSupabaseConnectionError(fetchError)) throw fetchError;
+  } catch (supaErr) {
+    if (isSupabaseConnectionError(supaErr)) {
+      console.log(`[FAL-WEBHOOK] Supabase unreachable for item ${itemId}, falling back to local storage`);
+      return await maybeUploadToDriveFallback(itemId);
+    }
+    console.log(`[FAL-WEBHOOK] Item ${itemId} not found`);
+    return;
+  }
 
-  if (fetchError || !items || items.length === 0) {
+  if (!items || items.length === 0) {
     console.log(`[FAL-WEBHOOK] Item ${itemId} not found`);
     return;
   }
@@ -186,11 +200,24 @@ async function maybeUploadToDrive(itemId) {
     return;
   }
 
-  const { data: rows, error: resultsError } = await supabase
-    .from(RESULTS_TABLE)
-    .select('*')
-    .eq('queue_item_id', itemId)
-    .order('view_id', { ascending: true });
+  let rows, resultsError;
+  try {
+    const result = await supabase
+      .from(RESULTS_TABLE)
+      .select('*')
+      .eq('queue_item_id', itemId)
+      .order('view_id', { ascending: true });
+    rows = result.data;
+    resultsError = result.error;
+    if (resultsError && isSupabaseConnectionError(resultsError)) throw resultsError;
+  } catch (supaErr) {
+    if (isSupabaseConnectionError(supaErr)) {
+      console.log(`[FAL-WEBHOOK] Supabase unreachable for results of item ${itemId}, falling back to local storage`);
+      return await maybeUploadToDriveFallback(itemId);
+    }
+    console.error(`[FAL-WEBHOOK] Failed to fetch results for item ${itemId}:`, resultsError?.message || supaErr.message);
+    return;
+  }
 
   if (resultsError) {
     console.error(`[FAL-WEBHOOK] Failed to fetch results for item ${itemId}:`, resultsError.message);
@@ -259,6 +286,83 @@ async function maybeUploadToDrive(itemId) {
       });
       console.error(`[FAL-WEBHOOK] Drive upload FAILED for item ${itemId}:`, driveErr.message);
     }
+  }
+}
+
+/**
+ * Fallback Drive upload when Supabase is unreachable.
+ * Reads item data from local completed-batches.json and stores results there.
+ */
+async function maybeUploadToDriveFallback(itemId) {
+  if (!process.env.GOOGLE_SERVICE_ACCOUNT_JSON) return;
+
+  const { listCompletedBatches, saveCompletedBatch } = await import('../lib/completed-batches.js');
+  const batches = await listCompletedBatches();
+  const batch = batches.find(b => Number(b.id) === Number(itemId));
+
+  if (!batch || !Array.isArray(batch.viewResults) || batch.viewResults.length < 4) {
+    console.log(`[FAL-WEBHOOK] Item ${itemId} not found in local batches, skipping Drive upload fallback`);
+    return;
+  }
+
+  // Check if already uploaded
+  if (batch.driveFolderId && batch.driveFolderId !== '') {
+    console.log(`[FAL-WEBHOOK] Item ${itemId} already uploaded locally to "${batch.driveFolderName}"`);
+    return;
+  }
+
+  const doneViews = batch.viewResults
+    .filter(r => r.status === 'done' && r.imageUrl)
+    .map(r => ({
+      viewId: r.viewId,
+      viewLabel: getViewLabel(r.viewId),
+      imageUrl: r.imageUrl
+    }));
+
+  if (doneViews.length !== 4) {
+    console.log(`[FAL-WEBHOOK] Item ${itemId} has ${doneViews.length}/4 done views locally, skipping Drive upload fallback`);
+    return;
+  }
+
+  try {
+    const counter = await getNextFolderCounterFallback();
+    const safeName = (batch.name || `Item_${itemId}`)
+      .replace(/[^a-zA-Z0-9\s_-]/g, '')
+      .replace(/\s+/g, '_')
+      .replace(/_+/g, '_')
+      .replace(/^_|_$/g, '')
+      .substring(0, 55);
+    const folderName = `${String(counter).padStart(3, '0')}_${safeName}`;
+
+    console.log(`[FAL-WEBHOOK] Drive upload fallback: uploading ${doneViews.length} views for item ${itemId} to "${folderName}"`);
+
+    const driveResult = await uploadRendersToDrive(itemId, batch.name, doneViews, {
+      folderName,
+      onProgress: progress => {
+        console.log(`[FAL-WEBHOOK] Drive fallback progress: ${progress.status} ${progress.uploaded}/${progress.total}`);
+      }
+    });
+
+    const success = driveResult.files.length === doneViews.length;
+    await saveCompletedBatch({
+      id: itemId,
+      name: batch.name || `Item ${itemId}`,
+      status: 'done',
+      provider: batch.provider || '',
+      apiModel: batch.apiModel || '',
+      driveFolderId: driveResult.folderId,
+      driveFolderName: driveResult.folderName,
+      driveFolderUrl: driveResult.folderUrl || '',
+      driveUploadStatus: success ? 'done' : 'error',
+      driveUploadDone: driveResult.files.length,
+      driveUploadTotal: doneViews.length,
+      driveUploadError: success ? '' : 'Some files failed to upload',
+      viewResults: batch.viewResults
+    });
+
+    console.log(`[FAL-WEBHOOK] SUCCESS (fallback): Uploaded item ${itemId} to Drive folder "${driveResult.folderName}" (URL: ${driveResult.folderUrl || 'N/A'})`);
+  } catch (driveErr) {
+    console.error(`[FAL-WEBHOOK] Drive upload fallback FAILED for item ${itemId}:`, driveErr.message);
   }
 }
 
