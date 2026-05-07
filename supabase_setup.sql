@@ -93,6 +93,7 @@ ALTER TABLE public.render_results ADD COLUMN IF NOT EXISTS attempt_label TEXT DE
 
 ALTER TABLE public.product_queue ADD COLUMN IF NOT EXISTS provider TEXT DEFAULT 'fal';
 ALTER TABLE public.product_queue ADD COLUMN IF NOT EXISTS resolution TEXT DEFAULT '1K';
+ALTER TABLE public.product_queue ADD COLUMN IF NOT EXISTS brand TEXT DEFAULT '';
 ALTER TABLE public.product_queue ADD COLUMN IF NOT EXISTS drive_upload_status TEXT DEFAULT '';
 ALTER TABLE public.product_queue ADD COLUMN IF NOT EXISTS drive_upload_done INTEGER DEFAULT 0;
 ALTER TABLE public.product_queue ADD COLUMN IF NOT EXISTS drive_upload_total INTEGER DEFAULT 0;

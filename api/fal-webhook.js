@@ -173,12 +173,18 @@ async function maybeUploadToDrive(itemId) {
 
   const item = items[0];
 
+  if (!process.env.GOOGLE_SERVICE_ACCOUNT_JSON) return;
+
+  // Check if upload is already in progress or completed
+  if (item.drive_upload_status === 'uploading') {
+    console.log(`[FAL-WEBHOOK] Item ${itemId} Drive upload already in progress`);
+    return;
+  }
+
   if ((item.drive_folder_id && item.drive_folder_id !== '') || (item.drive_folder_name && item.drive_folder_name !== '')) {
     console.log(`[FAL-WEBHOOK] Item ${itemId} already uploaded to "${item.drive_folder_name}"`);
     return;
   }
-
-  if (!process.env.GOOGLE_SERVICE_ACCOUNT_JSON) return;
 
   const { data: rows, error: resultsError } = await supabase
     .from(RESULTS_TABLE)

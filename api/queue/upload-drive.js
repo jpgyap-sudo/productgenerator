@@ -29,6 +29,10 @@ export default async function handler(req, res) {
     const item = items?.[0];
     if (!item) return res.status(404).json({ error: 'Queue item not found' });
 
+    if (item.drive_upload_status === 'uploading') {
+      return res.status(409).json({ error: 'Google Drive upload is already in progress' });
+    }
+
     const alreadyUploaded = !!(item.drive_folder_id && item.drive_folder_id !== '')
       || !!(item.drive_folder_name && item.drive_folder_name !== '');
     if (alreadyUploaded) {
@@ -39,10 +43,6 @@ export default async function handler(req, res) {
         folderName: item.drive_folder_name || '',
         message: `Already uploaded to Google Drive${item.drive_folder_name ? `: ${item.drive_folder_name}` : ''}`
       });
-    }
-
-    if (item.drive_upload_status === 'uploading') {
-      return res.status(409).json({ error: 'Google Drive upload is already in progress' });
     }
 
     const { data: rows, error: rowsError } = await supabase

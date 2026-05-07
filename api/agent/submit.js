@@ -68,7 +68,7 @@ export default async function handler(req, res) {
     const fileName = `agent-uploads/${Date.now()}_${(imageName || 'product').replace(/[^a-zA-Z0-9._-]/g, '_')}`;
 
     const { data: uploadData, error: uploadError } = await supabase.storage
-      .from('product-images')
+      .from('product_images')
       .upload(fileName, imageBuffer, {
         contentType: mimeType,
         upsert: false
@@ -81,7 +81,7 @@ export default async function handler(req, res) {
 
     // Get public URL
     const { data: publicUrlData } = supabase.storage
-      .from('product-images')
+      .from('product_images')
       .getPublicUrl(fileName);
 
     const imageUrl = publicUrlData?.publicUrl || '';
@@ -124,7 +124,7 @@ export default async function handler(req, res) {
     if (queueError) {
       console.error('[AGENT-SUBMIT] Queue insert failed:', queueError.message);
       // Try to clean up the uploaded image
-      await supabase.storage.from('product-images').remove([fileName]);
+      await supabase.storage.from('product_images').remove([fileName]);
       return res.status(500).json({ error: `Failed to create queue item: ${queueError.message}` });
     }
 

@@ -252,6 +252,10 @@ async function processItem(itemId, resolution, provider = 'fal') {
 
           if (updatedItems && updatedItems.length > 0) {
             const updatedItem = updatedItems[0];
+
+            // Check if upload is already in progress or completed
+            if (updatedItem.drive_upload_status === 'uploading') return;
+
             const alreadyUploaded = !!(updatedItem.drive_folder_id && updatedItem.drive_folder_id !== '')
               || !!(updatedItem.drive_folder_name && updatedItem.drive_folder_name !== '');
 

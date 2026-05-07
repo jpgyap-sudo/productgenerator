@@ -12,3 +12,5 @@ plans/
 .env
 .env.local
 .env.*.local
+logs/
+vps-env.txt

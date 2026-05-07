@@ -11,7 +11,6 @@
 // ═══════════════════════════════════════════════════════════════════
 import { supabase, QUEUE_TABLE, RESULTS_TABLE, BUCKET_NAME } from '../../lib/supabase.js';
 import { VIEWS } from '../../lib/fal.js';
-import { uploadRendersToDrive } from '../../lib/drive.js';
 
 const OPENAI_IMAGE_MODEL = process.env.OPENAI_IMAGE_MODEL || 'gpt-image-1.5';
 
@@ -199,58 +198,6 @@ async function updateQueueStatuses(queueItems, rows) {
     } else if (doneCount === 4) {
       status = 'done';
       subText = 'All 4 views generated';
-
-      // Auto-upload completed renders to Google Drive
-      const hasDriveEnv = !!process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
-      const alreadyUploaded = !!(item.drive_folder_id && item.drive_folder_id !== '')
-        || !!(item.drive_folder_name && item.drive_folder_name !== '');
-
-      if (hasDriveEnv && !alreadyUploaded) {
-        try {
-          const doneViews = itemRows
-            .filter(row => row.status === 'done' && row.image_url)
-            .map(row => ({
-              viewId: row.view_id,
-              viewLabel: getViewLabel(row.view_id),
-              imageUrl: row.image_url
-            }));
-
-          if (doneViews.length === 4) {
-            await updateDriveUploadState(item.id, {
-              drive_upload_status: 'uploading',
-              drive_upload_done: 0,
-              drive_upload_total: doneViews.length,
-              drive_upload_error: '',
-              updated_at: new Date().toISOString()
-            });
-
-            const driveResult = await uploadRendersToDrive(item.id, item.name, doneViews, {
-              folderName: item.drive_folder_name || '',
-              onProgress: progress => updateDriveUploadState(item.id, {
-                drive_upload_status: progress.status,
-                drive_upload_done: progress.uploaded,
-                drive_upload_total: progress.total,
-                drive_upload_error: progress.status === 'error' ? progress.message || 'Drive upload incomplete' : '',
-                drive_folder_id: progress.folderId || item.drive_folder_id || '',
-                drive_folder_name: progress.folderName || item.drive_folder_name || '',
-                updated_at: new Date().toISOString()
-              })
-            });
-
-            await updateDriveUploadState(item.id, {
-              drive_folder_id: driveResult.folderId,
-              drive_folder_name: driveResult.folderName,
-              drive_upload_status: driveResult.files.length === doneViews.length ? 'done' : 'error',
-              drive_upload_done: driveResult.files.length,
-              drive_upload_total: doneViews.length,
-              drive_upload_error: driveResult.files.length === doneViews.length ? '' : 'Some files failed to upload',
-              updated_at: new Date().toISOString()
-            });
-          }
-        } catch (driveErr) {
-          console.error(`[STATUS] Drive upload FAILED for item ${item.id}:`, driveErr.message);
-        }
-      }
     } else if (errorCount > 0) {
       status = 'error';
       subText = errorCount === 4
@@ -281,34 +228,6 @@ async function updateQueueStatuses(queueItems, rows) {
 function getViewLabel(viewId) {
   const view = VIEWS.find(v => v.id === viewId);
   return view ? view.label : `View ${viewId}`;
-}
-
-async function updateDriveUploadState(itemId, fields) {
-  const { error } = await supabase
-    .from(QUEUE_TABLE)
-    .update(fields)
-    .eq('id', itemId);
-
-  if (!error || !isMissingColumnError(error)) return;
-
-  const {
-    drive_upload_status,
-    drive_upload_done,
-    drive_upload_total,
-    drive_upload_error,
-    ...safeFields
-  } = fields;
-
-  await supabase
-    .from(QUEUE_TABLE)
-    .update(safeFields)
-    .eq('id', itemId);
-}
-
-function isMissingColumnError(error) {
-  return error?.code === 'PGRST204'
-    || /column .* does not exist/i.test(error?.message || '')
-    || /Could not find .* column/i.test(error?.message || '');
 }
 
 function groupResults(rows) {

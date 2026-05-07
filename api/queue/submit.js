@@ -1,44 +1,42 @@
-// POST /api/queue/submit
-// Starts durable render jobs for each product view and stores the
-// request/status URLs in Supabase so renders can survive tab closes/reloads.
+// ═══════════════════════════════════════════════════════════════════
+//  POST /api/queue/submit — Express route handler
+//  Starts render jobs for each product view.
 //
-// PROVIDER SUPPORT: Supports 'fal' (default), 'gemini', and 'openai'.
-// - fal: Uses fal.ai queue-based API with webhook support
-// - gemini: Uses Google Gemini API directly (synchronous, no queue/webhook)
-// - openai: Uses OpenAI GPT Image 2 API directly (synchronous, no queue/webhook)
+//  VPS ADAPTATION:
+//  - Removed waitUntil() — background worker handles processing
+//  - Removed VERCEL_URL self-fetch — worker polls Supabase directly
+//  - Removed @vercel/functions dependency
+//  - Uses Express req/res instead of Vercel (req) => Response
+//
+//  PROVIDER SUPPORT: Supports 'openai' (default) and 'gemini'.
+//  - openai: Uses OpenAI GPT Image 2 API (synchronous)
+//  - gemini: Uses Google Gemini API (synchronous)
+//  - fal: Deprecated on VPS — use openai or gemini instead
+// ═══════════════════════════════════════════════════════════════════
 import { supabase, QUEUE_TABLE, RESULTS_TABLE } from '../../lib/supabase.js';
-import { VIEWS, submitViewJob, getAttemptCount } from '../../lib/fal.js';
-import { waitUntil } from '@vercel/functions';
+import { VIEWS } from '../../lib/fal.js';
 
-export const config = {
-  runtime: 'nodejs',
-  maxDuration: 300
-};
-
-// ── Improvement: Derive webhook URL from the request's own origin ──
-// This ensures the webhook points back to this same deployment.
-// Fal.ai will POST the result to this URL when processing completes,
-// so we don't need to poll from the client.
-function getWebhookUrl(req) {
-  const origin = process.env.VERCEL_URL
-    ? `https://${process.env.VERCEL_URL}`
-    // BUGFIX: In Vercel serverless, req.url is a relative path (e.g. '/api/queue/submit')
-    // new URL() requires a full URL, so provide the host header as base
-    : new URL(req.url, `https://${req.headers.get('host') || 'localhost'}`).origin;
-  return `${origin}/api/fal-webhook`;
-}
-
-export default async function handler(req) {
+export default async function handler(req, res) {
   if (req.method !== 'POST') {
-    return json({ error: 'Method not allowed' }, 405);
+    return res.status(405).json({ error: 'Method not allowed' });
   }
 
   try {
-    const body = await req.json();
-    const { itemIds, resolution, provider } = body || {};
+    const body = req.body || {};
+    const { itemIds, resolution, provider, brands } = body;
 
     if (!Array.isArray(itemIds) || itemIds.length === 0) {
-      return json({ error: 'itemIds array is required' }, 400);
+      return res.status(400).json({ error: 'itemIds array is required' });
+    }
+
+    // Default to openai if no provider specified
+    const activeProvider = provider || 'openai';
+
+    // Validate provider
+    if (activeProvider !== 'openai' && activeProvider !== 'gemini') {
+      return res.status(400).json({
+        error: `Unsupported provider: "${activeProvider}". Use "openai" or "gemini".`
+      });
     }
 
     const { data: items, error: fetchError } = await supabase
@@ -48,274 +46,78 @@ export default async function handler(req) {
 
     if (fetchError) throw fetchError;
     if (!items || items.length === 0) {
-      return json({ error: 'No items found' }, 404);
+      return res.status(404).json({ error: 'No items found' });
     }
 
     const now = new Date().toISOString();
+
+    // Mark items as active — the background worker in server.js
+    // will pick them up on the next poll cycle
     const { error: updateError } = await supabase
       .from(QUEUE_TABLE)
-      .update({ status: 'active', sub_text: 'Submitting durable render jobs...', updated_at: now })
+      .update({
+        status: 'active',
+        sub_text: `Queued for ${activeProvider === 'gemini' ? 'Gemini' : 'OpenAI'} processing...`,
+        provider: activeProvider,
+        resolution: resolution || '1K',
+        updated_at: now
+      })
       .in('id', itemIds);
 
     if (updateError) throw updateError;
 
-    const resultRows = [];
-    for (const item of items) {
-      for (const view of VIEWS) {
-        resultRows.push(waitingRow(item.id, view.id, now, resolution || '1K'));
+    // Save brand references for items that have them
+    if (brands && typeof brands === 'object' && Object.keys(brands).length > 0) {
+      for (const itemId of itemIds) {
+        const brand = brands[itemId];
+        if (brand && brand.trim()) {
+          const { error: brandError } = await supabase
+            .from(QUEUE_TABLE)
+            .update({ brand: brand.trim(), updated_at: now })
+            .eq('id', itemId);
+          if (brandError) console.warn(`[SUBMIT] Failed to save brand for item ${itemId}:`, brandError.message);
+        }
       }
     }
 
-    const { error: upsertError } = await upsertResultRows(resultRows);
+    // Create waiting render result rows for all 4 views
+    const resultRows = [];
+    for (const item of items) {
+      for (const view of VIEWS) {
+        resultRows.push({
+          queue_item_id: item.id,
+          view_id: view.id,
+          status: 'waiting',
+          image_url: '',
+          error_message: '',
+          request_id: '',
+          response_url: '',
+          status_url: '',
+          started_at: null,
+          completed_at: null,
+          created_at: now,
+          updated_at: now
+        });
+      }
+    }
+
+    const { error: upsertError } = await supabase
+      .from(RESULTS_TABLE)
+      .upsert(resultRows, { onConflict: 'queue_item_id,view_id' });
 
     if (upsertError) throw upsertError;
 
-    // ── Improvement: Pass webhook URL so fal.ai notifies us on completion ──
-    // This eliminates the need for client-side polling. The webhook endpoint
-    // (/api/fal-webhook) will receive the result and update Supabase directly.
-    // For Gemini provider, no webhook is needed (synchronous generation).
-    const activeProvider = provider || 'fal';
-    const webhookUrl = activeProvider === 'fal' ? getWebhookUrl(req) : undefined;
-    waitUntil(submitDurableJobs(items, resolution || '1K', webhookUrl, activeProvider));
+    console.log(`[SUBMIT] Queued ${items.length} item(s) for ${activeProvider} processing`);
 
-    return json({
+    return res.json({
       success: true,
-      message: `Queued ${items.length} item(s) for durable render submission (provider: ${activeProvider})`,
+      message: `Queued ${items.length} item(s) for ${activeProvider} processing`,
       provider: activeProvider,
       items: items.map(item => ({ id: item.id, name: item.name }))
     });
+
   } catch (error) {
-    console.error('Queue submit error:', error);
-    return json({ error: error.message || 'Internal server error' }, 500);
+    console.error('[SUBMIT] Error:', error);
+    return res.status(500).json({ error: error.message || 'Internal server error' });
   }
-}
-
-async function submitDurableJobs(items, resolution, webhookUrl, provider = 'fal') {
-  // Submit all views for all items in parallel
-  const allPromises = [];
-
-  for (const item of items) {
-    const now = new Date().toISOString();
-
-    if (!item.image_url) {
-      // No image — mark all views as error immediately
-      const errorRows = VIEWS.map(view => errorRow(item.id, view.id, 'No reference image', now));
-      allPromises.push(
-        upsertResultRows(errorRows)
-          .then(() => markItemError(item.id, 'No reference image'))
-      );
-      continue;
-    }
-
-    if (provider === 'gemini') {
-      // ── Gemini provider: synchronous generation via background worker ──
-      // Gemini API is synchronous (no queue), so we trigger the background
-      // worker directly. The worker calls generateGeminiView() for each view.
-      const viewRows = VIEWS.map(view => waitingRow(item.id, view.id, now, resolution || '1K'));
-      allPromises.push(
-        upsertResultRows(viewRows)
-          .then(async () => {
-            // Save provider on the queue item so status.js reconciliation
-            // can identify Gemini rows and skip fal.ai queue polling
-            await updateQueueItem(item.id, {
-              status: 'active',
-              sub_text: 'Generating with Gemini...',
-              provider: 'gemini',
-              updated_at: new Date().toISOString()
-            });
-
-            // Trigger background worker for Gemini generation
-            const workerUrl = process.env.VERCEL_URL
-              ? `https://${process.env.VERCEL_URL}/api/process-item?ids=${item.id}&res=${resolution || '1K'}&provider=gemini`
-              : undefined;
-
-            if (workerUrl) {
-              // Fire-and-forget: trigger the worker asynchronously
-              fetch(workerUrl, { method: 'POST' }).catch(err => {
-                console.error(`Failed to trigger Gemini worker for item ${item.id}:`, err.message);
-              });
-            }
-          })
-      );
-    } else if (provider === 'openai') {
-      // ── OpenAI provider: synchronous generation via background worker ──
-      // OpenAI GPT Image 2 API is synchronous (no queue), so we trigger the
-      // background worker directly. The worker calls generateOpenAIView().
-      const viewRows = VIEWS.map(view => waitingRow(item.id, view.id, now, resolution || '1K'));
-      allPromises.push(
-        upsertResultRows(viewRows)
-          .then(async () => {
-            // Save provider on the queue item so status.js reconciliation
-            // can identify OpenAI rows and skip fal.ai queue polling
-            await updateQueueItem(item.id, {
-              status: 'active',
-              sub_text: 'Generating with OpenAI...',
-              provider: 'openai',
-              updated_at: new Date().toISOString()
-            });
-
-            // Trigger background worker for OpenAI generation
-            const workerUrl = process.env.VERCEL_URL
-              ? `https://${process.env.VERCEL_URL}/api/process-item?ids=${item.id}&res=${resolution || '1K'}&provider=openai`
-              : undefined;
-
-            if (workerUrl) {
-              // Fire-and-forget: trigger the worker asynchronously
-              fetch(workerUrl, { method: 'POST' }).catch(err => {
-                console.error(`Failed to trigger OpenAI worker for item ${item.id}:`, err.message);
-              });
-            }
-          })
-      );
-    } else {
-      // ── Fal.ai provider: queue-based submission with webhook ──
-      // Submit all 5 views in parallel with webhook URL
-      const viewPromises = VIEWS.map(view =>
-        submitDurableViewRow(item, view, resolution, now, webhookUrl)
-      );
-
-      allPromises.push(
-        Promise.all(viewPromises).then(async (itemRows) => {
-          const { error: upsertError } = await upsertResultRows(itemRows);
-
-          if (upsertError) {
-            console.error(`Failed to save render rows for item ${item.id}:`, upsertError);
-            await markItemError(item.id, upsertError.message || 'Failed to save render jobs');
-            return;
-          }
-
-          const everyViewFailed = itemRows.length > 0 && itemRows.every(row => row.status === 'error');
-          await updateQueueItem(item.id, {
-            status: everyViewFailed ? 'error' : 'active',
-            sub_text: everyViewFailed ? 'Failed to submit render jobs' : 'Render jobs submitted to fal.ai',
-            provider: 'fal',
-            updated_at: new Date().toISOString()
-          });
-        })
-      );
-    }
-  }
-
-  // Wait for all items to finish submitting
-  await Promise.all(allPromises);
-}
-
-async function submitDurableViewRow(item, view, resolution, now, webhookUrl) {
-  let lastError = null;
-
-  for (let attempt = 0; attempt < getAttemptCount(); attempt++) {
-    try {
-      // ── Improvement: Pass webhookUrl so fal.ai notifies us on completion ──
-      // Fal.ai will POST the result to our webhook endpoint when done.
-      // This eliminates the need for client-side polling.
-      const queued = await submitViewJob(
-        view,
-        item.description || '',
-        item.image_url,
-        resolution,
-        attempt,
-        { webhookUrl }
-      );
-      return {
-        queue_item_id: item.id,
-        view_id: view.id,
-        status: 'generating',
-        request_id: queued.request_id || '',
-        response_url: queued.response_url || '',
-        status_url: queued.status_url || '',
-        attempt_index: queued.attempt || 0,
-        attempt_label: queued.attempt_label || '',
-        error_message: '',
-        started_at: now,
-        completed_at: null,
-        created_at: now,
-        updated_at: now
-      };
-    } catch (error) {
-      lastError = error;
-    }
-  }
-
-  return errorRow(item.id, view.id, lastError?.message || 'Failed to submit fal queue job', now);
-}
-
-function waitingRow(itemId, viewId, now, resolution = '1K') {
-  return {
-    queue_item_id: itemId,
-    view_id: viewId,
-    status: 'waiting',
-    error_message: '',
-    image_url: '',
-    request_id: '',
-    response_url: '',
-    status_url: '',
-    started_at: null,
-    completed_at: null,
-    created_at: now,
-    updated_at: now
-  };
-}
-
-function errorRow(itemId, viewId, message, now) {
-  return {
-    queue_item_id: itemId,
-    view_id: viewId,
-    status: 'error',
-    error_message: message,
-    completed_at: now,
-    created_at: now,
-    updated_at: now
-  };
-}
-
-function stripOptionalResultColumns(row) {
-  const { cancel_url, queue_position, resolution, ...safeRow } = row;
-  return safeRow;
-}
-
-async function upsertResultRows(rows) {
-  const result = await supabase
-    .from(RESULTS_TABLE)
-    .upsert(rows, { onConflict: 'queue_item_id,view_id' });
-
-  if (!result.error || !isMissingColumnError(result.error)) return result;
-
-  return supabase
-    .from(RESULTS_TABLE)
-    .upsert(rows.map(stripOptionalResultColumns), { onConflict: 'queue_item_id,view_id' });
-}
-
-async function updateQueueItem(itemId, fields) {
-  const result = await supabase
-    .from(QUEUE_TABLE)
-    .update(fields)
-    .eq('id', itemId);
-
-  if (!result.error || !isMissingColumnError(result.error)) return result;
-
-  const { provider, resolution, ...safeFields } = fields;
-  return supabase
-    .from(QUEUE_TABLE)
-    .update(safeFields)
-    .eq('id', itemId);
-}
-
-function isMissingColumnError(error) {
-  return error?.code === 'PGRST204'
-    || /column .* does not exist/i.test(error?.message || '')
-    || /Could not find .* column/i.test(error?.message || '');
-}
-
-async function markItemError(itemId, message) {
-  await supabase
-    .from(QUEUE_TABLE)
-    .update({ status: 'error', sub_text: message, updated_at: new Date().toISOString() })
-    .eq('id', itemId);
-}
-
-function json(payload, status = 200) {
-  return new Response(JSON.stringify(payload), {
-    status,
-    headers: { 'Content-Type': 'application/json' }
-  });
 }

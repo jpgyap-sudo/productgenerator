@@ -94,22 +94,9 @@ export default async function handler(req, res) {
     console.log(`[AGENT] Processing PDF: "${pdfFile.originalname}" (${(pdfFile.buffer.length / 1024 / 1024).toFixed(2)} MB)`);
     console.log(`[AGENT] Processing ZIP: "${zipFile.originalname}" (${(zipFile.buffer.length / 1024 / 1024).toFixed(2)} MB)`);
 
-    // Step 1: Extract text from PDF
-    console.log('[AGENT] Step 1: Extracting PDF text...');
-    const pdfResult = await extractTextFromPDF(pdfFile.buffer);
-    const rawText = pdfResult.text;
-
-    if (!rawText || rawText.length < 10) {
-      return res.status(400).json({
-        error: 'Could not extract meaningful text from the PDF. The file may be scanned/image-based.',
-        rawText: rawText || ''
-      });
-    }
-
-    console.log(`[AGENT] PDF text extracted: ${rawText.length} chars from ${pdfResult.pages} pages`);
-
-    // Step 2: Extract images from ZIP
-    console.log('[AGENT] Step 2: Extracting ZIP images...');
+    // Step 1: Extract images from ZIP first. Even if PDF extraction fails,
+    // the user can still submit manually with the selected product image.
+    console.log('[AGENT] Step 1: Extracting ZIP images...');
     const zipResult = await extractImagesFromZip(zipFile.buffer);
 
     if (zipResult.totalImages === 0) {
@@ -120,6 +107,42 @@ export default async function handler(req, res) {
     }
 
     console.log(`[AGENT] ZIP images extracted: ${zipResult.totalImages} images found`);
+
+    // Step 2: Extract text from PDF
+    console.log('[AGENT] Step 2: Extracting PDF text...');
+    let pdfResult = { text: '', pages: 0 };
+    let rawText = '';
+
+    try {
+      pdfResult = await extractTextFromPDF(pdfFile.buffer);
+      rawText = pdfResult.text || '';
+    } catch (pdfErr) {
+      console.error('[AGENT] PDF extraction failed:', pdfErr.message);
+      return res.json({
+        success: true,
+        products: [],
+        selectedImage: zipResult.selectedImage,
+        allImages: zipResult.images,
+        rawText: '',
+        totalImages: zipResult.totalImages,
+        pdfError: pdfErr.message,
+        warning: `PDF text extraction failed: ${pdfErr.message}. You can manually enter product details below.`
+      });
+    }
+
+    if (!rawText || rawText.length < 10) {
+      return res.json({
+        success: true,
+        products: [],
+        selectedImage: zipResult.selectedImage,
+        allImages: zipResult.images,
+        rawText: rawText || '',
+        totalImages: zipResult.totalImages,
+        warning: 'Could not extract meaningful text from the PDF. The file may be scanned/image-based. You can manually enter product details below.'
+      });
+    }
+
+    console.log(`[AGENT] PDF text extracted: ${rawText.length} chars from ${pdfResult.pages} pages`);
 
     // Step 3: Use DeepSeek to extract product info from PDF text
     console.log('[AGENT] Step 3: Analyzing PDF text with DeepSeek...');

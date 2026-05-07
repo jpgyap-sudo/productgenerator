@@ -1,37 +1,13 @@
 {
-  "buildCommand": "npm run build",
-  "outputDirectory": "dist",
-  "functions": {
-    "api/process-item.js": {
-      "maxDuration": 300
-    },
-    "api/queue/submit.js": {
-      "maxDuration": 300
-    },
-    "api/queue/status.js": {
-      "maxDuration": 300
-    },
-    "api/fal-webhook.js": {
-      "maxDuration": 60
-    }
-  },
-  "rewrites": [
-    {
-      "source": "/api/(.*)",
-      "destination": "/api/$1"
-    },
-    {
-      "source": "/(.*)",
-      "destination": "/index.html"
-    }
-  ],
+  "buildCommand": "echo 'Frontend-only deployment — no build step needed'",
+  "outputDirectory": ".",
   "headers": [
     {
       "source": "/(.*)",
       "headers": [
         {
           "key": "Content-Security-Policy",
-          "value": "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://unpkg.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; connect-src 'self' https://fal.run https://queue.fal.run https://api.fal.ai https://*.fal.ai https://v3.fal.media https://fal.media https://*.fal.media https://*.supabase.co wss://*.supabase.co https://generativelanguage.googleapis.com https://api.openai.com; font-src 'self' data:;"
+          "value": "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://unpkg.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; connect-src 'self' https://fal.run https://queue.fal.run https://api.fal.ai https://*.fal.ai https://v3.fal.media https://fal.media https://*.fal.media https://*.supabase.co wss://*.supabase.co https://generativelanguage.googleapis.com https://api.openai.com http://128.199.67.96:3000; font-src 'self' data:;"
         },
         {
           "key": "X-Content-Type-Options",

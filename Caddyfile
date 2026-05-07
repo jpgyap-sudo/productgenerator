@@ -1,0 +1,33 @@
+# ═══════════════════════════════════════════════════════════════════
+#  Caddyfile — Reverse proxy for Product Image Studio
+#
+#  Replace 'yourdomain.com' with your actual domain name.
+#  Caddy automatically provisions Let's Encrypt TLS certificates.
+#
+#  Installation: sudo apt install -y caddy
+#  Start:        sudo caddy start
+#  Reload:       sudo caddy reload
+# ═══════════════════════════════════════════════════════════════════
+
+yourdomain.com {
+    # Reverse proxy to Express.js backend
+    reverse_proxy localhost:3000
+
+    # Security headers
+    header {
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        X-XSS-Protection "1; mode=block"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        Permissions-Policy "camera=(), microphone=(), geolocation=()"
+    }
+
+    # Gzip compression
+    encode gzip
+
+    # Logging
+    log {
+        output file /var/log/caddy/product-image-studio.log
+        format json
+    }
+}

@@ -1,0 +1,63 @@
+# ═══════════════════════════════════════════════════════════════════
+#  docker-compose.yml — Product Image Studio Backend
+#
+#  Isolates the app in a container with resource limits so it
+#  doesn't affect other services running on the same VPS.
+#
+#  Limits (adjust as needed):
+#    - Memory: 512MB hard limit, 384MB soft (leaves ~500MB for OS)
+#    - CPU:    0.5 cores (50% of 1 vCPU)
+#    - Restart: unless-stopped (survives reboots)
+# ═══════════════════════════════════════════════════════════════════
+
+version: "3.9"
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: product-image-studio:latest
+    container_name: product-studio-backend
+    restart: unless-stopped
+
+    # ── Resource Limits ──────────────────────────────────────────
+    # Memory: 512MB hard cap, 384MB soft reservation
+    # CPU:    50% of one core
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+        reservations:
+          memory: 384M
+
+    # ── Port Mapping ─────────────────────────────────────────────
+    # Expose port 3000 to the host (Caddy or direct)
+    ports:
+      - "0.0.0.0:3000:3000"
+
+    # ── Environment ──────────────────────────────────────────────
+    # Loaded from .env file (create it with your API keys)
+    env_file:
+      - .env
+
+    # ── Volumes ──────────────────────────────────────────────────
+    # Persist logs outside the container
+    volumes:
+      - ./logs:/app/logs
+
+    # ── Health Check ─────────────────────────────────────────────
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/health', r => {process.exit(r.statusCode===200?0:1)})"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+    # ── Logging ──────────────────────────────────────────────────
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"

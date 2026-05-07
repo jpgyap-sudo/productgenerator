@@ -1,0 +1,18 @@
+# ═══════════════════════════════════════════════════════════════════
+#  .dockerignore — Exclude unnecessary files from Docker build
+# ═══════════════════════════════════════════════════════════════════
+
+node_modules
+npm-debug.log*
+.env
+.git
+.gitignore
+*.md
+logs/
+deploy.sh
+vps-setup.sh
+Caddyfile
+README-VPS.md
+AI_CODER_LOG.md
+supabase_setup.sql
+plans/

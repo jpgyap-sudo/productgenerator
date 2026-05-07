@@ -8,8 +8,10 @@
 //    - Background worker polls Supabase every 5s for active queue items
 //    - Processes items using OpenAI GPT Image 2 or Gemini 3
 //    - PM2 manages process lifecycle (auto-restart on crash)
+//    - Environment variables loaded from .env file (via dotenv)
 // ═══════════════════════════════════════════════════════════════════
 
+import 'dotenv/config';
 import express from 'express';
 import { supabase, QUEUE_TABLE, RESULTS_TABLE } from './lib/supabase.js';
 import { VIEWS } from './lib/fal.js';
@@ -376,6 +378,9 @@ async function triggerDriveUpload(item) {
   try {
     const hasDriveEnv = !!process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
     if (!hasDriveEnv) return;
+
+    // Check if upload is already in progress or completed
+    if (item.drive_upload_status === 'uploading') return;
 
     const alreadyUploaded = !!(item.drive_folder_id && item.drive_folder_id !== '')
       || !!(item.drive_folder_name && item.drive_folder_name !== '');

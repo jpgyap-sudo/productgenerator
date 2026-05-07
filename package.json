@@ -1,15 +1,22 @@
 {
   "name": "product-image-studio",
   "version": "2.0.0",
-  "description": "Product Image Studio — AI-powered product photography using fal.ai Nano Banana 2",
+  "description": "Product Image Studio — AI-powered product photography using OpenAI GPT Image 2 and Gemini 3",
   "private": true,
+  "type": "module",
   "scripts": {
-    "dev": "npx serve .",
-    "build": "node -e \"const fs=require('fs');fs.rmSync('dist',{recursive:true,force:true});fs.mkdirSync('dist',{recursive:true});let h=fs.readFileSync('index.html','utf8');h=h.replace(/__FAL_API_KEY__/g,process.env.FAL_API_KEY||'__FAL_API_KEY__');fs.writeFileSync('dist/index.html',h);console.log('Build complete: dist/index.html created');\""
+    "dev": "node server.js",
+    "start": "node server.js",
+    "build": "echo 'No build step needed for VPS deployment'"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.39.0",
-    "@vercel/functions": "^3.5.0",
-    "googleapis": "^140.0.0"
+    "adm-zip": "^0.5.17",
+    "dotenv": "^16.6.1",
+    "express": "^4.21.0",
+    "googleapis": "^140.0.0",
+    "multer": "^2.1.1",
+    "pdf-parse": "^2.4.5",
+    "ws": "^8.18.0"
   }
 }
