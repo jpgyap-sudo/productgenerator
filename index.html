@@ -6198,7 +6198,11 @@ function initUploadAgent() {
         agentProductInfo.innerHTML = renderAgentProductReview(data.products);
       } else if (data.warning) {
         agentProductInfo.innerHTML = `<div style="color:var(--warning);font-size:11px;">${escapeHtml(data.warning)}</div>
-          <div style="margin-top:4px;"><strong>Raw PDF Text:</strong></div>
+          <div style="margin-top:6px;"><strong>Product Name:</strong></div>
+          <input id="agentNameManual" type="text" value="${escapeHtml((selectedPdfFile?.name || '').replace(/\.[^.]+$/, ''))}" style="width:100%;padding:4px;font-size:11px;border:1px solid var(--border-light);border-radius:4px;background:var(--bg);color:var(--text);box-sizing:border-box;" placeholder="e.g. Dining Chair HC-001"/>
+          <div style="margin-top:4px;"><strong>Brand:</strong></div>
+          <input id="agentBrandManual" type="text" style="width:100%;padding:4px;font-size:11px;border:1px solid var(--border-light);border-radius:4px;background:var(--bg);color:var(--text);box-sizing:border-box;" placeholder="e.g. Home Atelier"/>
+          <div style="margin-top:4px;"><strong>Description:</strong></div>
           <textarea id="agentDescEdit" style="width:100%;min-height:80px;font-size:11px;padding:4px;border:1px solid var(--border-light);border-radius:4px;background:var(--bg);color:var(--text);resize:vertical;box-sizing:border-box;margin-top:2px;" placeholder="Paste or type product description here...">${escapeHtml(data.rawText?.substring(0, 2000) || '')}</textarea>`;
       } else {
         agentProductInfo.innerHTML = `<div style="color:var(--warning);font-size:11px;">No products could be extracted. You can manually enter details below.</div>
