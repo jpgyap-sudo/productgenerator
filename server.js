@@ -207,13 +207,34 @@ async function processNextBatch() {
   if (availableSlots <= 0) return;
 
   // Fetch items that need processing (exclude archived items)
-  const { data: items, error } = await supabase
-    .from(QUEUE_TABLE)
-    .select('*')
-    .in('status', ['active', 'wait'])
-    .is('archived_at', null)
-    .order('id', { ascending: true })
-    .limit(availableSlots);
+  // Use try/catch with fallback for missing archived_at column
+  let items, error;
+  try {
+    const result = await supabase
+      .from(QUEUE_TABLE)
+      .select('*')
+      .in('status', ['active', 'wait'])
+      .is('archived_at', null)
+      .order('id', { ascending: true })
+      .limit(availableSlots);
+    items = result.data;
+    error = result.error;
+  } catch (firstErr) {
+    error = firstErr;
+  }
+
+  // Fallback: if archived_at column doesn't exist, query without it
+  if (error && (error.code === 'PGRST204' || /column .* does not exist/i.test(error.message || ''))) {
+    console.warn('[WORKER] archived_at column not found, querying without it');
+    const result = await supabase
+      .from(QUEUE_TABLE)
+      .select('*')
+      .in('status', ['active', 'wait'])
+      .order('id', { ascending: true })
+      .limit(availableSlots);
+    items = result.data;
+    error = result.error;
+  }
 
   if (error) {
     console.error('[WORKER] Failed to fetch queue items:', error.message);
@@ -269,9 +290,16 @@ async function processNextBatch() {
 function detectProvider(item) {
   if (!item.sub_text) return null;
   const t = item.sub_text.toLowerCase();
+  // Preserve sub-variants: check for 'cheap'/'mini' suffixes first
+  if (t.includes('stability')) {
+    if (t.includes('cheap') || t.includes('mini')) return 'stability-cheap';
+    return 'stability';
+  }
   if (t.includes('gemini')) return 'gemini';
-  if (t.includes('stability')) return 'stability';
-  if (t.includes('openai')) return 'openai';
+  if (t.includes('openai')) {
+    if (t.includes('cheap') || t.includes('mini')) return 'openai-cheap';
+    return 'openai';
+  }
   return null;
 }
 
@@ -725,11 +753,15 @@ async function updateDriveUploadState(itemId, fields) {
 
   if (!error || !isMissingColumnError(error)) return;
 
+  // Strip all drive_* columns that might not exist in older schemas
   const {
     drive_upload_status,
     drive_upload_done,
     drive_upload_total,
     drive_upload_error,
+    drive_folder_id,
+    drive_folder_name,
+    drive_folder_url,
     ...safeFields
   } = fields;
 
