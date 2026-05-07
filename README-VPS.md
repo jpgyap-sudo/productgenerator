@@ -167,7 +167,35 @@ curl -I https://yourdomain.com/health
 
 ## Deploying Updates
 
-From your local machine, run:
+You have two ways to deploy updates to the VPS:
+
+### Option A: Deploy Agent (recommended for AI coders)
+
+The [`deploy-agent.mjs`](deploy-agent.mjs) script handles the full workflow: commit → push → rsync → PM2 restart → health check.
+
+```bash
+# Commit all changes, push to GitHub, and deploy to VPS
+node deploy-agent.mjs "your commit message"
+
+# Or use npm script (will prompt for commit message)
+npm run deploy
+
+# Deploy local files without pushing to GitHub first
+npm run deploy:push
+
+# Commit and push to GitHub only (skip VPS deploy)
+npm run deploy:code
+```
+
+The deploy agent will:
+1. Check git status for modified files
+2. Stage all changes and commit with your message
+3. Push to GitHub (`origin main`)
+4. Rsync files to the VPS (excluding `node_modules`, `.env`, `.git`, etc.)
+5. Restart PM2 with the new code
+6. Run a health check to verify the app started
+
+### Option B: Legacy deploy script
 
 ```bash
 ./deploy.sh

@@ -77,6 +77,8 @@ export default async function handler(req, res) {
   }
 
   try {
+    let rawText = '';
+
     // Parse multipart form data
     await multerMiddleware(req, res);
 
@@ -111,7 +113,6 @@ export default async function handler(req, res) {
     // Step 2: Extract text from PDF
     console.log('[AGENT] Step 2: Extracting PDF text...');
     let pdfResult = { text: '', pages: 0 };
-    let rawText = '';
 
     try {
       pdfResult = await extractTextFromPDF(pdfFile.buffer);

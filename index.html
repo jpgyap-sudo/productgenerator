@@ -5676,7 +5676,7 @@ function initUploadAgent() {
 
       agentProgressText.textContent = 'Analyzing PDF with DeepSeek AI...';
 
-      const res = await fetch(`${API_BASE_URL}/api/agent/process`, {
+      const res = await fetchApi('/api/agent/process', {
         method: 'POST',
         body: formData
       });
@@ -5812,7 +5812,7 @@ function initUploadAgent() {
       }
 
       // Submit to queue
-      const res = await fetch(`${API_BASE_URL}/api/agent/submit`, {
+      const res = await fetchApi('/api/agent/submit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
