@@ -14,7 +14,7 @@ import { supabase, QUEUE_TABLE, RESULTS_TABLE, BUCKET_NAME } from '../lib/supaba
 import { generateView, VIEWS } from '../lib/fal.js';
 import { generateGeminiView } from '../lib/gemini.js';
 import { generateOpenAIView } from '../lib/openai.js';
-import { uploadRendersToDrive } from '../lib/drive.js';
+import { uploadRendersToDrive, getNextFolderCounter } from '../lib/drive.js';
 import { createRenderZipOnVps, saveRenderImageToVps } from '../lib/vps-storage.js';
 import { saveCompletedBatch } from '../lib/completed-batches.js';
 

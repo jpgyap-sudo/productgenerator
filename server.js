@@ -17,7 +17,7 @@ import { supabase, QUEUE_TABLE, RESULTS_TABLE } from './lib/supabase.js';
 import { VIEWS } from './lib/fal.js';
 import { generateGeminiView } from './lib/gemini.js';
 import { generateOpenAIView } from './lib/openai.js';
-import { uploadRendersToDrive } from './lib/drive.js';
+import { uploadRendersToDrive, getNextFolderCounter } from './lib/drive.js';
 import {
   VPS_ASSET_ROOT,
   createRenderZipOnVps,
@@ -464,6 +464,7 @@ async function processItem(itemId, provider = 'openai') {
 
 /**
  * Upload completed renders to Google Drive.
+ * Uses sequential counter for folder naming (e.g., "001_ProductName").
  */
 async function triggerDriveUpload(item) {
   try {
@@ -492,6 +493,16 @@ async function triggerDriveUpload(item) {
       imageUrl: row.image_url
     }));
 
+    // Generate sequential folder name with counter prefix
+    const counter = await getNextFolderCounter();
+    const safeName = (item.name || `Item_${item.id}`)
+      .replace(/[^a-zA-Z0-9\s_-]/g, '')
+      .replace(/\s+/g, '_')
+      .replace(/_+/g, '_')
+      .replace(/^_|_$/g, '')
+      .substring(0, 55);
+    const folderName = `${String(counter).padStart(3, '0')}_${safeName}`;
+
     await updateDriveUploadState(item.id, {
       drive_upload_status: 'uploading',
       drive_upload_done: 0,
@@ -501,7 +512,7 @@ async function triggerDriveUpload(item) {
     });
 
     const driveResult = await uploadRendersToDrive(item.id, item.name, doneViews, {
-      folderName: item.drive_folder_name || '',  // Use generated product code as folder name if available
+      folderName,
       onProgress: progress => updateDriveUploadState(item.id, {
         drive_upload_status: progress.status,
         drive_upload_done: progress.uploaded,
@@ -509,6 +520,7 @@ async function triggerDriveUpload(item) {
         drive_upload_error: progress.status === 'error' ? progress.message || 'Drive upload incomplete' : '',
         drive_folder_id: progress.folderId || item.drive_folder_id || '',
         drive_folder_name: progress.folderName || item.drive_folder_name || '',
+        drive_folder_url: progress.folderUrl || item.drive_folder_url || '',
         updated_at: new Date().toISOString()
       })
     });
@@ -516,6 +528,7 @@ async function triggerDriveUpload(item) {
     await updateDriveUploadState(item.id, {
       drive_folder_id: driveResult.folderId,
       drive_folder_name: driveResult.folderName,
+      drive_folder_url: driveResult.folderUrl || '',
       drive_upload_status: driveResult.files.length === doneViews.length ? 'done' : 'error',
       drive_upload_done: driveResult.files.length,
       drive_upload_total: doneViews.length,
@@ -523,7 +536,7 @@ async function triggerDriveUpload(item) {
       updated_at: new Date().toISOString()
     });
 
-    console.log(`[WORKER] SUCCESS: Uploaded item ${item.id} to Drive folder "${driveResult.folderName}"`);
+    console.log(`[WORKER] SUCCESS: Uploaded item ${item.id} to Drive folder "${driveResult.folderName}" (URL: ${driveResult.folderUrl || 'N/A'})`);
   } catch (driveErr) {
     await updateDriveUploadState(item.id, {
       drive_upload_status: 'error',
