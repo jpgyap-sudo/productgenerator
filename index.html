@@ -1089,6 +1089,77 @@ textarea:focus { outline: none; border-color: var(--text-secondary); }
 .drive-state.error { color: var(--error); background: var(--error-bg); border-color: var(--error-border); }
 
 /* ── LOG PANEL ───────────────────────────────────────────────── */
+.bulk-upload-panel {
+  max-width: 1280px;
+  margin: 0 auto;
+}
+.bulk-shell {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.bulk-hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 18px 22px;
+  border-bottom: 1px solid var(--border-light);
+}
+.bulk-kicker {
+  display: block;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+.bulk-hero h2 { font-size: 22px; line-height: 1.2; font-weight: 650; }
+.bulk-layout {
+  display: grid;
+  grid-template-columns: minmax(360px, 0.95fr) minmax(520px, 1.35fr);
+  min-height: 620px;
+}
+.bulk-stage {
+  padding: 18px;
+  border-right: 1px solid var(--border-light);
+  background: var(--surface-2);
+}
+.bulk-review { padding: 18px; min-width: 0; }
+.bulk-review-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.bulk-review-head .btn-start { width: auto; min-width: 180px; margin: 0; }
+.bulk-upload-panel #agentSection { display: block !important; }
+.bulk-upload-panel #agentSection .block {
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  margin-bottom: 12px;
+  background: var(--surface);
+}
+.bulk-upload-panel #agentSection .upload-box { min-height: 150px; }
+.bulk-upload-panel #agentSection .upload-box .icon { font-size: 34px; }
+.bulk-upload-panel #agentProductInfo { max-height: 520px; overflow: auto; }
+.bulk-upload-panel .agent-product-row { padding: 12px !important; margin-bottom: 10px !important; }
+#bulkPendingMount .q-list { padding: 0; }
+#bulkPendingMount #pendingArea > .block:first-child,
+#bulkPendingMount #pendingArea > .block:last-child { display: none; }
+#bulkPendingMount .q-item { min-height: 76px; align-items: flex-start; padding: 10px; }
+#bulkPendingMount .q-thumb { width: 64px; height: 64px; }
+#bulkPendingMount .q-name { font-size: 13px; white-space: normal; }
+#bulkPendingMount .q-desc-text,
+#bulkPendingMount .q-desc-edit { font-size: 12px; }
+@media (max-width: 980px) {
+  .bulk-layout { grid-template-columns: 1fr; }
+  .bulk-stage { border-right: none; border-bottom: 1px solid var(--border-light); }
+}
+
 .log-panel {
   background: var(--surface);
   border-radius: 10px;
@@ -1303,6 +1374,7 @@ textarea:focus { outline: none; border-color: var(--text-secondary); }
     <label for="apiKey">fal.ai Key</label>
     <input type="password" id="apiKey" placeholder="Paste your fal.ai key..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-secure="true"/>
     <button class="api-save-btn" id="apiKeySave" type="button" disabled>Save</button>
+    <button class="tb-btn" id="bulkUploadToggle" title="Bulk upload PDF + ZIP workflow" aria-label="Bulk Upload">Bulk Upload</button>
     <button class="tb-btn" id="completedToggle" title="Completed render history" aria-label="Completed Batches">✓ Completed</button>
     <button class="tb-btn" id="featureToggle" title="View & edit product feature prompts" aria-label="Product Features">📋 Features</button>
     <button class="tb-btn" id="aboutToggle" title="How to use & AI specifications" aria-label="About">ℹ️ About</button>
@@ -1507,6 +1579,28 @@ textarea:focus { outline: none; border-color: var(--text-secondary); }
         <button class="btn-dl-all" id="completedRefreshBtn" type="button">Refresh</button>
       </div>
       <div class="completed-list" id="completedList"></div>
+    </div>
+
+    <div class="bulk-upload-panel" id="bulkUploadPanel" style="display:none;">
+      <div class="bulk-shell">
+        <div class="bulk-hero">
+          <div>
+            <span class="bulk-kicker">PDF + ZIP workflow</span>
+            <h2>Bulk Upload</h2>
+          </div>
+          <button class="btn-clear" id="bulkUploadClose" type="button">Close</button>
+        </div>
+        <div class="bulk-layout">
+          <div class="bulk-stage" id="bulkAgentMount"></div>
+          <div class="bulk-review">
+            <div class="bulk-review-head">
+              <span class="lbl">Bulk Queue Review</span>
+              <button class="btn-start" id="bulkStartBtn" type="button" disabled>Add Selected to Queue</button>
+            </div>
+            <div id="bulkPendingMount"></div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <div class="feature-panel" id="featurePanel" style="display:none;">
@@ -2669,6 +2763,8 @@ completedToggle.addEventListener('click', async () => {
   completedToggle.classList.toggle('active', completedPanelOpen);
   completedPanel.style.display = completedPanelOpen ? 'block' : 'none';
   welcomeState.style.display = completedPanelOpen ? 'none' : 'flex';
+  if (bulkUploadPanel) bulkUploadPanel.style.display = 'none';
+  bulkUploadToggle?.classList.remove('active');
 
   featurePanel.style.display = 'none';
   document.getElementById('aboutPanel').style.display = 'none';
@@ -3230,9 +3326,52 @@ dmToggle.addEventListener('click', async () => {
 
 // ── PRODUCT FEATURE PANEL ─────────────────────────────────────────
 const featureToggle = document.getElementById('featureToggle');
+const bulkUploadToggle = document.getElementById('bulkUploadToggle');
+const bulkUploadPanel = document.getElementById('bulkUploadPanel');
+const bulkUploadClose = document.getElementById('bulkUploadClose');
+const bulkAgentMount = document.getElementById('bulkAgentMount');
+const bulkPendingMount = document.getElementById('bulkPendingMount');
+const bulkStartBtn = document.getElementById('bulkStartBtn');
 const featurePanel = document.getElementById('featurePanel');
 const featureGrid = document.getElementById('featureGrid');
 const featureResetBtn = document.getElementById('featureResetBtn');
+
+function showBulkUploadPanel() {
+  if (!bulkUploadPanel) return;
+  bulkUploadPanel.style.display = 'block';
+  if (bulkUploadToggle) bulkUploadToggle.classList.add('active');
+  completedPanel.style.display = 'none';
+  featurePanel.style.display = 'none';
+  document.getElementById('aboutPanel').style.display = 'none';
+  queueLogPanel.style.display = 'none';
+  logPanel.style.display = 'none';
+  completedToggle.classList.remove('active');
+  featureToggle.classList.remove('active');
+  if (aboutToggle) aboutToggle.classList.remove('active');
+  completedPanelOpen = false;
+  featurePanelOpen = false;
+  aboutPanelOpen = false;
+  welcomeState.style.display = 'none';
+  renderPendingList();
+}
+
+function hideBulkUploadPanel() {
+  if (!bulkUploadPanel) return;
+  bulkUploadPanel.style.display = 'none';
+  if (bulkUploadToggle) bulkUploadToggle.classList.remove('active');
+  if (!document.getElementById('active-section')) {
+    welcomeState.style.display = 'flex';
+  }
+}
+
+bulkUploadToggle?.addEventListener('click', () => {
+  const isOpen = bulkUploadPanel?.style.display !== 'none';
+  if (isOpen) hideBulkUploadPanel();
+  else showBulkUploadPanel();
+});
+
+bulkUploadClose?.addEventListener('click', hideBulkUploadPanel);
+bulkStartBtn?.addEventListener('click', () => confirmAddBtn.click());
 
 /** Default prompts for each view (same as VIEWS array) */
 const DEFAULT_FEATURE_PROMPTS = [
@@ -3363,6 +3502,8 @@ featureToggle.addEventListener('click', () => {
   featureToggle.classList.toggle('active', featurePanelOpen);
   featurePanel.style.display = featurePanelOpen ? 'block' : 'none';
   welcomeState.style.display = featurePanelOpen ? 'none' : 'flex';
+  if (bulkUploadPanel) bulkUploadPanel.style.display = 'none';
+  bulkUploadToggle?.classList.remove('active');
   // Hide other panels
   document.getElementById('queueLogPanel').style.display = 'none';
   document.getElementById('logPanel').style.display = 'none';
@@ -3389,6 +3530,8 @@ aboutToggle.addEventListener('click', () => {
   aboutToggle.classList.toggle('active', aboutPanelOpen);
   aboutPanel.style.display = aboutPanelOpen ? 'block' : 'none';
   welcomeState.style.display = aboutPanelOpen ? 'none' : 'flex';
+  if (bulkUploadPanel) bulkUploadPanel.style.display = 'none';
+  bulkUploadToggle?.classList.remove('active');
   // Hide other panels
   document.getElementById('queueLogPanel').style.display = 'none';
   document.getElementById('logPanel').style.display = 'none';
@@ -3743,6 +3886,7 @@ async function deleteCompletedBatch(id) {
 function renderPendingList() {
   if (!pendingItems.length) {
     pendingArea.style.display = 'none';
+    if (bulkStartBtn) bulkStartBtn.disabled = true;
     return;
   }
   pendingArea.style.display = 'block';
@@ -3766,6 +3910,7 @@ function renderPendingList() {
     pendingList.appendChild(div);
   });
   confirmAddBtn.disabled = false;
+  if (bulkStartBtn) bulkStartBtn.disabled = false;
 }
 
 function updatePendingDesc(id, val) {
@@ -5724,6 +5869,17 @@ window.addEventListener('beforeunload', function(e) {
 // ══════════════════════════════════════════════════════════════════
 
 function initUploadAgent() {
+  const existingAgentSection = document.getElementById('agentSection');
+  const existingPendingArea = document.getElementById('pendingArea');
+  if (bulkAgentMount && existingAgentSection && existingAgentSection.parentElement !== bulkAgentMount) {
+    bulkAgentMount.appendChild(existingAgentSection);
+    existingAgentSection.style.display = 'block';
+  }
+  if (bulkPendingMount && existingPendingArea && existingPendingArea.parentElement !== bulkPendingMount) {
+    bulkPendingMount.appendChild(existingPendingArea);
+    existingPendingArea.style.display = 'block';
+  }
+
   const agentToggle = document.getElementById('agentToggle');
   const agentSection = document.getElementById('agentSection');
   const agentArrow = document.getElementById('agentArrow');
@@ -5750,10 +5906,9 @@ function initUploadAgent() {
   let agentResultData = null;
 
   // ── Toggle agent section ──
-  agentToggle.addEventListener('click', () => {
-    const isOpen = agentSection.style.display !== 'none';
-    agentSection.style.display = isOpen ? 'none' : 'block';
-    agentArrow.style.transform = isOpen ? 'rotate(0deg)' : 'rotate(90deg)';
+  agentToggle?.addEventListener('click', () => {
+    showBulkUploadPanel();
+    if (agentArrow) agentArrow.style.transform = 'rotate(90deg)';
   });
 
   // ── PDF file selection ──
@@ -5972,7 +6127,7 @@ function initUploadAgent() {
   });
 
   // ── Submit button ──
-  agentSubmitBtn.addEventListener('click', async () => {
+  if (false) agentSubmitBtn.addEventListener('click', async () => {
     if (!agentResultData) return;
 
     agentSubmitBtn.disabled = true;
