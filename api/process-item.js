@@ -1,7 +1,7 @@
 // ═══════════════════════════════════════════════════════════════════
 //  POST /api/process-item — Background worker
 //  Called by submit.js via waitUntil(). Processes queue items by:
-//  1. Generating all 5 views in parallel via the selected AI provider
+//  1. Generating all 4 views in parallel via the selected AI provider
 //  2. Saving results to Supabase (render_results table + storage)
 //  3. Updating queue item status
 //
@@ -20,7 +20,7 @@ export const config = {
   runtime: 'nodejs',
   // Allow up to 300 seconds (5 minutes) for background processing
   // Each view generation uses fal.ai queue-based API with polling,
-  // so we need enough time for all 5 parallel generations + fallbacks
+  // so we need enough time for all 4 parallel generations + fallbacks
   maxDuration: 300
 };
 
@@ -80,7 +80,7 @@ export default async function handler(req) {
 }
 
 /**
- * Process a single queue item: generate 5 views, save results.
+ * Process a single queue item: generate 4 views, save results.
  *
  * @param {number} itemId - Queue item ID
  * @param {string} resolution - Resolution setting (e.g., '1K')
@@ -118,10 +118,10 @@ async function processItem(itemId, resolution, provider = 'fal') {
     const providerLabel = provider === 'gemini' ? 'Gemini'
       : provider === 'openai' ? 'OpenAI'
       : 'fal.ai';
-    await updateItemStatus(itemId, 'active', `Generating 5 views with ${providerLabel}...`);
+    await updateItemStatus(itemId, 'active', `Generating 4 views with ${providerLabel}...`);
     await updateAllViewStatuses(itemId, 'generating', null);
 
-    // Step 2: Generate all 5 views in parallel
+    // Step 2: Generate all 4 views in parallel
     // Provider selection:
     //   - 'fal' (default): Uses fal.ai queue-based API with webhook support.
     //     Returns fal.ai CDN URLs directly — no redundant download/upload.
@@ -132,8 +132,9 @@ async function processItem(itemId, resolution, provider = 'fal') {
     const generateFn = provider === 'gemini' ? generateGeminiView
       : provider === 'openai' ? generateOpenAIView
       : generateView;
+    const brand = item.brand || '';
     const results = await Promise.allSettled(
-      VIEWS.map(view => generateFn(view, desc, imageUrl, resolution))
+      VIEWS.map(view => generateFn(view, desc, imageUrl, resolution, brand))
     );
 
     // Step 3: Save results
@@ -232,14 +233,14 @@ async function processItem(itemId, resolution, provider = 'fal') {
     }
 
     // Step 4: Update queue item final status
-    const finalStatus = successCount === 5 ? 'done' : 'error';
-    const statusText = successCount === 5
-      ? 'All 5 views generated'
-      : `${successCount}/5 views generated`;
+    const finalStatus = successCount === 4 ? 'done' : 'error';
+    const statusText = successCount === 4
+      ? 'All 4 views generated'
+      : `${successCount}/4 views generated`;
     await updateItemStatus(itemId, finalStatus, statusText);
 
-    // Step 5: Trigger Drive upload if all 5 views completed
-    if (successCount === 5) {
+    // Step 5: Trigger Drive upload if all 4 views completed
+    if (successCount === 4) {
       try {
         const hasDriveEnv = !!process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
         if (hasDriveEnv) {
@@ -262,7 +263,7 @@ async function processItem(itemId, resolution, provider = 'fal') {
                 .eq('queue_item_id', itemId)
                 .eq('status', 'done');
 
-              if (doneRows && doneRows.length === 5) {
+              if (doneRows && doneRows.length === 4) {
                 const doneViews = doneRows.map(row => ({
                   viewId: row.view_id,
                   viewLabel: getViewLabel(row.view_id),
@@ -278,6 +279,7 @@ async function processItem(itemId, resolution, provider = 'fal') {
                 });
 
                 const driveResult = await uploadRendersToDrive(itemId, updatedItem.name, doneViews, {
+                  folderName: updatedItem.drive_folder_name || '',
                   onProgress: progress => updateDriveUploadState(itemId, {
                     drive_upload_status: progress.status,
                     drive_upload_done: progress.uploaded,

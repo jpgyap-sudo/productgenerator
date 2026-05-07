@@ -1,0 +1,528 @@
+// ═══════════════════════════════════════════════════════════════════
+//  server.js — Express entry point for VPS deployment
+//  Replaces Vercel serverless functions with a persistent Node.js
+//  server + background worker loop.
+//
+//  Architecture:
+//    - Express HTTP server on :3000 (behind Caddy reverse proxy)
+//    - Background worker polls Supabase every 5s for active queue items
+//    - Processes items using OpenAI GPT Image 2 or Gemini 3
+//    - PM2 manages process lifecycle (auto-restart on crash)
+// ═══════════════════════════════════════════════════════════════════
+
+import express from 'express';
+import { supabase, QUEUE_TABLE, RESULTS_TABLE } from './lib/supabase.js';
+import { VIEWS } from './lib/fal.js';
+import { generateGeminiView } from './lib/gemini.js';
+import { generateOpenAIView } from './lib/openai.js';
+import { uploadRendersToDrive } from './lib/drive.js';
+
+// ── Import API handlers (adapted for Express) ──
+import submitHandler from './api/queue/submit.js';
+import statusHandler from './api/queue/status.js';
+import uploadDriveHandler from './api/queue/upload-drive.js';
+import webhookHandler from './api/fal-webhook.js';
+import agentProcessHandler from './api/agent/process.js';
+import agentSubmitHandler from './api/agent/submit.js';
+
+const PORT = process.env.PORT || 3000;
+const POLL_INTERVAL_MS = 5000; // Check for new jobs every 5 seconds
+const CONCURRENCY = 5; // Process up to 5 items simultaneously
+
+const app = express();
+
+// ── Middleware ──
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true }));
+
+// ── CORS (allow frontend from any origin) ──
+app.use((req, res, next) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  if (req.method === 'OPTIONS') return res.sendStatus(204);
+  next();
+});
+
+// ── Health check ──
+app.get('/health', (req, res) => {
+  res.json({ status: 'ok', uptime: process.uptime(), memory: process.memoryUsage().rss });
+});
+
+// ── API Routes ──
+// These wrap the existing Vercel handlers into Express route handlers.
+// The handlers use req.query / req.body / res.json instead of
+// Vercel's (req) => Response pattern.
+
+app.post('/api/queue/submit', async (req, res) => {
+  try {
+    const result = await submitHandler(req, res);
+    // If handler already sent response, don't send again
+    if (!res.headersSent) {
+      res.json(result);
+    }
+  } catch (err) {
+    console.error('[SUBMIT] Error:', err);
+    if (!res.headersSent) res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/queue/status', async (req, res) => {
+  try {
+    const result = await statusHandler(req, res);
+    if (!res.headersSent) res.json(result);
+  } catch (err) {
+    console.error('[STATUS] Error:', err);
+    if (!res.headersSent) res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/queue/upload-drive', async (req, res) => {
+  try {
+    const result = await uploadDriveHandler(req, res);
+    if (!res.headersSent) res.json(result);
+  } catch (err) {
+    console.error('[UPLOAD-DRIVE] Error:', err);
+    if (!res.headersSent) res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/fal-webhook', async (req, res) => {
+  try {
+    const result = await webhookHandler(req, res);
+    if (!res.headersSent) res.json(result);
+  } catch (err) {
+    console.error('[WEBHOOK] Error:', err);
+    if (!res.headersSent) res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Uploading Agent Routes ──
+app.post('/api/agent/process', async (req, res) => {
+  try {
+    const result = await agentProcessHandler(req, res);
+    if (!res.headersSent) res.json(result);
+  } catch (err) {
+    console.error('[AGENT-PROCESS] Error:', err);
+    if (!res.headersSent) res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/agent/submit', async (req, res) => {
+  try {
+    const result = await agentSubmitHandler(req, res);
+    if (!res.headersSent) res.json(result);
+  } catch (err) {
+    console.error('[AGENT-SUBMIT] Error:', err);
+    if (!res.headersSent) res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Serve static frontend ──
+app.use(express.static('.'));
+
+// ═══════════════════════════════════════════════════════════════════
+//  Background Worker Loop
+//  Polls Supabase for active queue items and processes them.
+//  This replaces Vercel's waitUntil() mechanism.
+// ═══════════════════════════════════════════════════════════════════
+
+let workerRunning = false;
+let currentJobs = new Map(); // itemId -> processing promise
+
+/**
+ * Main worker loop — runs indefinitely.
+ * Polls Supabase every POLL_INTERVAL_MS for items with status='active'
+ * that are not already being processed.
+ */
+async function workerLoop() {
+  if (workerRunning) return;
+  workerRunning = true;
+
+  console.log(`[WORKER] Background worker started (poll interval: ${POLL_INTERVAL_MS}ms, concurrency: ${CONCURRENCY})`);
+
+  while (true) {
+    try {
+      await processNextBatch();
+    } catch (err) {
+      console.error('[WORKER] Loop error:', err);
+    }
+    await sleep(POLL_INTERVAL_MS);
+  }
+}
+
+/**
+ * Fetch the next batch of active items and process them.
+ */
+async function processNextBatch() {
+  // Count how many slots are free
+  const activeJobCount = currentJobs.size;
+  const availableSlots = CONCURRENCY - activeJobCount;
+
+  if (availableSlots <= 0) return;
+
+  // Fetch items that need processing
+  const { data: items, error } = await supabase
+    .from(QUEUE_TABLE)
+    .select('*')
+    .in('status', ['active', 'wait'])
+    .order('id', { ascending: true })
+    .limit(availableSlots);
+
+  if (error) {
+    console.error('[WORKER] Failed to fetch queue items:', error.message);
+    return;
+  }
+
+  if (!items || items.length === 0) return;
+
+  for (const item of items) {
+    // Skip if already being processed
+    if (currentJobs.has(item.id)) continue;
+
+    const provider = item.provider || detectProvider(item) || 'openai';
+
+    console.log(`[WORKER] Starting item ${item.id} ("${item.name}") with provider: ${provider}`);
+
+    // Mark as active
+    await supabase
+      .from(QUEUE_TABLE)
+      .update({
+        status: 'active',
+        sub_text: `Generating 4 views with ${provider === 'gemini' ? 'Gemini' : 'OpenAI'}...`,
+        provider,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', item.id);
+
+    // Ensure render_results rows exist
+    await ensureRenderRows(item.id, provider);
+
+    // Start processing in background
+    const jobPromise = processItem(item.id, provider).finally(() => {
+      currentJobs.delete(item.id);
+    });
+
+    currentJobs.set(item.id, jobPromise);
+  }
+}
+
+/**
+ * Detect provider from item sub_text or default to openai.
+ */
+function detectProvider(item) {
+  if (!item.sub_text) return null;
+  const t = item.sub_text.toLowerCase();
+  if (t.includes('gemini')) return 'gemini';
+  if (t.includes('openai')) return 'openai';
+  return null;
+}
+
+/**
+ * Ensure render_results rows exist for all 4 views of an item.
+ */
+async function ensureRenderRows(itemId, provider) {
+  const now = new Date().toISOString();
+
+  const { data: existing } = await supabase
+    .from(RESULTS_TABLE)
+    .select('view_id')
+    .eq('queue_item_id', itemId);
+
+  const existingViewIds = new Set((existing || []).map(r => r.view_id));
+  const missingViews = VIEWS.filter(v => !existingViewIds.has(v.id));
+
+  if (missingViews.length === 0) return;
+
+  const rows = missingViews.map(view => ({
+    queue_item_id: itemId,
+    view_id: view.id,
+    status: 'generating',
+    image_url: '',
+    error_message: '',
+    request_id: '',
+    response_url: '',
+    status_url: '',
+    started_at: now,
+    completed_at: null,
+    created_at: now,
+    updated_at: now
+  }));
+
+  const { error } = await supabase
+    .from(RESULTS_TABLE)
+    .upsert(rows, { onConflict: 'queue_item_id,view_id' });
+
+  if (error) {
+    console.error(`[WORKER] Failed to create render rows for item ${itemId}:`, error.message);
+  }
+}
+
+/**
+ * Process a single queue item: generate all 4 views, save results.
+ */
+async function processItem(itemId, provider = 'openai') {
+  const now = new Date().toISOString();
+
+  // Fetch the item
+  const { data: items, error: fetchError } = await supabase
+    .from(QUEUE_TABLE)
+    .select('*')
+    .eq('id', itemId);
+
+  if (fetchError || !items || items.length === 0) {
+    console.error(`[WORKER] Item ${itemId} not found:`, fetchError?.message);
+    return;
+  }
+
+  const item = items[0];
+  const imageUrl = item.image_url;
+  const desc = item.description || '';
+
+  if (!imageUrl) {
+    await updateItemStatus(itemId, 'error', 'No reference image');
+    await updateAllViewStatuses(itemId, 'error', 'No reference image');
+    return;
+  }
+
+  try {
+    // Mark all views as generating
+    const providerLabel = provider === 'gemini' ? 'Gemini' : 'OpenAI';
+    await updateItemStatus(itemId, 'active', `Generating 4 views with ${providerLabel}...`);
+    await updateAllViewStatuses(itemId, 'generating', null);
+
+    // Generate all 4 views in parallel
+    const generateFn = provider === 'gemini' ? generateGeminiView : generateOpenAIView;
+    const brand = item.brand || '';
+    const results = await Promise.allSettled(
+      VIEWS.map(view => generateFn(view, desc, imageUrl, item.resolution || '1K', brand))
+    );
+
+    // Save results
+    let successCount = 0;
+    let failCount = 0;
+
+    for (let i = 0; i < VIEWS.length; i++) {
+      const view = VIEWS[i];
+      const result = results[i];
+
+      if (result.status === 'fulfilled' && result.value) {
+        successCount++;
+        try {
+          const publicUrl = result.value.cdnUrl;
+
+          await supabase
+            .from(RESULTS_TABLE)
+            .update({
+              status: 'done',
+              image_url: publicUrl,
+              completed_at: new Date().toISOString(),
+              updated_at: new Date().toISOString()
+            })
+            .eq('queue_item_id', itemId)
+            .eq('view_id', view.id);
+
+        } catch (saveErr) {
+          console.error(`[WORKER] Failed to save result for item ${itemId} view ${view.id}:`, saveErr);
+          await supabase
+            .from(RESULTS_TABLE)
+            .update({
+              status: 'error',
+              error_message: saveErr.message,
+              updated_at: new Date().toISOString()
+            })
+            .eq('queue_item_id', itemId)
+            .eq('view_id', view.id);
+          failCount++;
+        }
+      } else {
+        failCount++;
+        const errMsg = result.status === 'rejected' ? result.reason?.message || 'Unknown error' : 'No result';
+        await supabase
+          .from(RESULTS_TABLE)
+          .update({
+            status: 'error',
+            error_message: errMsg,
+            updated_at: new Date().toISOString()
+          })
+          .eq('queue_item_id', itemId)
+          .eq('view_id', view.id);
+      }
+    }
+
+    // Update queue item final status
+    const finalStatus = successCount === 4 ? 'done' : 'error';
+    const statusText = successCount === 4
+      ? 'All 4 views generated'
+      : `${successCount}/4 views generated`;
+    await updateItemStatus(itemId, finalStatus, statusText);
+
+    // Trigger Drive upload if all 4 views completed
+    if (successCount === 4) {
+      await triggerDriveUpload(item);
+    }
+
+  } catch (error) {
+    console.error(`[WORKER] Error processing item ${itemId}:`, error);
+    await updateItemStatus(itemId, 'error', error.message || 'Processing failed');
+    await updateAllViewStatuses(itemId, 'error', error.message || 'Processing failed');
+  }
+}
+
+/**
+ * Upload completed renders to Google Drive.
+ */
+async function triggerDriveUpload(item) {
+  try {
+    const hasDriveEnv = !!process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
+    if (!hasDriveEnv) return;
+
+    const alreadyUploaded = !!(item.drive_folder_id && item.drive_folder_id !== '')
+      || !!(item.drive_folder_name && item.drive_folder_name !== '');
+
+    if (alreadyUploaded) return;
+
+    const { data: doneRows } = await supabase
+      .from(RESULTS_TABLE)
+      .select('*')
+      .eq('queue_item_id', item.id)
+      .eq('status', 'done');
+
+    if (!doneRows || doneRows.length !== 4) return;
+
+    const doneViews = doneRows.map(row => ({
+      viewId: row.view_id,
+      viewLabel: getViewLabel(row.view_id),
+      imageUrl: row.image_url
+    }));
+
+    await updateDriveUploadState(item.id, {
+      drive_upload_status: 'uploading',
+      drive_upload_done: 0,
+      drive_upload_total: doneViews.length,
+      drive_upload_error: '',
+      updated_at: new Date().toISOString()
+    });
+
+    const driveResult = await uploadRendersToDrive(item.id, item.name, doneViews, {
+      folderName: item.drive_folder_name || '',  // Use generated product code as folder name if available
+      onProgress: progress => updateDriveUploadState(item.id, {
+        drive_upload_status: progress.status,
+        drive_upload_done: progress.uploaded,
+        drive_upload_total: progress.total,
+        drive_upload_error: progress.status === 'error' ? progress.message || 'Drive upload incomplete' : '',
+        drive_folder_id: progress.folderId || item.drive_folder_id || '',
+        drive_folder_name: progress.folderName || item.drive_folder_name || '',
+        updated_at: new Date().toISOString()
+      })
+    });
+
+    await updateDriveUploadState(item.id, {
+      drive_folder_id: driveResult.folderId,
+      drive_folder_name: driveResult.folderName,
+      drive_upload_status: driveResult.files.length === doneViews.length ? 'done' : 'error',
+      drive_upload_done: driveResult.files.length,
+      drive_upload_total: doneViews.length,
+      drive_upload_error: driveResult.files.length === doneViews.length ? '' : 'Some files failed to upload',
+      updated_at: new Date().toISOString()
+    });
+
+    console.log(`[WORKER] SUCCESS: Uploaded item ${item.id} to Drive folder "${driveResult.folderName}"`);
+  } catch (driveErr) {
+    await updateDriveUploadState(item.id, {
+      drive_upload_status: 'error',
+      drive_upload_error: driveErr.message || 'Drive upload failed',
+      updated_at: new Date().toISOString()
+    });
+    console.error(`[WORKER] Drive upload failed for item ${item.id}:`, driveErr.message);
+  }
+}
+
+function getViewLabel(viewId) {
+  const view = VIEWS.find(v => v.id === viewId);
+  return view ? view.label : `View ${viewId}`;
+}
+
+async function updateItemStatus(itemId, status, subText) {
+  const now = new Date().toISOString();
+  const updateData = { status, updated_at: now };
+  if (subText) updateData.sub_text = subText;
+
+  const { error } = await supabase
+    .from(QUEUE_TABLE)
+    .update(updateData)
+    .eq('id', itemId);
+
+  if (error) {
+    console.error(`[WORKER] Failed to update item ${itemId} status:`, error.message);
+  }
+}
+
+async function updateAllViewStatuses(itemId, status, errorMessage) {
+  const now = new Date().toISOString();
+  const updateData = { status, updated_at: now };
+  if (errorMessage) updateData.error_message = errorMessage;
+  if (status === 'generating') updateData.started_at = now;
+  if (status === 'done' || status === 'error') updateData.completed_at = now;
+
+  const { error } = await supabase
+    .from(RESULTS_TABLE)
+    .update(updateData)
+    .eq('queue_item_id', itemId);
+
+  if (error) {
+    console.error(`[WORKER] Failed to update view statuses for item ${itemId}:`, error.message);
+  }
+}
+
+async function updateDriveUploadState(itemId, fields) {
+  const { error } = await supabase
+    .from(QUEUE_TABLE)
+    .update(fields)
+    .eq('id', itemId);
+
+  if (!error || !isMissingColumnError(error)) return;
+
+  const {
+    drive_upload_status,
+    drive_upload_done,
+    drive_upload_total,
+    drive_upload_error,
+    ...safeFields
+  } = fields;
+
+  await supabase
+    .from(QUEUE_TABLE)
+    .update(safeFields)
+    .eq('id', itemId);
+}
+
+function isMissingColumnError(error) {
+  return error?.code === 'PGRST204'
+    || /column .* does not exist/i.test(error?.message || '')
+    || /Could not find .* column/i.test(error?.message || '');
+}
+
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  Start Server
+// ═══════════════════════════════════════════════════════════════════
+
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`[SERVER] Product Image Studio running on port ${PORT}`);
+  console.log(`[SERVER] Environment: SUPABASE_URL=${process.env.SUPABASE_URL ? '✓ set' : '✗ missing'}`);
+  console.log(`[SERVER] Environment: SUPABASE_SERVICE_ROLE_KEY=${process.env.SUPABASE_SERVICE_ROLE_KEY ? '✓ set' : '✗ missing'}`);
+  console.log(`[SERVER] Environment: OPENAI_API_KEY=${process.env.OPENAI_API_KEY ? '✓ set' : '✗ missing'}`);
+  console.log(`[SERVER] Environment: GEMINI_API_KEY=${process.env.GEMINI_API_KEY ? '✓ set' : '✗ missing'}`);
+  console.log(`[SERVER] Environment: DEEPSEEK_API_KEY=${process.env.DEEPSEEK_API_KEY ? '✓ set' : '✗ missing'}`);
+  console.log(`[SERVER] Environment: GOOGLE_SERVICE_ACCOUNT_JSON=${process.env.GOOGLE_SERVICE_ACCOUNT_JSON ? '✓ set' : '✗ missing (optional)'}`);
+
+  // Start background worker
+  workerLoop().catch(err => {
+    console.error('[SERVER] Worker loop crashed:', err);
+    process.exit(1);
+  });
+});

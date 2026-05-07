@@ -9,6 +9,45 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 <style>
+/* ── TOGGLE SWITCH ──────────────────────────────────────────── */
+.toggle-switch {
+position: relative;
+display: inline-block;
+width: 40px;
+height: 22px;
+flex-shrink: 0;
+}
+.toggle-switch input {
+opacity: 0;
+width: 0;
+height: 0;
+}
+.toggle-slider {
+position: absolute;
+cursor: pointer;
+inset: 0;
+background: var(--border);
+border-radius: 22px;
+transition: background var(--transition);
+}
+.toggle-slider::before {
+content: '';
+position: absolute;
+left: 3px;
+bottom: 3px;
+width: 16px;
+height: 16px;
+background: #fff;
+border-radius: 50%;
+transition: transform var(--transition);
+}
+.toggle-switch input:checked + .toggle-slider {
+background: var(--accent);
+}
+.toggle-switch input:checked + .toggle-slider::before {
+transform: translateX(18px);
+}
+
 /* ── RESET & BASE ─────────────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
@@ -277,6 +316,29 @@ textarea:focus { outline: none; border-color: var(--text-secondary); }
 }
 .q-btn:hover { border-color: var(--accent); }
 .q-btn.active { background: var(--topbar-bg); color: var(--topbar-text); border-color: var(--topbar-bg); }
+.q-btn:disabled { cursor: default; }
+.q-btn:disabled:not(.active) { opacity: 0.55; }
+.setting-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.setting-head .lbl { margin-bottom: 0; flex: 1; }
+.setting-edit-btn {
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+.setting-edit-btn:hover { border-color: var(--text-secondary); color: var(--text); }
+.setting-edit-btn.is-editing { background: var(--topbar-bg); color: var(--topbar-text); border-color: var(--topbar-bg); }
 .q-btn .price { font-size: 9px; color: inherit; opacity: 0.7; }
 .res-note { font-size: 10px; color: var(--text-muted); margin-top: 6px; line-height: 1.5; }
 
@@ -514,6 +576,20 @@ textarea:focus { outline: none; border-color: var(--text-secondary); }
 .feature-card-header .fc-label {
   font-size: 12px; font-weight: 600; flex: 1;
 }
+.feature-edit-btn {
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+.feature-edit-btn:hover { border-color: var(--text-secondary); color: var(--text); }
+.feature-edit-btn.is-editing { background: var(--topbar-bg); color: var(--topbar-text); border-color: var(--topbar-bg); }
 .feature-card-header .fc-arrow {
   font-size: 10px; color: var(--text-muted);
   transition: transform 0.2s ease;
@@ -534,6 +610,11 @@ textarea:focus { outline: none; border-color: var(--text-secondary); }
   transition: border-color var(--transition);
 }
 .feature-card-body textarea:focus { outline: none; border-color: var(--accent); }
+.feature-card-body textarea[readonly] {
+  cursor: default;
+  color: var(--text-secondary);
+  background: var(--surface);
+}
 .feature-card-body .fc-hint {
   font-size: 10px; color: var(--text-muted);
   margin-top: 6px; line-height: 1.5;
@@ -546,6 +627,164 @@ textarea:focus { outline: none; border-color: var(--text-secondary); }
   font-size: 11px; color: var(--text-secondary);
   line-height: 1.5; flex: 1;
 }
+
+/* ── ABOUT PANEL ─────────────────────────────────────────────── */
+.about-panel {
+  max-width: 800px; margin: 0 auto;
+}
+.about-section {
+  display: flex; flex-direction: column; gap: 14px;
+}
+.about-card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  overflow: hidden;
+}
+.about-card-header {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 16px;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border-light);
+  cursor: pointer;
+  user-select: none;
+}
+.about-card-header .about-icon {
+  font-size: 18px; flex-shrink: 0;
+}
+.about-card-header .about-card-title {
+  font-size: 13px; font-weight: 700;
+}
+.about-card-body {
+  padding: 16px;
+  font-size: 12px; line-height: 1.7;
+  color: var(--text);
+}
+.about-card-body ol, .about-card-body ul {
+  padding-left: 20px;
+}
+.about-card-body li {
+  margin-bottom: 8px;
+}
+.about-card-body li:last-child {
+  margin-bottom: 0;
+}
+.about-steps {
+  list-style: none; padding: 0; margin: 0;
+}
+.about-steps li {
+  padding: 10px 12px;
+  margin-bottom: 6px;
+  background: var(--surface-2);
+  border-radius: var(--radius-sm);
+  border-left: 3px solid var(--accent);
+}
+.about-steps li:last-child { margin-bottom: 0; }
+.about-steps li strong {
+  color: var(--accent);
+  display: inline-block;
+  min-width: 130px;
+}
+.about-specs {
+  display: flex; flex-direction: column; gap: 12px;
+}
+.about-spec {
+  padding: 12px;
+  background: var(--surface-2);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-light);
+}
+.about-spec-name {
+  font-size: 13px; font-weight: 700; margin-bottom: 8px;
+  color: var(--text);
+}
+.about-spec-detail {
+  display: flex; flex-wrap: wrap; gap: 4px;
+  margin-bottom: 8px;
+}
+.spec-tag {
+  display: inline-block;
+  padding: 3px 8px;
+  font-size: 10px;
+  background: var(--bg);
+  border: 1px solid var(--border-light);
+  border-radius: 4px;
+  color: var(--text-secondary);
+}
+.about-spec-note {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-style: italic;
+  line-height: 1.5;
+}
+.about-workflow {
+  display: flex; flex-direction: column; gap: 8px;
+}
+.about-workflow-item {
+  display: flex; align-items: flex-start; gap: 12px;
+  padding: 10px 12px;
+  background: var(--surface-2);
+  border-radius: var(--radius-sm);
+}
+.about-workflow-item .wf-step {
+  width: 26px; height: 26px; border-radius: 50%;
+  background: var(--accent); color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 700; flex-shrink: 0;
+  margin-top: 1px;
+}
+.about-workflow-item div {
+  flex: 1;
+}
+.about-workflow-item strong {
+  display: block; font-size: 12px; margin-bottom: 2px;
+}
+.about-workflow-item span {
+  font-size: 11px; color: var(--text-secondary);
+  line-height: 1.5;
+}
+.about-views-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+}
+@media (max-width: 600px) {
+  .about-views-grid { grid-template-columns: 1fr; }
+}
+.about-view-item {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 10px 12px;
+  background: var(--surface-2);
+  border-radius: var(--radius-sm);
+}
+.about-view-item .about-view-icon {
+  width: 24px; height: 24px; border-radius: 50%;
+  background: var(--topbar-bg); color: var(--topbar-text);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 700; flex-shrink: 0;
+  margin-top: 1px;
+}
+.about-view-item div {
+  flex: 1;
+}
+.about-view-item strong {
+  display: block; font-size: 12px; margin-bottom: 2px;
+}
+.about-view-item span {
+  font-size: 11px; color: var(--text-secondary);
+  line-height: 1.5;
+}
+.about-tips {
+  list-style: none; padding: 0; margin: 0;
+}
+.about-tips li {
+  padding: 8px 12px;
+  margin-bottom: 6px;
+  background: var(--surface-2);
+  border-radius: var(--radius-sm);
+  border-left: 3px solid var(--success);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.about-tips li:last-child { margin-bottom: 0; }
 
 /* ── ACTIVE CARD ─────────────────────────────────────────────── */
 .active-card {
@@ -659,7 +898,7 @@ textarea:focus { outline: none; border-color: var(--text-secondary); }
 .batch-info h3 { font-size: 13px; font-weight: 600; }
 .batch-info p { font-size: 11px; color: var(--text-secondary); margin-top: 1px; }
 .batch-actions { display: flex; gap: 6px; flex-shrink: 0; flex-wrap: wrap; }
-.btn-zip, .btn-retry-batch {
+.btn-zip, .btn-retry-batch, .btn-drive-upload {
   padding: 6px 12px; font-size: 11px; font-weight: 600;
   border-radius: var(--radius-sm); border: none; cursor: pointer;
   transition: opacity var(--transition);
@@ -670,6 +909,9 @@ textarea:focus { outline: none; border-color: var(--text-secondary); }
 .btn-zip:disabled { opacity: 0.4; cursor: not-allowed; }
 .btn-retry-batch { background: var(--warning-bg); color: var(--warning-text); }
 .btn-retry-batch:hover { opacity: 0.8; }
+.btn-drive-upload { background: #eef5ff; color: #2463a6; border: 1px solid #b8d3f2; }
+.btn-drive-upload:hover { opacity: 0.85; }
+.btn-drive-upload:disabled { opacity: 0.45; cursor: not-allowed; }
 .batch-grid {
   padding: 10px;
   display: grid;
@@ -817,6 +1059,34 @@ textarea:focus { outline: none; border-color: var(--text-secondary); }
 }
 .btn-dl-all:hover { background: var(--success); color: #fff; }
 .btn-dl-all:disabled { opacity: 0.4; cursor: not-allowed; background: var(--success-bg); color: var(--success); }
+.completed-panel {
+  max-width: 1100px;
+  margin: 0 auto;
+}
+.completed-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.completed-empty {
+  padding: 48px 20px;
+  text-align: center;
+  color: var(--text-muted);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  font-size: 13px;
+}
+.drive-state {
+  font-size: 11px;
+  color: var(--text-secondary);
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  border: 1px solid var(--border-light);
+}
+.drive-state.done { color: var(--success); background: var(--success-bg); border-color: var(--success-border); }
+.drive-state.error { color: var(--error); background: var(--error-bg); border-color: var(--error-border); }
 
 /* ── LOG PANEL ───────────────────────────────────────────────── */
 .log-panel {
@@ -1033,7 +1303,9 @@ textarea:focus { outline: none; border-color: var(--text-secondary); }
     <label for="apiKey">fal.ai Key</label>
     <input type="password" id="apiKey" placeholder="Paste your fal.ai key..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-secure="true"/>
     <button class="api-save-btn" id="apiKeySave" type="button" disabled>Save</button>
+    <button class="tb-btn" id="completedToggle" title="Completed render history" aria-label="Completed Batches">✓ Completed</button>
     <button class="tb-btn" id="featureToggle" title="View & edit product feature prompts" aria-label="Product Features">📋 Features</button>
+    <button class="tb-btn" id="aboutToggle" title="How to use & AI specifications" aria-label="About">ℹ️ About</button>
     <button class="sidebar-toggle" id="sidebarToggle" title="Toggle sidebar" aria-label="Toggle sidebar">☰</button>
     <button class="dm-toggle" id="dmToggle" title="Toggle dark mode" aria-label="Toggle dark mode">🌙</button>
   </div>
@@ -1058,8 +1330,72 @@ textarea:focus { outline: none; border-color: var(--text-secondary); }
         <textarea id="desc" placeholder="Describe the materials, colors, and style of your product.&#10;This helps the AI understand what to preserve from the reference image.&#10;&#10;Example: tan leather dining chair, curved back, dark smoked ash wood legs"></textarea>
       </div>
 
+      <!-- ── BRAND REFERENCE ─────────────────────────────────────── -->
       <div class="block">
-        <span class="lbl">Resolution — Nano Banana 2</span>
+        <span class="lbl">Furniture Brand <span style="font-weight:400;text-transform:none;color:var(--text-muted);letter-spacing:0;">(optional — helps AI match brand style)</span></span>
+        <input type="text" id="brandRef" placeholder="e.g. Herman Miller, Vitra, Kartell, IKEA, Poliform..." style="width:100%;padding:8px;border:1px solid var(--border-light);border-radius:6px;background:var(--bg);color:var(--text);font-size:12px;box-sizing:border-box;"/>
+      </div>
+
+      <!-- ── UPLOAD AGENT (collapsible) ─────────────────────────── -->
+      <div class="block" style="border-bottom:none;">
+        <div class="setting-head" id="agentToggle" style="cursor:pointer;">
+          <span class="lbl">🤖 Upload Agent <span style="font-weight:400;text-transform:none;color:var(--text-muted);letter-spacing:0;">— auto-extract from PDF+ZIP</span></span>
+          <span class="agent-toggle-arrow" id="agentArrow" style="transition:transform 0.2s;">▶</span>
+        </div>
+      </div>
+      <div id="agentSection" style="display:none;">
+        <div class="block" style="padding-top:0;">
+          <span class="lbl" style="font-size:11px;color:var(--text-muted);">Upload a product catalog PDF and a ZIP of images. The agent extracts product info using DeepSeek AI and selects the best image.</span>
+        </div>
+        <div class="block">
+          <span class="lbl">Step 1: Upload Catalog PDF</span>
+          <label for="agentPdfInput" class="upload-box" id="agentPdfDropZone" style="padding:10px;min-height:60px;">
+            <span class="icon" id="agentPdfIcon">📄</span>
+            <span class="txt" id="agentPdfText">Drop PDF catalog here or click to browse</span>
+            <span class="sub" id="agentPdfSub">PDF files only · max 50MB</span>
+          </label>
+          <input type="file" id="agentPdfInput" accept=".pdf,application/pdf" style="position:absolute;left:-9999px;top:-9999px;"/>
+        </div>
+        <div class="block">
+          <span class="lbl">Step 2: Upload Images ZIP</span>
+          <label for="agentZipInput" class="upload-box" id="agentZipDropZone" style="padding:10px;min-height:60px;">
+            <span class="icon" id="agentZipIcon">🗜️</span>
+            <span class="txt" id="agentZipText">Drop ZIP file here or click to browse</span>
+            <span class="sub" id="agentZipSub">ZIP files only · max 50MB</span>
+          </label>
+          <input type="file" id="agentZipInput" accept=".zip,application/zip,application/x-zip-compressed" style="position:absolute;left:-9999px;top:-9999px;"/>
+        </div>
+        <div class="block" style="padding-top:0;padding-bottom:0;">
+          <button class="btn-start" id="agentAnalyzeBtn" disabled style="width:100%;font-size:12px;padding:8px;">🔍 Analyze & Extract</button>
+        </div>
+        <div id="agentProgress" class="block" style="display:none;padding-top:0.3rem;padding-bottom:0.3rem;">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span class="agent-spinner" style="width:14px;height:14px;border:2px solid var(--border-light);border-top-color:var(--accent);border-radius:50%;animation:spin 0.8s linear infinite;display:inline-block;"></span>
+            <span id="agentProgressText" style="font-size:11px;color:var(--text-muted);">Analyzing...</span>
+          </div>
+        </div>
+        <div id="agentResult" style="display:none;">
+          <div class="block" style="border-top:1px solid var(--border-light);padding-top:0.6rem;">
+            <span class="lbl">Extracted Product Info</span>
+            <div id="agentProductInfo" style="font-size:11px;color:var(--text-secondary);margin-top:4px;"></div>
+          </div>
+          <div class="block" style="padding-top:0;">
+            <span class="lbl">Selected Image</span>
+            <div id="agentImagePreview" style="margin-top:4px;text-align:center;">
+              <img id="agentSelectedImg" src="" alt="Selected product image" style="max-width:100%;max-height:120px;border-radius:4px;display:none;"/>
+            </div>
+          </div>
+          <div class="block" style="padding-top:0;padding-bottom:0.6rem;">
+            <button class="btn-start" id="agentSubmitBtn" disabled style="width:100%;font-size:12px;padding:8px;">🚀 Submit to Queue</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="block">
+        <div class="setting-head">
+          <span class="lbl">Resolution — Nano Banana 2</span>
+          <button class="setting-edit-btn" id="resolutionEditBtn" type="button">Edit</button>
+        </div>
         <div class="q-btns">
           <button class="q-btn active" data-res="0.5K">0.5K<br><span class="price">$0.06/img</span></button>
           <button class="q-btn" data-res="1K">1K<br><span class="price">$0.08/img</span></button>
@@ -1071,11 +1407,14 @@ textarea:focus { outline: none; border-color: var(--text-secondary); }
 
       <!-- ── PROVIDER SELECTOR ──────────────────────────────────── -->
       <div class="block">
-        <span class="lbl">AI Provider</span>
+        <div class="setting-head">
+          <span class="lbl">AI Provider</span>
+          <button class="setting-edit-btn" id="providerEditBtn" type="button">Edit</button>
+        </div>
         <div class="q-btns" id="providerBtns">
           <button class="q-btn active" data-provider="fal">fal.ai<br><span class="price">Nano Banana 2</span></button>
           <button class="q-btn" data-provider="gemini">Gemini 3<br><span class="price">Flash / Pro</span></button>
-          <button class="q-btn" data-provider="openai">OpenAI<br><span class="price">GPT Image 2</span></button>
+          <button class="q-btn" data-provider="openai">OpenAI<br><span class="price">GPT Image</span></button>
         </div>
         <div class="res-note" id="providerNote">fal.ai — Nano Banana 2 / GPT Image 2. Requires fal.ai API key.</div>
       </div>
@@ -1099,6 +1438,15 @@ textarea:focus { outline: none; border-color: var(--text-secondary); }
         <div class="block" style="border-top:1px solid var(--border-light);padding-top:0.6rem;padding-bottom:0.6rem;">
           <button class="btn-start" id="confirmAddBtn" style="font-size:12px;padding:8px;" disabled>✚ Add Selected to Queue</button>
         </div>
+      </div>
+
+      <!-- ── AUTO-QUEUE TOGGLE ──────────────────────────────────── -->
+      <div class="block" style="padding-bottom:0.3rem;display:flex;justify-content:space-between;align-items:center;">
+        <span class="lbl" style="margin-bottom:0;">Auto-Queue</span>
+        <label class="toggle-switch">
+          <input type="checkbox" id="autoQueueToggle" />
+          <span class="toggle-slider"></span>
+        </label>
       </div>
 
       <div class="par-block">
@@ -1147,14 +1495,24 @@ textarea:focus { outline: none; border-color: var(--text-secondary); }
     <div class="welcome" id="welcomeState">
       <span class="wi">🪑</span>
       <h2>Queue up your products</h2>
-      <p>Add product images on the left. Each generates 5 separate views — front, side, isometric, back, and luxury interior. Finished batches appear here to download.</p>
+      <p>Add product images on the left. Each generates 4 separate views — front, side, isometric, and luxury interior scene. Finished batches appear here to download.</p>
     </div>
 
     <!-- ── PRODUCT FEATURE PANEL ──────────────────────────────── -->
+    <div class="completed-panel" id="completedPanel" style="display:none;">
+      <div class="sec-title">
+        <span class="pulse done"></span>
+        <span class="sec-title-text">Completed Batches</span>
+        <span style="font-size:11px;font-weight:400;color:var(--text-secondary);margin-left:auto;">Saved render URLs from Supabase and this browser</span>
+        <button class="btn-dl-all" id="completedRefreshBtn" type="button">Refresh</button>
+      </div>
+      <div class="completed-list" id="completedList"></div>
+    </div>
+
     <div class="feature-panel" id="featurePanel" style="display:none;">
       <div class="sec-title">
         <span>📋 Product Features — View Prompts</span>
-        <span style="font-size:11px;font-weight:400;color:var(--text-secondary);margin-left:auto;">Edit prompts below to guide the AI for each view</span>
+        <span style="font-size:11px;font-weight:400;color:var(--text-secondary);margin-left:auto;">Click Edit on a view before changing its prompt</span>
       </div>
       <div class="feature-grid" id="featureGrid">
         <!-- populated by JS -->
@@ -1162,6 +1520,189 @@ textarea:focus { outline: none; border-color: var(--text-secondary); }
       <div class="feature-foot">
         <button class="btn-start" id="featureResetBtn" style="width:auto;padding:6px 16px;font-size:12px;margin:0;">↺ Reset to Defaults</button>
         <span class="feature-hint">💡 <strong>Tip:</strong> Be specific about material, color, shape, and style. The more detail you add, the more accurate the AI output will be.</span>
+      </div>
+    </div>
+
+    <!-- ── ABOUT / PRODUCT INFO PANEL ─────────────────────────── -->
+    <div class="about-panel" id="aboutPanel" style="display:none;">
+      <div class="sec-title">
+        <span>ℹ️ About — Product Image Studio</span>
+        <span style="font-size:11px;font-weight:400;color:var(--text-secondary);margin-left:auto;">AI-powered product photography studio</span>
+      </div>
+
+      <div class="about-section">
+        <div class="about-card">
+          <div class="about-card-header">
+            <span class="about-icon">📖</span>
+            <span class="about-card-title">How to Use</span>
+          </div>
+          <div class="about-card-body">
+            <ol class="about-steps">
+              <li><strong>Select Images</strong> — Click the upload box in the sidebar to add product photos (PNG, JPG, WEBP, up to 10MB each).</li>
+              <li><strong>Add Description</strong> — (Optional) Describe materials, colors, and style to help the AI preserve key details from the reference image.</li>
+              <li><strong>Set Brand Reference</strong> — (Optional) Enter a furniture brand name (e.g. Minotti, Poliform) so the AI matches the brand's design language and aesthetic.</li>
+              <li><strong>Choose Resolution</strong> — Select output resolution: 0.5K (512px, fastest), 1K (1024px, recommended), 2K, or 4K.</li>
+              <li><strong>Select AI Provider</strong> — Choose between Gemini 3 (Flash/Pro), OpenAI GPT Image, or fal.ai Nano Banana 2.</li>
+              <li><strong>Add to Queue</strong> — Click "Add Selected to Queue" to add items. Toggle <strong>Auto-Queue</strong> to start rendering immediately after adding.</li>
+              <li><strong>Start Queue</strong> — Click "▶ Start Queue" to begin processing. The background worker on the VPS processes up to 5 items concurrently.</li>
+              <li><strong>Download Results</strong> — Once complete, each batch card shows all 4 generated views. Click individual images to preview & download, or use "Download All" to get a ZIP.</li>
+            </ol>
+          </div>
+        </div>
+
+        <div class="about-card">
+          <div class="about-card-header">
+            <span class="about-icon">🤖</span>
+            <span class="about-card-title">AI Models & Specifications</span>
+          </div>
+          <div class="about-card-body">
+            <div class="about-specs">
+              <div class="about-spec">
+                <div class="about-spec-name">Gemini 3 — Flash / Pro</div>
+                <div class="about-spec-detail">
+                  <span class="spec-tag">Provider: Google</span>
+                  <span class="spec-tag">Model: gemini-3.0-flash-001 / gemini-3.0-pro-001</span>
+                  <span class="spec-tag">Capability: Image-to-image generation</span>
+                  <span class="spec-tag">Max Resolution: 4K</span>
+                  <span class="spec-tag">Best for: Fast, high-quality renders with strong brand/style adherence</span>
+                </div>
+                <div class="about-spec-note">Auto-selects Flash for standard views, Pro for interior scenes (higher detail). Brand reference is injected directly into the prompt for style matching.</div>
+              </div>
+              <div class="about-spec">
+                <div class="about-spec-name">OpenAI — GPT Image</div>
+                <div class="about-spec-detail">
+                  <span class="spec-tag">Provider: OpenAI</span>
+                  <span class="spec-tag">Model: gpt-image-1.5 by default</span>
+                  <span class="spec-tag">Capability: Image editing & generation</span>
+                  <span class="spec-tag">Max Resolution: 4K</span>
+                  <span class="spec-tag">Best for: Photorealistic renders, e-commerce quality</span>
+                </div>
+                <div class="about-spec-note">Uses image-to-image editing API. Brand reference is included in the prompt to guide style and material choices.</div>
+              </div>
+              <div class="about-spec">
+                <div class="about-spec-name">fal.ai — Nano Banana 2</div>
+                <div class="about-spec-detail">
+                  <span class="spec-tag">Provider: fal.ai</span>
+                  <span class="spec-tag">Model: Nano Banana 2 (SD-based)</span>
+                  <span class="spec-tag">Capability: Fast inference image generation</span>
+                  <span class="spec-tag">Max Resolution: 4K</span>
+                  <span class="spec-tag">Best for: Rapid prototyping, drafts, budget-friendly batch processing</span>
+                </div>
+                <div class="about-spec-note">Requires a fal.ai API key. Fastest option for draft-quality renders. Pricing scales with resolution (0.5K: $0.06/img → 4K: $0.16/img).</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="about-card">
+          <div class="about-card-header">
+            <span class="about-icon">⚙️</span>
+            <span class="about-card-title">Workflow & Architecture</span>
+          </div>
+          <div class="about-card-body">
+            <div class="about-workflow">
+              <div class="about-workflow-item">
+                <span class="wf-step">1</span>
+                <div>
+                  <strong>Upload</strong>
+                  <span>Images are uploaded to Supabase Storage for persistent access.</span>
+                </div>
+              </div>
+              <div class="about-workflow-item">
+                <span class="wf-step">2</span>
+                <div>
+                  <strong>Queue</strong>
+                  <span>Items are saved to Supabase database with status tracking (waiting → active → done/error).</span>
+                </div>
+              </div>
+              <div class="about-workflow-item">
+                <span class="wf-step">3</span>
+                <div>
+                  <strong>Process</strong>
+                  <span>A background worker on the VPS polls every 5 seconds, picks up queued items, and generates all 4 views in parallel using the selected AI provider.</span>
+                </div>
+              </div>
+              <div class="about-workflow-item">
+                <span class="wf-step">4</span>
+                <div>
+                  <strong>Store</strong>
+                  <span>Generated images are saved to Supabase Storage and the database is updated with status and URLs.</span>
+                </div>
+              </div>
+              <div class="about-workflow-item">
+                <span class="wf-step">5</span>
+                <div>
+                  <strong>Drive Upload</strong>
+                  <span>(Optional) If Google Drive is configured, completed renders are automatically uploaded to a folder named after the product.</span>
+                </div>
+              </div>
+              <div class="about-workflow-item">
+                <span class="wf-step">6</span>
+                <div>
+                  <strong>Download</strong>
+                  <span>Results appear in the main panel. Download individual images or all 4 views as a ZIP file.</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="about-card">
+          <div class="about-card-header">
+            <span class="about-icon">🎨</span>
+            <span class="about-card-title">The 4 Generated Views</span>
+          </div>
+          <div class="about-card-body">
+            <div class="about-views-grid">
+              <div class="about-view-item">
+                <span class="about-view-icon">1</span>
+                <div>
+                  <strong>Front View</strong>
+                  <span>Straight-on product shot. Best for thumbnails, e-commerce listings, and hero images. White/clean background.</span>
+                </div>
+              </div>
+              <div class="about-view-item">
+                <span class="about-view-icon">2</span>
+                <div>
+                  <strong>Side View</strong>
+                  <span>Profile perspective showing product depth, proportions, and silhouette. Clean background.</span>
+                </div>
+              </div>
+              <div class="about-view-item">
+                <span class="about-view-icon">3</span>
+                <div>
+                  <strong>Isometric View</strong>
+                  <span>Angled 3D-feel shot. Best for marketing materials, social media, and catalog spreads. Clean background.</span>
+                </div>
+              </div>
+              <div class="about-view-item">
+                <span class="about-view-icon">4</span>
+                <div>
+                  <strong>Interior Scene</strong>
+                  <span>Lifestyle render placing the product in a luxury interior setting. Best for social media, catalog hero images, and brand storytelling.</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="about-card">
+          <div class="about-card-header">
+            <span class="about-icon">💡</span>
+            <span class="about-card-title">Tips for Best Results</span>
+          </div>
+          <div class="about-card-body">
+            <ul class="about-tips">
+              <li>Use <strong>high-quality reference images</strong> with good lighting and clear product visibility.</li>
+              <li>Write <strong>detailed descriptions</strong> — mention materials (e.g. "tan leather, brushed brass legs"), colors, and textures.</li>
+              <li>Set a <strong>brand reference</strong> to match the product's design language (e.g. "Minotti" for warm Italian luxury, "Vitra" for modern design).</li>
+              <li>For <strong>interior scenes</strong>, Gemini 3 Pro is recommended for the best detail and composition.</li>
+              <li>Use <strong>0.5K resolution</strong> for quick drafts and testing prompts, then switch to <strong>1K or 2K</strong> for final renders.</li>
+              <li>Enable <strong>Auto-Queue</strong> when processing multiple items to save clicks.</li>
+              <li>Customize the <strong>AI prompts</strong> via the 📋 Features panel to fine-tune how each view is generated.</li>
+            </ul>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -1216,16 +1757,14 @@ function homeuPrompt(view, desc) {
   if (view.id === 1) return `${fidelity} ${productShot} Image 1: front view of the chair.`;
   if (view.id === 2) return `${fidelity} ${productShot} Image 2: side view of the chair.`;
   if (view.id === 3) return `${fidelity} ${productShot} Image 3: isometric 45-degree view of the chair.`;
-  if (view.id === 4) return `${fidelity} ${productShot} Image 4: back view of the chair. Infer hidden rear details conservatively from the reference without changing the design.`;
-  return `${fidelity} Generate one separate image only, not a collage or grid. Image 5: full luxury modern dining room interior scene using the EXACT same chair as the main furniture. Place it naturally in a high-end condominium or architect-designed luxury home setting with premium materials such as marble, travertine, wood veneer, brushed metal, linen or boucle textures, soft natural daylight, balanced exposure, realistic grounding shadows, correct scale and perspective, eye-level camera, and Homeu-style neutral luxury tones: beige, taupe, cream, warm gray, black accents, walnut or oak. Supporting decor such as rugs, pendant lights, wall art, curtains, vases, books, or trays is allowed only if it does not overpower the chair. The scene must look like a real photographed luxury property listing or interior design magazine image.`;
+  return `${fidelity} Generate one separate image only, not a collage or grid. Image 4: full luxury modern dining room interior scene using the EXACT same chair as the main furniture. Place it naturally in a high-end condominium or architect-designed luxury home setting with premium materials such as marble, travertine, wood veneer, brushed metal, linen or boucle textures, soft natural daylight, balanced exposure, realistic grounding shadows, correct scale and perspective, eye-level camera, and Homeu-style neutral luxury tones: beige, taupe, cream, warm gray, black accents, walnut or oak. Supporting decor such as rugs, pendant lights, wall art, curtains, vases, books, or trays is allowed only if it does not overpower the chair. The scene must look like a real photographed luxury property listing or interior design magazine image.`;
 }
 
 const VIEWS = [
   { id:1, label:'Front view',     prompt: d=>homeuPrompt({ id: 1 }, d) },
   { id:2, label:'Side view',      prompt: d=>homeuPrompt({ id: 2 }, d) },
   { id:3, label:'Isometric view', prompt: d=>homeuPrompt({ id: 3 }, d) },
-  { id:4, label:'Back view',      prompt: d=>homeuPrompt({ id: 4 }, d) },
-  { id:5, label:'Interior scene', prompt: d=>homeuPrompt({ id: 5 }, d) }
+  { id:4, label:'Interior scene', prompt: d=>homeuPrompt({ id: 4 }, d) }
 ];
 
 const STATUS = {
@@ -1285,6 +1824,7 @@ const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
 const LS_KEY = 'product_studio_state';
 const LOG_KEY = 'product_studio_failure_log';
 const QUEUE_LOG_KEY = 'product_studio_queue_log';
+const COMPLETED_ARCHIVE_KEY = 'product_studio_completed_archive_v1';
 const MAX_LOG_ENTRIES = 500;
 const MAX_QUEUE_LOG_ENTRIES = 200;
 
@@ -1312,8 +1852,53 @@ const ENV_API_KEY = (function(){
 let queue = [];
 let pendingItems = [];
 let nb2Res = '0.5K';
-let provider = 'fal'; // 'fal', 'gemini', or 'openai'
+let provider = 'openai'; // 'openai' or 'gemini' (fal is deprecated on VPS)
 let nextId = 1;
+
+// ── VPS Backend Configuration ──
+// When frontend is on Vercel and backend is on a VPS, set this to
+// the VPS IP or domain. When both are on the same server, keep empty.
+const API_BASE_URL = (() => {
+  const explicitBackend = '';
+  if (explicitBackend) return explicitBackend.replace(/\/$/, '');
+  if (window.location.protocol === 'http:' || window.location.protocol === 'https:') {
+    return window.location.origin;
+  }
+  return 'http://104.248.225.250:3000';
+})();
+const API_BASE_CANDIDATES = (() => {
+  const bases = [];
+  const add = value => {
+    const base = (value || '').replace(/\/$/, '');
+    if (base && !bases.includes(base)) bases.push(base);
+  };
+  add(API_BASE_URL);
+  if (window.location.protocol !== 'https:') {
+    add('http://104.248.225.250:3000');
+  }
+  return bases;
+})();
+
+async function fetchApi(path, options = {}) {
+  let lastNetworkError = null;
+
+  for (const base of API_BASE_CANDIDATES) {
+    try {
+      const res = await fetch(`${base}${path}`, options);
+      if (res.status === 404 && base !== API_BASE_CANDIDATES[API_BASE_CANDIDATES.length - 1]) {
+        continue;
+      }
+      return res;
+    } catch (error) {
+      lastNetworkError = error;
+    }
+  }
+
+  const detail = window.location.protocol === 'https:'
+    ? 'Backend route is not reachable from this HTTPS origin. Make sure Caddy/proxy is serving the updated VPS app and restart the Node/PM2 process.'
+    : 'Backend route is not reachable. Make sure the VPS app is running on port 3000 and was restarted after the latest changes.';
+  throw new Error(`${detail} Last network error: ${formatError(lastNetworkError, 'Failed to fetch')}`);
+}
 let darkMode = false;
 let parallelism = 1;
 let savedApiKey = '';
@@ -1376,11 +1961,21 @@ const queueLogList  = document.getElementById('queueLogList');
 const queueLogToggle = document.getElementById('queueLogToggle');
 const queueLogBadge  = document.getElementById('queueLogBadge');
 const queueLogClear  = document.getElementById('queueLogClear');
+const resolutionEditBtn = document.getElementById('resolutionEditBtn');
+const providerEditBtn = document.getElementById('providerEditBtn');
+const completedToggle = document.getElementById('completedToggle');
+const completedPanel = document.getElementById('completedPanel');
+const completedList = document.getElementById('completedList');
+const completedRefreshBtn = document.getElementById('completedRefreshBtn');
 
 // ── PENDING ELEMENTS ────────────────────────────────────────────────
 const pendingArea = document.getElementById('pendingArea');
 const pendingList = document.getElementById('pendingList');
 const confirmAddBtn = document.getElementById('confirmAddBtn');
+
+// ── BRAND REFERENCE & AUTO-QUEUE ────────────────────────────────────
+const brandRef = document.getElementById('brandRef');
+const autoQueueToggle = document.getElementById('autoQueueToggle');
 
 // ── SUPABASE ELEMENTS ──────────────────────────────────────────────
 const supaStatus  = document.getElementById('supaStatus');
@@ -1659,9 +2254,221 @@ function renderQueueLogIfVisible() {
   }
 }
 
+function getCompletedArchive() {
+  try {
+    const raw = localStorage.getItem(COMPLETED_ARCHIVE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch(e) {
+    return [];
+  }
+}
+
+function saveCompletedArchive(items) {
+  try {
+    localStorage.setItem(COMPLETED_ARCHIVE_KEY, JSON.stringify(items.slice(0, 300)));
+  } catch(e) {
+    console.warn('Completed archive save failed:', e);
+  }
+}
+
+function archiveCompletedItem(item, viewResults = []) {
+  if (!item || !viewResults?.length) return;
+  const hasAnyImage = viewResults.some(r => r.status === 'done' && r.imageUrl);
+  if (!hasAnyImage && item.status !== STATUS.ERROR) return;
+
+  const archive = getCompletedArchive().filter(entry => Number(entry.id) !== Number(item.id));
+  archive.unshift({
+    id: item.id,
+    name: item.name || `Item ${item.id}`,
+    imageUrl: item.dataUrl || item.supabaseUrl || item.imageUrl || '',
+    status: item.status || STATUS.DONE,
+    provider: item.provider || '',
+    apiModel: item.apiModel || '',
+    updatedAt: item.updatedAt || new Date().toISOString(),
+    driveFolderId: item.driveFolderId || '',
+    driveFolderName: item.driveFolderName || '',
+    driveUploadStatus: item.driveUploadStatus || (item.driveFolderName ? 'done' : ''),
+    driveUploadDone: item.driveUploadDone || 0,
+    driveUploadTotal: item.driveUploadTotal || 0,
+    driveUploadError: item.driveUploadError || '',
+    viewResults: viewResults.map(r => ({
+      viewId: r.viewId,
+      status: r.status,
+      imageUrl: r.imageUrl || null,
+      errorMessage: r.errorMessage || null,
+      completedAt: r.completedAt || null
+    }))
+  });
+  saveCompletedArchive(archive);
+}
+
+function getDriveStateText(item) {
+  const status = item.driveUploadStatus || (item.driveFolderName ? 'done' : '');
+  if (status === 'done') return item.driveFolderName ? `Uploaded to Drive: ${item.driveFolderName}` : 'Uploaded to Drive';
+  if (status === 'uploading') return `Uploading to Drive (${item.driveUploadDone || 0}/${item.driveUploadTotal || VIEWS.length})`;
+  if (status === 'error') return item.driveUploadError ? `Drive upload failed: ${item.driveUploadError}` : 'Drive upload failed';
+  return 'Not uploaded to Drive';
+}
+
+function getRenderProvider(item = {}) {
+  return (item.provider || '').toLowerCase();
+}
+
+function getBatchApiText(item = {}) {
+  const itemProvider = getRenderProvider(item);
+  if (itemProvider === 'gemini') return 'Rendered with Gemini 3: Flash for product views, Pro for interior scene';
+  if (itemProvider === 'openai') return `Rendered with OpenAI GPT Image${item.apiModel ? ` (${item.apiModel})` : ''}`;
+  if (itemProvider === 'fal') return 'Rendered with fal.ai';
+  return 'Rendered API not recorded';
+}
+
+function getViewApiText(item = {}, viewId) {
+  const itemProvider = getRenderProvider(item);
+  if (itemProvider === 'gemini') return Number(viewId) === 4 ? 'Gemini 3 Pro' : 'Gemini 3 Flash';
+  if (itemProvider === 'openai') return item.apiModel || 'OpenAI GPT Image';
+  if (itemProvider === 'fal') return 'fal.ai';
+  return '';
+}
+
+function getMergedCompletedRecords() {
+  const records = new Map();
+  for (const entry of getCompletedArchive()) {
+    records.set(Number(entry.id), { item: entry, viewResults: entry.viewResults || [], source: 'archive' });
+  }
+
+  for (const item of queue) {
+    if (![STATUS.DONE, STATUS.PARTIAL, STATUS.ERROR, STATUS.STOPPED].includes(item.status)) continue;
+    const viewResults = lastPollRenderResults[item.id] || records.get(Number(item.id))?.viewResults || [];
+    const liveHasImages = viewResults.some(r => r.status === 'done' && r.imageUrl);
+    const previous = records.get(Number(item.id));
+    records.set(Number(item.id), {
+      item: {
+        ...(previous?.item || {}),
+        ...item,
+        imageUrl: item.dataUrl || item.supabaseUrl || previous?.item?.imageUrl || '',
+        provider: item.provider || previous?.item?.provider || '',
+        apiModel: item.apiModel || previous?.item?.apiModel || '',
+        updatedAt: item.updatedAt || previous?.item?.updatedAt || ''
+      },
+      viewResults: liveHasImages ? viewResults : (previous?.viewResults || viewResults),
+      source: liveHasImages ? 'supabase' : (previous?.source || 'queue')
+    });
+  }
+
+  return Array.from(records.values())
+    .sort((a, b) => Number(b.item.id) - Number(a.item.id));
+}
+
+async function renderCompletedPanel() {
+  if (!completedList) return;
+  completedList.innerHTML = '<div class="completed-empty">Loading completed batches...</div>';
+
+  if (supaConnected) await pollStatus();
+
+  const records = getMergedCompletedRecords();
+  if (!records.length) {
+    completedList.innerHTML = '<div class="completed-empty">No completed batches yet. Finished renders will appear here and stay downloadable when their saved image URLs exist.</div>';
+    return;
+  }
+
+  completedList.innerHTML = '';
+  for (const record of records) {
+    completedList.appendChild(createCompletedHistoryCard(record.item, record.viewResults, record.source));
+  }
+}
+
+function createCompletedHistoryCard(item, viewResults = [], source = 'archive') {
+  const doneCount = viewResults.filter(r => r.status === 'done' && r.imageUrl).length;
+  const hasThumb = item.imageUrl || item.dataUrl || item.supabaseUrl;
+  const driveStatus = item.driveUploadStatus || (item.driveFolderName ? 'done' : '');
+  const card = document.createElement('div');
+  card.className = 'batch-card';
+  card.id = `hc-${item.id}`;
+  card.innerHTML = `
+    <div class="batch-head">
+      ${hasThumb
+        ? `<img class="batch-thumb" src="${hasThumb}" alt="${escHtml(item.name)}"/>`
+        : `<div class="batch-thumb" style="display:flex;align-items:center;justify-content:center;background:var(--border-light);font-size:18px;color:var(--text-dim);">📷</div>`
+      }
+      <div class="batch-info">
+        <h3>${escHtml(item.name || `Item ${item.id}`)}</h3>
+        <p>${escHtml(getBatchApiText(item))}</p>
+        <p>${doneCount} of ${VIEWS.length} renders stored · ${source === 'supabase' ? 'Supabase' : 'Archive'}</p>
+      </div>
+      <span class="drive-state ${driveStatus === 'done' ? 'done' : driveStatus === 'error' ? 'error' : ''}">${escHtml(getDriveStateText(item))}</span>
+      <div class="batch-actions">
+        ${driveUploadButtonHtml(item, viewResults).replace(`id="bdrive-${item.id}"`, `id="hdrive-${item.id}"`)}
+        <button class="btn-zip" id="hzip-${item.id}" type="button" ${doneCount ? '' : 'disabled'}>⬇ ZIP</button>
+        <button class="btn-retry-batch" id="hregen-${item.id}" type="button">↻ Re-generate</button>
+      </div>
+    </div>
+    <div class="batch-grid" id="hgrid-${item.id}"></div>
+  `;
+
+  const grid = card.querySelector(`#hgrid-${item.id}`);
+  VIEWS.forEach(v => {
+    const r = viewResults.find(row => Number(row.viewId) === Number(v.id));
+    const slot = document.createElement('div');
+    slot.className = 'bslot';
+    if (r?.status === 'done' && r.imageUrl) {
+      slot.innerHTML = `
+        <img src="${r.imageUrl}" alt="${v.label}"/>
+        <div class="bslot-label">Img ${v.id} — ${v.label}</div>
+        <button class="btn-dl1" type="button" data-url="${r.imageUrl}" data-name="${item.name}_img${v.id}">⬇ Download</button>`;
+      slot.querySelector('img').addEventListener('click', () => openLightbox(r.imageUrl));
+      slot.querySelector('.btn-dl1').addEventListener('click', e => {
+        dlOneUrl(e.currentTarget.dataset.url, e.currentTarget.dataset.name);
+      });
+    } else {
+      slot.innerHTML = `
+        <div style="min-height:90px;display:flex;align-items:center;justify-content:center;"><span style="font-size:10px;color:var(--text-dim);">${r?.errorMessage ? escHtml(r.errorMessage) : 'No stored image URL'}</span></div>
+        <div class="bslot-label">Img ${v.id} — ${v.label}</div>`;
+    }
+    grid.appendChild(slot);
+  });
+
+  card.querySelector(`#hzip-${item.id}`)?.addEventListener('click', () => downloadHistoryZip(item.name || `Item_${item.id}`, viewResults));
+  card.querySelector(`#hregen-${item.id}`)?.addEventListener('click', () => retryItemFromHistory(item.id));
+  card.querySelector(`#hdrive-${item.id}`)?.addEventListener('click', () => uploadBatchToDrive(item.id));
+  return card;
+}
+
+async function downloadHistoryZip(name, viewResults) {
+  const doneResults = viewResults.filter(r => r.status === 'done' && r.imageUrl);
+  if (!doneResults.length) {
+    toast('No stored render images to zip', 'info');
+    return;
+  }
+
+  const zip = new JSZip();
+  for (const r of doneResults) {
+    const view = VIEWS.find(v => v.id === r.viewId);
+    const label = view ? view.label.replace(/ /g, '_') : `view_${r.viewId}`;
+    try {
+      const res = await fetch(r.imageUrl);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const arrayBuf = await res.arrayBuffer();
+      zip.file(`${name}_img${r.viewId}_${label}.jpg`, new Uint8Array(arrayBuf));
+    } catch (e) {
+      console.warn(`Failed to fetch completed image ${r.viewId}:`, e);
+    }
+  }
+
+  const blob = await zip.generateAsync({ type: 'blob' });
+  const objUrl = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = objUrl;
+  a.download = `${name}_renders.zip`;
+  a.click();
+  URL.revokeObjectURL(objUrl);
+}
+
 queueLogToggle.addEventListener('click', () => {
   const isHidden = queueLogPanel.style.display === 'none';
   queueLogPanel.style.display = isHidden ? 'block' : 'none';
+  completedPanel.style.display = 'none';
+  completedToggle.classList.remove('active');
+  completedPanelOpen = false;
   // Only toggle welcomeState if there's no active section showing
   if (!document.getElementById('active-section')) {
     welcomeState.style.display = isHidden ? 'none' : 'flex';
@@ -1672,9 +2479,33 @@ queueLogToggle.addEventListener('click', () => {
 
 queueLogClear.addEventListener('click', clearQueueLog);
 
+let completedPanelOpen = false;
+completedToggle.addEventListener('click', async () => {
+  completedPanelOpen = !completedPanelOpen;
+  completedToggle.classList.toggle('active', completedPanelOpen);
+  completedPanel.style.display = completedPanelOpen ? 'block' : 'none';
+  welcomeState.style.display = completedPanelOpen ? 'none' : 'flex';
+
+  featurePanel.style.display = 'none';
+  document.getElementById('aboutPanel').style.display = 'none';
+  queueLogPanel.style.display = 'none';
+  logPanel.style.display = 'none';
+  featureToggle.classList.remove('active');
+  if (aboutToggle) aboutToggle.classList.remove('active');
+  featurePanelOpen = false;
+  aboutPanelOpen = false;
+
+  if (completedPanelOpen) await renderCompletedPanel();
+});
+
+completedRefreshBtn?.addEventListener('click', renderCompletedPanel);
+
 logToggle.addEventListener('click', () => {
   const isHidden = logPanel.style.display === 'none';
   logPanel.style.display = isHidden ? 'block' : 'none';
+  completedPanel.style.display = 'none';
+  completedToggle.classList.remove('active');
+  completedPanelOpen = false;
   // Only toggle welcomeState if there's no active section showing
   if (!document.getElementById('active-section')) {
     welcomeState.style.display = isHidden ? 'none' : 'flex';
@@ -1812,7 +2643,9 @@ async function saveQueueToSupabase() {
       name: q.name,
       image_url: q.supabaseUrl || '',
       status: q.status,
-      description: q.desc || ''
+      description: q.desc || '',
+      brand: q.brand || '',
+      provider: q.provider || provider || 'openai'
     }));
 
     if (queueData.length === 0) return;
@@ -1827,6 +2660,8 @@ async function saveQueueToSupabase() {
         updated_at: new Date().toISOString()
       };
       if (item.description) row.description = item.description;
+      if (item.brand) row.brand = item.brand;
+      if (item.provider) row.provider = item.provider;
       return row;
     });
 
@@ -1878,6 +2713,8 @@ async function loadQueueFromSupabase() {
           supabaseUrl: row.image_url || '',
           status: row.status || STATUS.WAIT,
           desc: row.description || '',
+          brand: row.brand || '',
+          provider: row.provider || '',
           driveFolderId: row.drive_folder_id || '',
           driveFolderName: row.drive_folder_name || '',
           driveUploadStatus: row.drive_upload_status || '',
@@ -1958,6 +2795,9 @@ async function saveState() {
         status: q.status,
         supabaseUrl: q.supabaseUrl || '',
         desc: q.desc || '',
+        brand: q.brand || '',
+        provider: q.provider || '',
+        apiModel: q.apiModel || '',
         driveFolderId: q.driveFolderId || '',
         driveFolderName: q.driveFolderName || '',
         driveUploadStatus: q.driveUploadStatus || '',
@@ -2122,9 +2962,9 @@ async function loadState() {
         });
         const note = document.getElementById('providerNote');
         if (provider === 'gemini') {
-          note.textContent = 'Gemini 3 — gemini-3.1-flash-image-preview (views 1-4) & gemini-3-pro-image-preview (view 5). GEMINI_API_KEY set on server.';
+          note.textContent = 'Gemini 3 — gemini-3.1-flash-image-preview for all 4 views. GEMINI_API_KEY set on server.';
         } else if (provider === 'openai') {
-          note.textContent = 'OpenAI — GPT Image 2 (HD, natural style). OPENAI_API_KEY set on server.';
+          note.textContent = 'OpenAI — GPT Image edit. OPENAI_API_KEY set on server.';
         }
       }
       if (state.darkMode !== undefined) {
@@ -2213,10 +3053,8 @@ const DEFAULT_FEATURE_PROMPTS = [
     prompt: homeuPrompt({ id: 2 }, '') },
   { id: 3, label: 'Isometric View', hint: 'Best for: 3D-feel marketing shots, social media, angled hero images.',
     prompt: homeuPrompt({ id: 3 }, '') },
-  { id: 4, label: 'Back View',      hint: 'Best for: showing rear details, labels, ports, or stitching.',
-    prompt: homeuPrompt({ id: 4 }, '') },
-  { id: 5, label: 'Interior Scene', hint: 'Best for: lifestyle marketing, social media, catalog hero images showing product in context.',
-    prompt: homeuPrompt({ id: 5 }, '') }
+  { id: 4, label: 'Interior Scene', hint: 'Best for: lifestyle marketing, social media, catalog hero images showing product in context.',
+    prompt: homeuPrompt({ id: 4 }, '') }
 ];
 
 /** Current feature prompts (editable by user) */
@@ -2247,10 +3085,11 @@ function renderFeatureGrid() {
       <div class="feature-card-header" data-idx="${idx}">
         <span class="fc-num">${idx + 1}</span>
         <span class="fc-label">${fp.label}</span>
+        <button class="feature-edit-btn" type="button" data-idx="${idx}">Edit</button>
         <span class="fc-arrow">▼</span>
       </div>
       <div class="feature-card-body">
-        <textarea data-idx="${idx}" rows="4">${fp.prompt}</textarea>
+        <textarea data-idx="${idx}" rows="4" readonly>${escHtml(fp.prompt)}</textarea>
         <div class="fc-hint">${fp.hint}</div>
       </div>
     `;
@@ -2260,6 +3099,8 @@ function renderFeatureGrid() {
     const header = card.querySelector('.feature-card-header');
     const body = card.querySelector('.feature-card-body');
     const arrow = card.querySelector('.fc-arrow');
+    const editBtn = card.querySelector('.feature-edit-btn');
+    const textarea = card.querySelector('textarea');
     header.addEventListener('click', () => {
       const isOpen = body.classList.toggle('open');
       arrow.classList.toggle('open', isOpen);
@@ -2271,9 +3112,25 @@ function renderFeatureGrid() {
       arrow.classList.add('open');
     }
 
-    // Save on edit
-    const textarea = card.querySelector('textarea');
+    editBtn.addEventListener('click', e => {
+      e.stopPropagation();
+      const shouldEdit = textarea.hasAttribute('readonly');
+      if (shouldEdit && !body.classList.contains('open')) {
+        body.classList.add('open');
+        arrow.classList.add('open');
+      }
+      textarea.toggleAttribute('readonly', !shouldEdit);
+      editBtn.classList.toggle('is-editing', shouldEdit);
+      editBtn.textContent = shouldEdit ? 'Done' : 'Edit';
+      if (shouldEdit) {
+        textarea.focus();
+        textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+      }
+    });
+
+    // Save only after the view has been unlocked with Edit.
     textarea.addEventListener('input', () => {
+      if (textarea.hasAttribute('readonly')) return;
       featurePrompts[idx].prompt = textarea.value;
       saveFeaturePrompts();
       syncPromptsToViews();
@@ -2320,10 +3177,39 @@ featureToggle.addEventListener('click', () => {
   // Hide other panels
   document.getElementById('queueLogPanel').style.display = 'none';
   document.getElementById('logPanel').style.display = 'none';
+  document.getElementById('aboutPanel').style.display = 'none';
+  completedPanel.style.display = 'none';
+  completedToggle.classList.remove('active');
+  completedPanelOpen = false;
+  if (aboutToggle) aboutToggle.classList.remove('active');
+  aboutPanelOpen = false;
   if (featurePanelOpen) renderFeatureGrid();
 });
 
 featureResetBtn.addEventListener('click', resetFeaturePrompts);
+setSettingsGroupEditing('resolution', false);
+setSettingsGroupEditing('provider', false);
+
+// ── ABOUT PANEL TOGGLE ─────────────────────────────────────────────
+const aboutToggle = document.getElementById('aboutToggle');
+const aboutPanel = document.getElementById('aboutPanel');
+let aboutPanelOpen = false;
+
+aboutToggle.addEventListener('click', () => {
+  aboutPanelOpen = !aboutPanelOpen;
+  aboutToggle.classList.toggle('active', aboutPanelOpen);
+  aboutPanel.style.display = aboutPanelOpen ? 'block' : 'none';
+  welcomeState.style.display = aboutPanelOpen ? 'none' : 'flex';
+  // Hide other panels
+  document.getElementById('queueLogPanel').style.display = 'none';
+  document.getElementById('logPanel').style.display = 'none';
+  document.getElementById('featurePanel').style.display = 'none';
+  completedPanel.style.display = 'none';
+  featureToggle.classList.remove('active');
+  completedToggle.classList.remove('active');
+  featurePanelOpen = false;
+  completedPanelOpen = false;
+});
 
 // ── READY CHECK ───────────────────────────────────────────────────
 function checkReady() {
@@ -2345,7 +3231,7 @@ function checkReady() {
 function updateCost() {
   const n = queue.filter(q => q.status === STATUS.WAIT).length;
   if (!n) { costEst.textContent = ''; return; }
-  const price = NB2_PRICES[nb2Res] * 5;
+  const price = NB2_PRICES[nb2Res] * VIEWS.length;
   costEst.textContent = `~$${(n * price).toFixed(2)} for ${n} product${n>1?'s':''} · ${nb2Res} resolution`;
 }
 
@@ -2385,8 +3271,36 @@ apiKeyEl.addEventListener('keydown', e => {
 });
 
 // ── RESOLUTION PICKER ──────────────────────────────────────────────
+let resolutionEditing = false;
+let providerEditing = false;
+
+function setSettingsGroupEditing(group, isEditing) {
+  const selector = group === 'resolution' ? '.q-btn[data-res]' : '.q-btn[data-provider]';
+  const editBtn = group === 'resolution' ? resolutionEditBtn : providerEditBtn;
+
+  document.querySelectorAll(selector).forEach(btn => {
+    btn.disabled = !isEditing;
+  });
+
+  if (editBtn) {
+    editBtn.classList.toggle('is-editing', isEditing);
+    editBtn.textContent = isEditing ? 'Done' : 'Edit';
+  }
+}
+
+resolutionEditBtn?.addEventListener('click', () => {
+  resolutionEditing = !resolutionEditing;
+  setSettingsGroupEditing('resolution', resolutionEditing);
+});
+
+providerEditBtn?.addEventListener('click', () => {
+  providerEditing = !providerEditing;
+  setSettingsGroupEditing('provider', providerEditing);
+});
+
 document.querySelectorAll('.q-btn[data-res]').forEach(btn => {
   btn.addEventListener('click', async () => {
+    if (!resolutionEditing) return;
     nb2Res = btn.dataset.res;
     document.querySelectorAll('.q-btn[data-res]').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
@@ -2399,6 +3313,7 @@ document.querySelectorAll('.q-btn[data-res]').forEach(btn => {
 // ── PROVIDER SELECTOR ──────────────────────────────────────────────
 document.querySelectorAll('.q-btn[data-provider]').forEach(btn => {
   btn.addEventListener('click', async () => {
+    if (!providerEditing) return;
     provider = btn.dataset.provider;
     document.querySelectorAll('.q-btn[data-provider]').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
@@ -2406,9 +3321,9 @@ document.querySelectorAll('.q-btn[data-provider]').forEach(btn => {
     if (provider === 'fal') {
       note.textContent = 'fal.ai — Nano Banana 2 / GPT Image 2. Requires fal.ai API key.';
     } else if (provider === 'gemini') {
-      note.textContent = 'Gemini 3 — gemini-3.1-flash-image-preview (views 1-4) & gemini-3-pro-image-preview (view 5). GEMINI_API_KEY set on server.';
+      note.textContent = 'Gemini 3 — gemini-3.1-flash-image-preview for all 4 views. GEMINI_API_KEY set on server.';
     } else if (provider === 'openai') {
-      note.textContent = 'OpenAI — GPT Image 2 (HD, natural style). OPENAI_API_KEY set on server.';
+      note.textContent = 'OpenAI — GPT Image edit. OPENAI_API_KEY set on server.';
     }
     await saveState();
   });
@@ -2446,7 +3361,9 @@ async function addFiles(files) {
     const dataUrl = await blobToDataUrl(file);
     const name = file.name.replace(/\.[^.]+$/, '');
     // Description starts empty — user adds per-image description in the pending preview
-    const newItem = { id: nextId++, name, dataUrl, desc: '', status: STATUS.WAIT, supabaseUrl: '' };
+    // Brand is read from the global brandRef input
+    const brand = brandRef ? brandRef.value.trim() : '';
+    const newItem = { id: nextId++, name, dataUrl, desc: '', brand, status: STATUS.WAIT, supabaseUrl: '' };
     pendingItems.push(newItem);
     added++;
   }
@@ -2493,7 +3410,7 @@ function renderQueue() {
       }
       <div class="q-info">
         <div class="q-name">${escHtml(item.name)}${needsReupload ? ' <span style="color:var(--error);font-size:9px;">(re-upload needed)</span>' : ''}</div>
-        <div class="q-sub" id="qsub-${item.id}">5 renders · ~$${(NB2_PRICES[nb2Res]*5).toFixed(2)}</div>
+        <div class="q-sub" id="qsub-${item.id}">4 renders · ~$${(NB2_PRICES[nb2Res]*4).toFixed(2)}</div>
         <div class="q-desc-wrap" id="qdescw-${item.id}">
           <div class="q-desc-text" id="qdesct-${item.id}" onclick="editDesc(${item.id})" title="Click to edit description">${escHtml(itemDesc || 'No description')}</div>
           <textarea class="q-desc-edit" id="qdesce-${item.id}" style="display:none;" placeholder="Enter description for this image..." onblur="saveDesc(${item.id})" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();this.blur();}">${escHtml(itemDesc)}</textarea>
@@ -2691,6 +3608,11 @@ confirmAddBtn.addEventListener('click', async () => {
   renderPendingList();
   if (queue.length) welcomeState.style.display = 'none';
   toast(`Added ${items.length} item${items.length > 1 ? 's' : ''} to queue`, 'success');
+
+  // Auto-start queue if toggle is enabled
+  if (autoQueueToggle && autoQueueToggle.checked) {
+    setTimeout(() => startBtn.click(), 300);
+  }
 });
 
 // ── CLEAR BUTTONS ─────────────────────────────────────────────────
@@ -2874,7 +3796,7 @@ function createActiveCard(item) {
     const barFill = document.getElementById('active-bar-fill');
     if (barFill) { barFill.style.width = '0%'; }
     const barLabel = document.getElementById('active-bar-label');
-    if (barLabel) barLabel.textContent = '0 / 5 views';
+    if (barLabel) barLabel.textContent = '0 / 4 views';
     // Reset elapsed timer
     const timerEl = document.getElementById('active-timer');
     if (timerEl) timerEl.textContent = '⏱ 0s';
@@ -2912,13 +3834,13 @@ function createActiveCard(item) {
         <div class="progress-bar">
           <div class="progress-fill" id="active-bar-fill" style="width:0%;"></div>
         </div>
-        <span class="progress-label" id="active-bar-label">0 / 5 views</span>
+        <span class="progress-label" id="active-bar-label">0 / 4 views</span>
         <span class="progress-timer" id="active-timer">⏱ 0s</span>
       </div>
       <div class="drive-progress" id="active-drive-prog" style="display:none;">
         <span class="drive-label" id="active-drive-label">Google Drive</span>
         <div class="drive-bar"><div class="drive-bar-fill" id="active-drive-fill"></div></div>
-        <span class="drive-count" id="active-drive-count">0/5</span>
+        <span class="drive-count" id="active-drive-count">0/4</span>
       </div>
       <div class="renders-grid" id="active-grid"></div>
     </div>`;
@@ -3146,21 +4068,44 @@ function driveProgressHtml(item) {
   return `<div class="drive-progress" id="dprog-${id}">
     <span class="drive-label" id="dlabel-${id}">Google Drive</span>
     <div class="drive-bar"><div class="drive-bar-fill" id="dfill-${id}"></div></div>
-    <span class="drive-count" id="dcount-${id}">0/5</span>
+    <span class="drive-count" id="dcount-${id}">0/4</span>
   </div>`;
+}
+
+function driveUploadButtonHtml(item, viewResults = []) {
+  const status = item.driveUploadStatus || (item.driveFolderName ? 'done' : '');
+  const doneCount = viewResults.filter(r => r.status === 'done' && r.imageUrl).length;
+  const canUpload = doneCount === VIEWS.length;
+  if (status === 'done') {
+    return `<button class="btn-drive-upload" id="bdrive-${item.id}" type="button" disabled>Drive uploaded</button>`;
+  }
+  if (status === 'uploading') {
+    return `<button class="btn-drive-upload" id="bdrive-${item.id}" type="button" disabled>Uploading Drive...</button>`;
+  }
+  return `<button class="btn-drive-upload" id="bdrive-${item.id}" type="button" ${canUpload ? '' : 'disabled'}>Upload to Drive</button>`;
 }
 
 function updateBatchDriveStatus(item) {
   const wrap = document.getElementById(`dprog-${item.id}`);
+  const driveBtn = document.getElementById(`bdrive-${item.id}`);
+
+  const status = item.driveUploadStatus || (item.driveFolderName ? 'done' : '');
+  const total = Number(item.driveUploadTotal || VIEWS.length);
+  const done = Number(item.driveUploadDone || (status === 'done' ? total : 0));
+  const pct = total > 0 ? Math.min(100, Math.round((done / total) * 100)) : 0;
+
+  if (driveBtn) {
+    driveBtn.disabled = status === 'done' || status === 'uploading';
+    if (status === 'done') driveBtn.textContent = 'Drive uploaded';
+    else if (status === 'uploading') driveBtn.textContent = 'Uploading Drive...';
+    else driveBtn.textContent = 'Upload to Drive';
+  }
+
   if (!wrap) return;
 
   const label = document.getElementById(`dlabel-${item.id}`);
   const fill = document.getElementById(`dfill-${item.id}`);
   const count = document.getElementById(`dcount-${item.id}`);
-  const status = item.driveUploadStatus || (item.driveFolderName ? 'done' : '');
-  const total = Number(item.driveUploadTotal || 5);
-  const done = Number(item.driveUploadDone || (status === 'done' ? total : 0));
-  const pct = total > 0 ? Math.min(100, Math.round((done / total) * 100)) : 0;
 
   wrap.classList.toggle('visible', !!status);
   wrap.classList.toggle('done', status === 'done');
@@ -3186,7 +4131,7 @@ function updateBatchDriveStatus(item) {
 
 /**
  * Update the Drive upload progress bar in the active card.
- * Shows real-time upload progress (e.g., "Uploading to Drive: 3/5 files")
+ * Shows real-time upload progress (e.g., "Uploading to Drive: 3/4 files")
  * while the background worker is uploading renders to Google Drive.
  */
 function updateActiveDriveStatus(item) {
@@ -3197,7 +4142,7 @@ function updateActiveDriveStatus(item) {
   const fill = document.getElementById('active-drive-fill');
   const count = document.getElementById('active-drive-count');
   const status = item.driveUploadStatus || (item.driveFolderName ? 'done' : '');
-  const total = Number(item.driveUploadTotal || 5);
+  const total = Number(item.driveUploadTotal || VIEWS.length);
   const done = Number(item.driveUploadDone || (status === 'done' ? total : 0));
   const pct = total > 0 ? Math.min(100, Math.round((done / total) * 100)) : 0;
 
@@ -3250,10 +4195,12 @@ function createBatchCard(item, images) {
       <img class="batch-thumb" src="${item.dataUrl}" alt="${escHtml(item.name)}"/>
       <div class="batch-info">
         <h3>${escHtml(item.name)}</h3>
-        <p>${count} of 5 renders completed</p>
+        <p>${escHtml(getBatchApiText(item))}</p>
+        <p>${count} of 4 renders completed</p>
       </div>
       <div class="batch-actions">
-        <button class="btn-retry-batch" id="bretry-${item.id}" ${count === 5 ? 'style="display:none"' : ''}>↻ Retry failed</button>
+        <button class="btn-retry-batch" id="bretry-${item.id}" ${count === VIEWS.length ? 'style="display:none"' : ''}>↻ Retry failed</button>
+        ${driveUploadButtonHtml(item)}
         <button class="btn-zip" id="bzip-${item.id}">⬇ ZIP</button>
         <button class="btn-mini-clear" id="bdel-${item.id}">Delete</button>
       </div>
@@ -3289,6 +4236,8 @@ function createBatchCard(item, images) {
 
   document.getElementById(`bzip-${item.id}`).addEventListener('click', () => dlZip(item.id, item.name, images));
   document.getElementById(`bdel-${item.id}`).addEventListener('click', () => deleteCompletedBatch(item.id));
+  const driveBtn = document.getElementById(`bdrive-${item.id}`);
+  if (driveBtn) driveBtn.addEventListener('click', () => uploadBatchToDrive(item.id));
   const retryBtn = document.getElementById(`bretry-${item.id}`);
   if (retryBtn) {
     retryBtn.addEventListener('click', () => retryFailedViews(item, images));
@@ -3336,6 +4285,7 @@ async function dlZip(itemId, name, images) {
 // Called after server-side processing so renders show actual images + working downloads.
 function createBatchCardFromUrls(item, viewResults) {
   if (document.getElementById(`bc-${item.id}`)) return;
+  archiveCompletedItem(item, viewResults);
 
   let batchSec = document.getElementById('batch-section');
   if (!batchSec) {
@@ -3364,10 +4314,12 @@ function createBatchCardFromUrls(item, viewResults) {
       }
       <div class="batch-info">
         <h3>${escHtml(item.name)}</h3>
-        <p>${doneCount} of 5 renders completed</p>
+        <p>${escHtml(getBatchApiText(item))}</p>
+        <p>${doneCount} of 4 renders completed</p>
       </div>
       <div class="batch-actions">
-        <button class="btn-retry-batch" id="bretry-${item.id}" ${doneCount === 5 ? 'style="display:none"' : ''}>↻ Retry failed</button>
+        <button class="btn-retry-batch" id="bretry-${item.id}" ${doneCount === VIEWS.length ? 'style="display:none"' : ''}>↻ Retry failed</button>
+        ${driveUploadButtonHtml(item, viewResults)}
         <button class="btn-zip" id="bzip-${item.id}">⬇ ZIP</button>
         <button class="btn-mini-clear" id="bdel-${item.id}">Delete</button>
       </div>
@@ -3405,6 +4357,8 @@ function createBatchCardFromUrls(item, viewResults) {
 
   document.getElementById(`bzip-${item.id}`).addEventListener('click', () => dlZipFromUrls(item.id, item.name, viewResults));
   document.getElementById(`bdel-${item.id}`).addEventListener('click', () => deleteCompletedBatch(item.id));
+  const driveBtn = document.getElementById(`bdrive-${item.id}`);
+  if (driveBtn) driveBtn.addEventListener('click', () => uploadBatchToDrive(item.id));
   const retryBtn = document.getElementById(`bretry-${item.id}`);
   if (retryBtn) {
     retryBtn.addEventListener('click', () => retryFailedViews(item, {}));
@@ -3472,6 +4426,58 @@ async function dlZipFromUrls(itemId, name, viewResults) {
   prog.classList.remove('visible');
   fill.style.width = '0%';
   pct.textContent = '0%';
+}
+
+async function uploadBatchToDrive(itemId) {
+  const archiveItem = getCompletedArchive().find(entry => Number(entry.id) === Number(itemId));
+  const item = queue.find(q => q.id === itemId) || archiveItem;
+  const btn = document.getElementById(`bdrive-${itemId}`);
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = 'Uploading Drive...';
+  }
+
+  try {
+    const res = await fetchApi('/api/queue/upload-drive', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ itemId })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+
+    if (item) {
+      item.driveFolderId = data.folderId || item.driveFolderId || '';
+      item.driveFolderName = data.folderName || item.driveFolderName || '';
+      item.driveUploadStatus = data.success ? 'done' : 'error';
+      item.driveUploadDone = data.uploaded || item.driveUploadDone || VIEWS.length;
+      item.driveUploadTotal = data.total || item.driveUploadTotal || VIEWS.length;
+      item.driveUploadError = data.success ? '' : (data.message || 'Some files failed to upload');
+      updateBatchDriveStatus(item);
+      const viewResults = lastPollRenderResults[itemId] || archiveItem?.viewResults || [];
+      archiveCompletedItem(item, viewResults);
+    }
+
+    toast(data.message || 'Uploaded to Google Drive', data.success ? 'success' : 'info');
+    addQueueLogEntry('drive', item?.name || '', data.message || 'Uploaded to Google Drive');
+    await pollStatus();
+    if (completedPanelOpen) await renderCompletedPanel();
+    await saveState();
+  } catch (e) {
+    if (item) {
+      item.driveUploadStatus = 'error';
+      item.driveUploadError = formatError(e, 'Drive upload failed');
+      updateBatchDriveStatus(item);
+    }
+    toast('Drive upload failed: ' + formatError(e), 'error');
+  } finally {
+    if (btn) {
+      const nextItem = queue.find(q => q.id === itemId) || getCompletedArchive().find(entry => Number(entry.id) === Number(itemId));
+      const status = nextItem?.driveUploadStatus || (nextItem?.driveFolderName ? 'done' : '');
+      btn.disabled = status === 'done' || status === 'uploading';
+      btn.textContent = status === 'done' ? 'Drive uploaded' : 'Upload to Drive';
+    }
+  }
 }
 
 // ── DOWNLOAD ALL BATCHES ────────────────────────────────────────────
@@ -3604,6 +4610,12 @@ async function restoreBatchCards() {
     // Skip if card already exists
     if (document.getElementById(`bc-${item.id}`)) return;
 
+    const archived = getCompletedArchive().find(entry => Number(entry.id) === Number(item.id));
+    if (archived?.viewResults?.some(r => r.status === 'done' && r.imageUrl)) {
+      createBatchCardFromUrls({ ...item, ...archived, dataUrl: item.dataUrl || archived.imageUrl }, archived.viewResults);
+      return;
+    }
+
     const statusLabel = STATUS_LABEL[item.status] || 'done';
     const hasImage = item.dataUrl && (item.dataUrl.startsWith('data:') || item.dataUrl.startsWith('http'));
     const thumbSrc = hasImage ? item.dataUrl : '';
@@ -3623,18 +4635,21 @@ async function restoreBatchCards() {
         </div>
         <div class="batch-actions">
           <button class="btn-retry-batch" onclick="retryItemFromHistory(${item.id})">↻ Re-generate</button>
+          ${driveUploadButtonHtml(item, lastPollRenderResults[item.id] || [])}
           <button class="btn-mini-clear" id="bdel-${item.id}">Delete</button>
         </div>
       </div>
       <div class="batch-grid" id="bgrid-${item.id}">
         <div style="grid-column:1/-1;text-align:center;padding:1.5rem;color:var(--text-dim);font-size:12px;">
-          Images are not available after page reload.<br/>
-          Click "↻ Re-generate" to create them again.
+          No stored render image URLs were found for this batch.<br/>
+          Open Completed to check the archive, or re-generate once to store future downloads.
         </div>
-      </div>
+    </div>
       ${driveProgressHtml(item)}`;
     batchSec.appendChild(card);
     document.getElementById(`bdel-${item.id}`).addEventListener('click', () => deleteCompletedBatch(item.id));
+    const driveBtn = document.getElementById(`bdrive-${item.id}`);
+    if (driveBtn) driveBtn.addEventListener('click', () => uploadBatchToDrive(item.id));
     updateBatchDriveStatus(item);
   });
 }
@@ -3670,8 +4685,7 @@ const CLIENT_VIEW_PROMPTS = [
   { id: 1, prompt: d => homeuPrompt({ id: 1 }, d) },
   { id: 2, prompt: d => homeuPrompt({ id: 2 }, d) },
   { id: 3, prompt: d => homeuPrompt({ id: 3 }, d) },
-  { id: 4, prompt: d => homeuPrompt({ id: 4 }, d) },
-  { id: 5, prompt: d => homeuPrompt({ id: 5 }, d) }
+  { id: 4, prompt: d => homeuPrompt({ id: 4 }, d) }
 ];
 
 const CLIENT_ATTEMPTS = [
@@ -3682,7 +4696,7 @@ const CLIENT_ATTEMPTS = [
       prompt,
       image_urls: [imageDataUrl],
       resolution: resolution || '1K',
-      aspect_ratio: view.id === 5 ? '16:9' : '1:1',
+      aspect_ratio: view.id === 4 ? '16:9' : '1:1',
       output_format: 'jpeg',
       num_images: 1,
       safety_tolerance: '4',
@@ -3695,7 +4709,7 @@ const CLIENT_ATTEMPTS = [
     body: (view, prompt, imageDataUrl) => ({
       prompt,
       image_urls: [imageDataUrl],
-      image_size: view.id === 5 ? 'landscape_16_9' : 'square_hd',
+      image_size: view.id === 4 ? 'landscape_16_9' : 'square_hd',
       quality: 'high',
       num_images: 1,
       output_format: 'jpeg'
@@ -3802,7 +4816,7 @@ async function clientPollQueue(statusUrl, apiKey, responseUrl = statusUrl, timeo
 }
 
 /**
- * Process a single item client-side: generate all 5 views.
+ * Process a single item client-side: generate all 4 views.
  * Updates the active card UI in real-time as each view completes.
  */
 let clientStopRequested = false;
@@ -3913,14 +4927,14 @@ async function processQueueClientSide() {
         // Create/update active card for this item
         createActiveCard(item);
         startActiveTimer();
-        setActiveProg(`Generating 5 views for "${item.name}"...`);
+        setActiveProg(`Generating 4 views for "${item.name}"...`);
         addQueueLogEntry('gen', item.name, 'Starting generation');
 
         const results = await processItemClientSide(item);
 
         // Determine final status
         const doneCount = results.filter(r => r.status === 'done').length;
-        const finalStatus = doneCount === 5 ? STATUS.DONE : (doneCount > 0 ? STATUS.PARTIAL : STATUS.ERROR);
+        const finalStatus = doneCount === VIEWS.length ? STATUS.DONE : (doneCount > 0 ? STATUS.PARTIAL : STATUS.ERROR);
         item.status = finalStatus;
 
         // Update queue badge
@@ -3944,8 +4958,8 @@ async function processQueueClientSide() {
         createBatchCardFromUrls(item, viewResults);
 
         stopActiveTimer();
-        setActiveProg(`Completed: ${item.name} (${doneCount}/5 views)`);
-        addQueueLogEntry('done', item.name, `${doneCount}/5 views generated`);
+        setActiveProg(`Completed: ${item.name} (${doneCount}/4 views)`);
+        addQueueLogEntry('done', item.name, `${doneCount}/4 views generated`);
 
         return { item, results };
       })
@@ -3977,16 +4991,26 @@ async function processQueueClientSide() {
  */
 async function submitToServer(itemIds) {
   try {
-    const res = await fetch('/api/queue/submit', {
+    // Collect brand references for each item from the queue
+    const brands = {};
+    for (const item of queue) {
+      if (itemIds.includes(item.id) && item.brand) {
+        brands[item.id] = item.brand;
+      }
+    }
+    const res = await fetchApi('/api/queue/submit', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ itemIds, resolution: nb2Res, provider })
+      body: JSON.stringify({ itemIds, resolution: nb2Res, provider, brands })
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       throw new Error(err.error || `Server error ${res.status}`);
     }
     const data = await res.json();
+    queue.forEach(item => {
+      if (itemIds.includes(item.id)) item.provider = data.provider || provider || item.provider || 'openai';
+    });
     addQueueLogEntry('start', '', `Submitted ${data.items.length} item(s) to server`);
     return data;
   } catch (e) {
@@ -4004,7 +5028,7 @@ async function submitToServer(itemIds) {
  */
 async function pollStatus() {
   try {
-    const res = await fetch('/api/queue/status', {
+    const res = await fetchApi('/api/queue/status', {
       method: 'GET',
       headers: { 'Cache-Control': 'no-cache' }
     });
@@ -4023,7 +5047,8 @@ async function pollStatus() {
             dataUrl: serverItem.imageUrl || '',
             supabaseUrl: serverItem.imageUrl || '',
             status: serverItem.status || STATUS.WAIT,
-            desc: serverItem.description || ''
+            desc: serverItem.description || '',
+            provider: serverItem.provider || ''
           };
           queue.push(localItem);
           queue.sort((a, b) => a.id - b.id);
@@ -4031,6 +5056,8 @@ async function pollStatus() {
         if (localItem) {
           const prevStatus = localItem.status;
           localItem.status = serverItem.status;
+          localItem.provider = serverItem.provider || localItem.provider || '';
+          localItem.apiModel = serverItem.apiModel || localItem.apiModel || '';
           localItem.supabaseUrl = serverItem.imageUrl || localItem.supabaseUrl;
           localItem.driveFolderId = serverItem.driveFolderId || '';
           localItem.driveFolderName = serverItem.driveFolderName || '';
@@ -4061,6 +5088,12 @@ async function pollStatus() {
     // Store render results for use when building batch cards
     if (data.renderResults) {
       lastPollRenderResults = data.renderResults;
+      for (const serverItem of data.queue || []) {
+        if (serverItem.status !== 'done' && serverItem.status !== 'error') continue;
+        const localItem = queue.find(q => q.id === serverItem.id) || serverItem;
+        const viewResults = data.renderResults[serverItem.id] || [];
+        if (viewResults.length) archiveCompletedItem(localItem, viewResults);
+      }
     }
 
     // Update active card with render results
@@ -4112,10 +5145,16 @@ async function pollStatus() {
     if (data.renderResults) {
       for (const serverItem of data.queue) {
         if (serverItem.status !== 'done' && serverItem.status !== 'error') continue;
-        if (document.getElementById(`bc-${serverItem.id}`)) continue;
         const localItem = queue.find(q => q.id === serverItem.id);
         const viewResults = data.renderResults[serverItem.id];
         if (localItem && viewResults && viewResults.length > 0) {
+          const existingCard = document.getElementById(`bc-${serverItem.id}`);
+          const hasRenderedImages = existingCard?.querySelector('.batch-grid img');
+          if (existingCard && hasRenderedImages) {
+            updateBatchDriveStatus(localItem);
+            continue;
+          }
+          if (existingCard) existingCard.remove();
           createBatchCardFromUrls(localItem, viewResults);
           updateBatchDriveStatus(localItem);
           welcomeState.style.display = 'none';
@@ -4125,7 +5164,7 @@ async function pollStatus() {
 
     // ── Drive upload progress monitoring ──
     // Update the active card's Drive progress bar and status bar text
-    // with real-time upload progress (e.g., "Uploading to Drive: 3/5 files")
+    // with real-time upload progress (e.g., "Uploading to Drive: 3/4 files")
     const driveUploading = data.queue.some(q => q.driveUploadStatus === 'uploading');
     const driveItem = data.queue.find(q => q.driveUploadStatus === 'uploading' || q.driveUploadStatus === 'done' || q.driveUploadStatus === 'error');
     if (driveItem) {
@@ -4140,7 +5179,7 @@ async function pollStatus() {
     if (activeOrWait.length === 0 && driveUploading && isPolling) {
       const uploadingItem = data.queue.find(q => q.driveUploadStatus === 'uploading');
       const done = uploadingItem ? uploadingItem.driveUploadDone || 0 : 0;
-      const total = uploadingItem ? uploadingItem.driveUploadTotal || 5 : 5;
+      const total = uploadingItem ? uploadingItem.driveUploadTotal || VIEWS.length : VIEWS.length;
       setStatus(`Renders complete — uploading to Google Drive (${done}/${total} files)...`);
     }
     if (activeOrWait.length === 0 && !driveUploading && isPolling) {
@@ -4362,6 +5401,9 @@ window.addEventListener('beforeunload', function(e) {
         status: q.status,
         supabaseUrl: q.supabaseUrl || '',
         desc: q.desc || '',
+        brand: q.brand || '',
+        provider: q.provider || '',
+        apiModel: q.apiModel || '',
         driveFolderId: q.driveFolderId || '',
         driveFolderName: q.driveFolderName || '',
         driveUploadStatus: q.driveUploadStatus || '',
@@ -4406,7 +5448,337 @@ window.addEventListener('beforeunload', function(e) {
   await restoreBatchCards();
   await reconcileServerProcessingOnLoad();
   restoreQueuedPreviewCard();
+  initUploadAgent();
 })();
+
+// ══════════════════════════════════════════════════════════════════
+//  UPLOAD AGENT — PDF+ZIP auto-extraction with DeepSeek AI
+// ══════════════════════════════════════════════════════════════════
+
+function initUploadAgent() {
+  const agentToggle = document.getElementById('agentToggle');
+  const agentSection = document.getElementById('agentSection');
+  const agentArrow = document.getElementById('agentArrow');
+  const agentPdfInput = document.getElementById('agentPdfInput');
+  const agentZipInput = document.getElementById('agentZipInput');
+  const agentPdfDropZone = document.getElementById('agentPdfDropZone');
+  const agentZipDropZone = document.getElementById('agentZipDropZone');
+  const agentPdfText = document.getElementById('agentPdfText');
+  const agentZipText = document.getElementById('agentZipText');
+  const agentPdfSub = document.getElementById('agentPdfSub');
+  const agentZipSub = document.getElementById('agentZipSub');
+  const agentPdfIcon = document.getElementById('agentPdfIcon');
+  const agentZipIcon = document.getElementById('agentZipIcon');
+  const agentAnalyzeBtn = document.getElementById('agentAnalyzeBtn');
+  const agentProgress = document.getElementById('agentProgress');
+  const agentProgressText = document.getElementById('agentProgressText');
+  const agentResult = document.getElementById('agentResult');
+  const agentProductInfo = document.getElementById('agentProductInfo');
+  const agentSelectedImg = document.getElementById('agentSelectedImg');
+  const agentSubmitBtn = document.getElementById('agentSubmitBtn');
+
+  let selectedPdfFile = null;
+  let selectedZipFile = null;
+  let agentResultData = null;
+
+  // ── Toggle agent section ──
+  agentToggle.addEventListener('click', () => {
+    const isOpen = agentSection.style.display !== 'none';
+    agentSection.style.display = isOpen ? 'none' : 'block';
+    agentArrow.style.transform = isOpen ? 'rotate(0deg)' : 'rotate(90deg)';
+  });
+
+  // ── PDF file selection ──
+  agentPdfDropZone.addEventListener('click', () => agentPdfInput.click());
+  agentPdfInput.addEventListener('change', (e) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      selectedPdfFile = file;
+      agentPdfText.textContent = file.name;
+      agentPdfSub.textContent = `${(file.size / 1024 / 1024).toFixed(2)} MB`;
+      agentPdfIcon.textContent = '✅';
+      updateAgentAnalyzeBtn();
+    }
+  });
+
+  // ── ZIP file selection ──
+  agentZipDropZone.addEventListener('click', () => agentZipInput.click());
+  agentZipInput.addEventListener('change', (e) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      selectedZipFile = file;
+      agentZipText.textContent = file.name;
+      agentZipSub.textContent = `${(file.size / 1024 / 1024).toFixed(2)} MB`;
+      agentZipIcon.textContent = '✅';
+      updateAgentAnalyzeBtn();
+    }
+  });
+
+  // ── Drag & drop for PDF ──
+  agentPdfDropZone.addEventListener('dragover', (e) => { e.preventDefault(); agentPdfDropZone.style.borderColor = 'var(--accent)'; });
+  agentPdfDropZone.addEventListener('dragleave', () => { agentPdfDropZone.style.borderColor = ''; });
+  agentPdfDropZone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    agentPdfDropZone.style.borderColor = '';
+    const file = e.dataTransfer.files?.[0];
+    if (file && file.type === 'application/pdf') {
+      selectedPdfFile = file;
+      agentPdfText.textContent = file.name;
+      agentPdfSub.textContent = `${(file.size / 1024 / 1024).toFixed(2)} MB`;
+      agentPdfIcon.textContent = '✅';
+      updateAgentAnalyzeBtn();
+    }
+  });
+
+  // ── Drag & drop for ZIP ──
+  agentZipDropZone.addEventListener('dragover', (e) => { e.preventDefault(); agentZipDropZone.style.borderColor = 'var(--accent)'; });
+  agentZipDropZone.addEventListener('dragleave', () => { agentZipDropZone.style.borderColor = ''; });
+  agentZipDropZone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    agentZipDropZone.style.borderColor = '';
+    const file = e.dataTransfer.files?.[0];
+    if (file && (file.type === 'application/zip' || file.name.endsWith('.zip'))) {
+      selectedZipFile = file;
+      agentZipText.textContent = file.name;
+      agentZipSub.textContent = `${(file.size / 1024 / 1024).toFixed(2)} MB`;
+      agentZipIcon.textContent = '✅';
+      updateAgentAnalyzeBtn();
+    }
+  });
+
+  function updateAgentAnalyzeBtn() {
+    agentAnalyzeBtn.disabled = !selectedPdfFile || !selectedZipFile;
+  }
+
+  // ── Analyze button ──
+  agentAnalyzeBtn.addEventListener('click', async () => {
+    if (!selectedPdfFile || !selectedZipFile) return;
+
+    // Reset previous results
+    agentResult.style.display = 'none';
+    agentResultData = null;
+    agentSubmitBtn.disabled = true;
+
+    // Show progress
+    agentProgress.style.display = 'block';
+    agentProgressText.textContent = 'Uploading files to server...';
+    agentAnalyzeBtn.disabled = true;
+
+    try {
+      const formData = new FormData();
+      formData.append('pdf', selectedPdfFile);
+      formData.append('zip', selectedZipFile);
+
+      agentProgressText.textContent = 'Analyzing PDF with DeepSeek AI...';
+
+      const res = await fetch(`${API_BASE_URL}/api/agent/process`, {
+        method: 'POST',
+        body: formData
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || `Server error: ${res.status}`);
+      }
+
+      const data = await res.json();
+      agentResultData = data;
+
+      if (!data.success) {
+        throw new Error(data.error || 'Analysis failed');
+      }
+
+      // Display results
+      agentProgress.style.display = 'none';
+
+      if (data.products && data.products.length > 0) {
+        const product = data.products[0];
+        let html = '';
+        html += `<div style="margin-bottom:6px;"><strong>Product:</strong> ${escapeHtml(product.name)}</div>`;
+        html += `<div style="margin-bottom:6px;"><strong>Brand:</strong> ${escapeHtml(product.brand || '(not detected)')}</div>`;
+        html += `<div style="margin-bottom:6px;"><strong>Category:</strong> ${escapeHtml(product.category || 'N/A')}</div>`;
+        if (product.productCode) {
+          html += `<div style="margin-bottom:6px;"><strong>Original Code:</strong> ${escapeHtml(product.productCode)}</div>`;
+        }
+        if (product.generatedCode) {
+          html += `<div style="margin-bottom:6px;"><strong>Generated Code (folder name):</strong> <code style="background:var(--accent);color:#fff;padding:1px 6px;border-radius:3px;font-size:11px;">${escapeHtml(product.generatedCode)}</code></div>`;
+        }
+        html += `<div><strong>Description:</strong><br/><textarea id="agentDescEdit" style="width:100%;min-height:60px;font-size:11px;padding:4px;border:1px solid var(--border-light);border-radius:4px;background:var(--bg);color:var(--text);resize:vertical;box-sizing:border-box;margin-top:2px;">${escapeHtml(product.description)}</textarea></div>`;
+
+        if (data.products.length > 1) {
+          html += `<div style="margin-top:6px;font-size:10px;color:var(--text-muted);">${data.products.length} products found. Using the first one.</div>`;
+        }
+
+        agentProductInfo.innerHTML = html;
+      } else if (data.warning) {
+        agentProductInfo.innerHTML = `<div style="color:var(--warning);font-size:11px;">${escapeHtml(data.warning)}</div>
+          <div style="margin-top:4px;"><strong>Raw PDF Text:</strong></div>
+          <textarea id="agentDescEdit" style="width:100%;min-height:80px;font-size:11px;padding:4px;border:1px solid var(--border-light);border-radius:4px;background:var(--bg);color:var(--text);resize:vertical;box-sizing:border-box;margin-top:2px;" placeholder="Paste or type product description here...">${escapeHtml(data.rawText?.substring(0, 2000) || '')}</textarea>`;
+      } else {
+        agentProductInfo.innerHTML = `<div style="color:var(--warning);font-size:11px;">No products could be extracted. You can manually enter details below.</div>
+          <div style="margin-top:4px;"><strong>Product Name:</strong></div>
+          <input id="agentNameManual" type="text" style="width:100%;padding:4px;font-size:11px;border:1px solid var(--border-light);border-radius:4px;background:var(--bg);color:var(--text);box-sizing:border-box;" placeholder="e.g. Dining Chair HC-001"/>
+          <div style="margin-top:4px;"><strong>Brand:</strong></div>
+          <input id="agentBrandManual" type="text" style="width:100%;padding:4px;font-size:11px;border:1px solid var(--border-light);border-radius:4px;background:var(--bg);color:var(--text);box-sizing:border-box;" placeholder="e.g. Home Atelier"/>
+          <div style="margin-top:4px;"><strong>Description:</strong></div>
+          <textarea id="agentDescEdit" style="width:100%;min-height:80px;font-size:11px;padding:4px;border:1px solid var(--border-light);border-radius:4px;background:var(--bg);color:var(--text);resize:vertical;box-sizing:border-box;margin-top:2px;" placeholder="Describe the product in detail..."></textarea>`;
+      }
+
+      // Show selected image
+      if (data.selectedImage && data.selectedImage.dataUrl) {
+        agentSelectedImg.src = data.selectedImage.dataUrl;
+        agentSelectedImg.style.display = 'block';
+        agentSelectedImg.title = `${data.selectedImage.name} (${data.selectedImage.width}x${data.selectedImage.height})`;
+      } else if (data.allImages && data.allImages.length > 0) {
+        const firstWithData = data.allImages.find(i => i.dataUrl);
+        if (firstWithData) {
+          agentSelectedImg.src = firstWithData.dataUrl;
+          agentSelectedImg.style.display = 'block';
+          agentSelectedImg.title = `${firstWithData.name} (${firstWithData.width}x${firstWithData.height})`;
+        }
+      }
+
+      agentResult.style.display = 'block';
+      agentSubmitBtn.disabled = false;
+
+      // Show image count
+      if (data.totalImages) {
+        addToast(`Found ${data.totalImages} images in ZIP. Best image selected.`, 'info');
+      }
+
+    } catch (err) {
+      agentProgress.style.display = 'none';
+      agentProductInfo.innerHTML = `<div style="color:var(--danger);font-size:11px;">❌ Error: ${escapeHtml(err.message)}</div>`;
+      agentResult.style.display = 'block';
+      addToast(`Agent analysis failed: ${err.message}`, 'error');
+    } finally {
+      agentAnalyzeBtn.disabled = false;
+    }
+  });
+
+  // ── Submit button ──
+  agentSubmitBtn.addEventListener('click', async () => {
+    if (!agentResultData) return;
+
+    agentSubmitBtn.disabled = true;
+    agentSubmitBtn.textContent = '⏳ Submitting...';
+
+    try {
+      // Get the product info (from AI or manual)
+      let name, brand, description;
+      const descEdit = document.getElementById('agentDescEdit');
+
+      if (agentResultData.products && agentResultData.products.length > 0) {
+        const product = agentResultData.products[0];
+        name = product.name;
+        brand = product.brand || '';
+        description = descEdit ? descEdit.value : product.description;
+      } else {
+        const nameInput = document.getElementById('agentNameManual');
+        const brandInput = document.getElementById('agentBrandManual');
+        name = nameInput ? nameInput.value.trim() : '';
+        brand = brandInput ? brandInput.value.trim() : '';
+        description = descEdit ? descEdit.value.trim() : '';
+      }
+
+      if (!name) {
+        addToast('Please enter a product name.', 'error');
+        agentSubmitBtn.disabled = false;
+        agentSubmitBtn.textContent = '🚀 Submit to Queue';
+        return;
+      }
+
+      if (!description) {
+        addToast('Please enter a product description.', 'error');
+        agentSubmitBtn.disabled = false;
+        agentSubmitBtn.textContent = '🚀 Submit to Queue';
+        return;
+      }
+
+      // Get the image data URL
+      let imageDataUrl = '';
+      let imageName = '';
+
+      if (agentResultData.selectedImage && agentResultData.selectedImage.dataUrl) {
+        imageDataUrl = agentResultData.selectedImage.dataUrl;
+        imageName = agentResultData.selectedImage.name;
+      } else if (agentResultData.allImages) {
+        const firstWithData = agentResultData.allImages.find(i => i.dataUrl);
+        if (firstWithData) {
+          imageDataUrl = firstWithData.dataUrl;
+          imageName = firstWithData.name;
+        }
+      }
+
+      if (!imageDataUrl) {
+        addToast('No image data available. Please try uploading the ZIP again.', 'error');
+        agentSubmitBtn.disabled = false;
+        agentSubmitBtn.textContent = '🚀 Submit to Queue';
+        return;
+      }
+
+      // Get the generated product code (if available)
+      let productCode = '';
+      if (agentResultData.products && agentResultData.products.length > 0) {
+        productCode = agentResultData.products[0].generatedCode || '';
+      }
+
+      // Submit to queue
+      const res = await fetch(`${API_BASE_URL}/api/agent/submit`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name,
+          brand,
+          description,
+          productCode,  // Send the generated code (e.g., HACH-005R) for Drive folder naming
+          imageDataUrl,
+          imageName
+        })
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || `Server error: ${res.status}`);
+      }
+
+      const result = await res.json();
+
+      addToast(`✅ "${name}" queued at position #${result.queuePosition}`, 'success');
+
+      // Reset agent UI
+      agentResult.style.display = 'none';
+      agentResultData = null;
+      selectedPdfFile = null;
+      selectedZipFile = null;
+      agentPdfText.textContent = 'Drop PDF catalog here or click to browse';
+      agentPdfSub.textContent = 'PDF files only · max 50MB';
+      agentPdfIcon.textContent = '📄';
+      agentZipText.textContent = 'Drop ZIP file here or click to browse';
+      agentZipSub.textContent = 'ZIP files only · max 50MB';
+      agentZipIcon.textContent = '🗜️';
+      agentSelectedImg.style.display = 'none';
+      agentSelectedImg.src = '';
+      agentAnalyzeBtn.disabled = true;
+      agentSubmitBtn.textContent = '🚀 Submit to Queue';
+
+      // Refresh queue display
+      if (typeof renderQueue === 'function') renderQueue();
+
+    } catch (err) {
+      addToast(`Submit failed: ${err.message}`, 'error');
+      agentSubmitBtn.disabled = false;
+      agentSubmitBtn.textContent = '🚀 Submit to Queue';
+    }
+  });
+}
+
+function escapeHtml(str) {
+  if (!str) return '';
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
 </script>
 </body>
 </html>
