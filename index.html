@@ -1873,9 +1873,8 @@ const API_BASE_CANDIDATES = (() => {
     if (base && !bases.includes(base)) bases.push(base);
   };
   add(API_BASE_URL);
-  if (window.location.protocol !== 'https:') {
-    add('http://104.248.225.250:3000');
-  }
+  // Always add the VPS backend as a fallback candidate
+  add('http://104.248.225.250:3000');
   return bases;
 })();
 
@@ -2494,40 +2493,73 @@ function createCompletedHistoryCard(item, viewResults = [], source = 'archive') 
     grid.appendChild(slot);
   });
 
-  card.querySelector(`#hzip-${item.id}`)?.addEventListener('click', () => downloadHistoryZip(item.name || `Item_${item.id}`, viewResults));
+  card.querySelector(`#hzip-${item.id}`)?.addEventListener('click', e => downloadHistoryZip(item.name || `Item_${item.id}`, viewResults, e.currentTarget));
   card.querySelector(`#hregen-${item.id}`)?.addEventListener('click', () => retryItemFromHistory(item.id));
   card.querySelector(`#hdrive-${item.id}`)?.addEventListener('click', () => uploadBatchToDrive(item.id));
   return card;
 }
 
-async function downloadHistoryZip(name, viewResults) {
+async function downloadRenderZipFromServer(name, viewResults, btn = null) {
   const doneResults = viewResults.filter(r => r.status === 'done' && r.imageUrl);
   if (!doneResults.length) {
     toast('No stored render images to zip', 'info');
-    return;
+    return false;
   }
 
-  const zip = new JSZip();
-  for (const r of doneResults) {
-    const view = VIEWS.find(v => v.id === r.viewId);
-    const label = view ? view.label.replace(/ /g, '_') : `view_${r.viewId}`;
-    try {
-      const res = await fetch(r.imageUrl);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const arrayBuf = await res.arrayBuffer();
-      zip.file(`${name}_img${r.viewId}_${label}.jpg`, new Uint8Array(arrayBuf));
-    } catch (e) {
-      console.warn(`Failed to fetch completed image ${r.viewId}:`, e);
+  try {
+    const res = await fetchApi('/api/queue/download-zip', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, viewResults: doneResults })
+    });
+
+    if (!res.ok) {
+      let message = `HTTP ${res.status}`;
+      try {
+        const data = await res.json();
+        message = data.error || message;
+      } catch {}
+      throw new Error(message);
+    }
+
+    const blob = await res.blob();
+    const imageCount = Number(res.headers.get('X-Zip-Image-Count') || 0);
+    if (!blob.size || imageCount <= 0) throw new Error('Server returned an empty ZIP');
+
+    const objUrl = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = objUrl;
+    a.download = `${sanitizeDownloadName(name)}_renders.zip`;
+    a.click();
+    URL.revokeObjectURL(objUrl);
+
+    const failedCount = Number(res.headers.get('X-Zip-Failed-Count') || 0);
+    toast(failedCount ? `Downloaded ${imageCount} image(s); ${failedCount} skipped` : `Downloaded ${imageCount} image(s)`, failedCount ? 'info' : 'success');
+    return true;
+  } catch (e) {
+    console.warn('Server ZIP download failed:', e);
+    toast('ZIP download failed: ' + formatError(e), 'error');
+    return false;
+  }
+}
+
+function sanitizeDownloadName(name) {
+  return String(name || 'renders').trim().replace(/[^a-z0-9._-]+/gi, '_').replace(/^_+|_+$/g, '') || 'renders';
+}
+
+async function downloadHistoryZip(name, viewResults, btn = null) {
+  if (btn) {
+    btn.textContent = 'Zipping...';
+    btn.disabled = true;
+  }
+  try {
+    await downloadRenderZipFromServer(name, viewResults, btn);
+  } finally {
+    if (btn) {
+      btn.textContent = '⬇ ZIP';
+      btn.disabled = !viewResults.some(r => r.status === 'done' && r.imageUrl);
     }
   }
-
-  const blob = await zip.generateAsync({ type: 'blob' });
-  const objUrl = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = objUrl;
-  a.download = `${name}_renders.zip`;
-  a.click();
-  URL.revokeObjectURL(objUrl);
 }
 
 queueLogToggle.addEventListener('click', () => {
@@ -4481,7 +4513,6 @@ async function dlZipFromUrls(itemId, name, viewResults) {
   btn.textContent = 'Zipping...'; btn.disabled = true;
   prog.classList.add('visible');
 
-  const zip = new JSZip();
   const doneResults = viewResults.filter(r => r.status === 'done' && r.imageUrl);
   if (!doneResults.length) {
     toast('No completed render images to zip', 'info');
@@ -4492,6 +4523,18 @@ async function dlZipFromUrls(itemId, name, viewResults) {
     pct.textContent = '0%';
     return;
   }
+  try {
+    await downloadRenderZipFromServer(name, doneResults, btn);
+  } finally {
+    btn.textContent = 'â¬‡ ZIP';
+    btn.disabled = false;
+    prog.classList.remove('visible');
+    fill.style.width = '0%';
+    pct.textContent = '0%';
+  }
+  return;
+
+  const zip = new JSZip();
   let completed = 0;
 
   for (const r of doneResults) {

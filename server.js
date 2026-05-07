@@ -22,6 +22,7 @@ import { uploadRendersToDrive } from './lib/drive.js';
 // ── Import API handlers (adapted for Express) ──
 import submitHandler from './api/queue/submit.js';
 import statusHandler from './api/queue/status.js';
+import downloadZipHandler from './api/queue/download-zip.js';
 import uploadDriveHandler from './api/queue/upload-drive.js';
 import webhookHandler from './api/fal-webhook.js';
 import agentProcessHandler from './api/agent/process.js';
@@ -85,6 +86,16 @@ app.post('/api/queue/upload-drive', async (req, res) => {
     if (!res.headersSent) res.json(result);
   } catch (err) {
     console.error('[UPLOAD-DRIVE] Error:', err);
+    if (!res.headersSent) res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/queue/download-zip', async (req, res) => {
+  try {
+    const result = await downloadZipHandler(req, res);
+    if (!res.headersSent) res.json(result);
+  } catch (err) {
+    console.error('[DOWNLOAD-ZIP] Error:', err);
     if (!res.headersSent) res.status(500).json({ error: err.message });
   }
 });
