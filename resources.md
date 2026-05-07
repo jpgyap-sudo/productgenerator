@@ -7,6 +7,20 @@
 
 ---
 
+# API KEY CONFIGURATION RESOURCES
+
+Use these provider pages when setting up server-side API keys in `.env`.
+
+| Provider | Environment Variable | Resource |
+| --- | --- | --- |
+| Gemini API | `GEMINI_API_KEY` | https://ai.google.dev/gemini-api/docs/gemini-3 |
+| OpenAI API | `OPENAI_API_KEY` | https://openai.com/api/ |
+| Stability AI | `STABILITY_API_KEY` | https://platform.stability.ai/ |
+
+Restart the server after changing `.env` so the worker and API Monitor pick up the new keys.
+
+---
+
 # CORE SYSTEM RULES
 
 The AI must preserve:

@@ -725,6 +725,46 @@ textarea:focus { outline: none; border-color: var(--text-secondary); }
   font-style: italic;
   line-height: 1.5;
 }
+.api-resource-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+@media (max-width: 720px) {
+  .api-resource-grid { grid-template-columns: 1fr; }
+}
+.api-resource {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+}
+.api-resource strong {
+  font-size: 12px;
+}
+.api-resource code {
+  width: fit-content;
+  max-width: 100%;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--bg);
+  border: 1px solid var(--border-light);
+  color: var(--text-secondary);
+  font-size: 10px;
+  word-break: break-word;
+}
+.api-resource a {
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 700;
+  text-decoration: none;
+}
+.api-resource a:hover {
+  text-decoration: underline;
+}
 .about-workflow {
   display: flex; flex-direction: column; gap: 8px;
 }
@@ -1798,7 +1838,7 @@ textarea:focus { outline: none; border-color: var(--text-secondary); }
               <li><strong>Add Description</strong> — (Optional) Describe materials, colors, and style to help the AI preserve key details from the reference image.</li>
               <li><strong>Set Brand Reference</strong> — (Optional) Enter a furniture brand name (e.g. Minotti, Poliform) so the AI matches the brand's design language and aesthetic.</li>
               <li><strong>Choose Resolution</strong> — Select output resolution: 0.5K (512px, fastest), 1K (1024px, recommended), 2K, or 4K.</li>
-              <li><strong>Select AI Provider</strong> — Choose between OpenAI GPT Image or Gemini 3 (Flash/Pro).</li>
+              <li><strong>Select AI Provider</strong> — Choose between Gemini 3, OpenAI GPT Image, or Stability AI.</li>
               <li><strong>Add to Queue</strong> — Click "Add Selected to Queue" to add items. Toggle <strong>Auto-Queue</strong> to start rendering immediately after adding.</li>
               <li><strong>Start Queue</strong> — Click "▶ Start Queue" to begin processing. The background worker on the VPS processes up to 5 items concurrently.</li>
               <li><strong>Download Results</strong> — Once complete, each batch card shows all 4 generated views. Click individual images to preview & download, or use "Download All" to get a ZIP.</li>
@@ -1834,6 +1874,43 @@ textarea:focus { outline: none; border-color: var(--text-secondary); }
                   <span class="spec-tag">Best for: Photorealistic renders, e-commerce quality</span>
                 </div>
                 <div class="about-spec-note">Uses image-to-image editing API. Brand reference is included in the prompt to guide style and material choices.</div>
+              </div>
+              <div class="about-spec">
+                <div class="about-spec-name">Stability AI — SDXL</div>
+                <div class="about-spec-detail">
+                  <span class="spec-tag">Provider: Stability AI</span>
+                  <span class="spec-tag">Model: sdxl-v1.0 / sdxl-v1.0-turbo</span>
+                  <span class="spec-tag">Capability: Image-to-image generation</span>
+                  <span class="spec-tag">Max Resolution: 4K target sizing</span>
+                  <span class="spec-tag">Best for: Fast drafts and alternate visual treatments</span>
+                </div>
+                <div class="about-spec-note">Uses the server-side STABILITY_API_KEY. Cheap/mini provider variants use the turbo model when configured.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="about-card">
+          <div class="about-card-header">
+            <span class="about-icon">🔑</span>
+            <span class="about-card-title">API Key Resources</span>
+          </div>
+          <div class="about-card-body">
+            <div class="api-resource-grid">
+              <div class="api-resource">
+                <strong>Gemini API</strong>
+                <code>GEMINI_API_KEY</code>
+                <a href="https://ai.google.dev/gemini-api/docs/gemini-3" target="_blank" rel="noopener noreferrer">Open Gemini 3 docs</a>
+              </div>
+              <div class="api-resource">
+                <strong>OpenAI API</strong>
+                <code>OPENAI_API_KEY</code>
+                <a href="https://openai.com/api/" target="_blank" rel="noopener noreferrer">Open OpenAI API page</a>
+              </div>
+              <div class="api-resource">
+                <strong>Stability AI</strong>
+                <code>STABILITY_API_KEY</code>
+                <a href="https://platform.stability.ai/" target="_blank" rel="noopener noreferrer">Open Stability platform</a>
               </div>
             </div>
           </div>
@@ -2289,6 +2366,46 @@ function toast(msg, type = 'info') {
   setTimeout(() => { el.style.opacity = '0'; el.style.transition = 'opacity 0.3s'; setTimeout(() => el.remove(), 300); }, 3500);
 }
 const addToast = toast;
+
+function getMissingSchemaColumn(error) {
+  const message = String(error?.message || '');
+  const match = message.match(/'([^']+)' column/i);
+  return match ? match[1] : '';
+}
+
+function isSchemaCacheColumnError(error) {
+  return error?.code === 'PGRST204' || /schema cache/i.test(String(error?.message || ''));
+}
+
+async function upsertQueueRowsWithSchemaFallback(rows) {
+  let currentRows = rows;
+  const strippedColumns = [];
+
+  for (let attempt = 0; attempt < 6; attempt++) {
+    const { error } = await supabaseClient
+      .from(SUPA_QUEUE_TABLE)
+      .upsert(currentRows, { onConflict: 'id', ignoreDuplicates: false });
+
+    if (!error) {
+      if (strippedColumns.length > 0) {
+        console.warn('Supabase save skipped optional missing columns:', strippedColumns.join(', '));
+      }
+      return null;
+    }
+
+    const missingColumn = getMissingSchemaColumn(error);
+    if (!isSchemaCacheColumnError(error) || !missingColumn) return error;
+
+    strippedColumns.push(missingColumn);
+    currentRows = currentRows.map(row => {
+      const next = { ...row };
+      delete next[missingColumn];
+      return next;
+    });
+  }
+
+  return new Error('Could not save queue rows after removing missing schema-cache columns');
+}
 
 function openLightbox(src) {
   lbImg.src = src;
@@ -3208,24 +3325,9 @@ async function saveQueueToSupabase() {
       return row;
     });
 
-    const { error } = await supabaseClient
-      .from(SUPA_QUEUE_TABLE)
-      .upsert(rows, { onConflict: 'id', ignoreDuplicates: false });
-
+    const error = await upsertQueueRowsWithSchemaFallback(rows);
     if (error) {
-      // If error is about missing 'description' column, retry without it
-      if (error.message && error.message.includes('description')) {
-        const fallbackRows = rows.map(r => {
-          const { description, ...rest } = r;
-          return rest;
-        });
-        const { error: retryErr } = await supabaseClient
-          .from(SUPA_QUEUE_TABLE)
-          .upsert(fallbackRows, { onConflict: 'id', ignoreDuplicates: false });
-        if (retryErr) console.warn('Supabase save error (fallback):', retryErr);
-      } else {
-        console.warn('Supabase save error:', error);
-      }
+      console.warn('Supabase save error:', error);
     }
   } catch (e) {
     console.warn('Failed to save to Supabase:', e);

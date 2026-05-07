@@ -14,6 +14,9 @@ config({ path: resolve(__dirname, '.env') });
 
 const sql = `
 -- Add missing columns for Google Drive upload feature
+ALTER TABLE public.product_queue ADD COLUMN IF NOT EXISTS brand TEXT DEFAULT '';
+ALTER TABLE public.product_queue ADD COLUMN IF NOT EXISTS provider TEXT DEFAULT 'openai';
+ALTER TABLE public.product_queue ADD COLUMN IF NOT EXISTS resolution TEXT DEFAULT '1K';
 ALTER TABLE public.product_queue ADD COLUMN IF NOT EXISTS drive_folder_id TEXT DEFAULT '';
 ALTER TABLE public.product_queue ADD COLUMN IF NOT EXISTS drive_folder_name TEXT DEFAULT '';
 ALTER TABLE public.product_queue ADD COLUMN IF NOT EXISTS drive_folder_url TEXT DEFAULT '';
@@ -27,6 +30,9 @@ ALTER TABLE public.product_queue ADD COLUMN IF NOT EXISTS archived_at TIMESTAMPT
 INSERT INTO public.app_config (key, value, updated_at)
 VALUES ('drive_folder_counter', '1', NOW())
 ON CONFLICT (key) DO NOTHING;
+
+-- Refresh PostgREST schema cache so API writes see new columns immediately
+NOTIFY pgrst, 'reload schema';
 `;
 
 console.log('╔═══════════════════════════════════════════════════════════════╗');

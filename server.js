@@ -11,7 +11,8 @@
 //    - Environment variables loaded from .env file (via dotenv)
 // ═══════════════════════════════════════════════════════════════════
 
-import 'dotenv/config';
+import dotenv from 'dotenv';
+dotenv.config({ override: true });
 import express from 'express';
 import { supabase, QUEUE_TABLE, RESULTS_TABLE } from './lib/supabase.js';
 import { VIEWS } from './lib/fal.js';

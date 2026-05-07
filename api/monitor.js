@@ -70,6 +70,25 @@ async function checkGemini() {
 }
 
 /**
+ * Check Stability AI API by reading account details.
+ */
+async function checkStability() {
+  const key = process.env.STABILITY_API_KEY;
+  if (!key) {
+    return { ok: false, latencyMs: 0, error: 'STABILITY_API_KEY is not set' };
+  }
+  return timed(
+    fetch('https://api.stability.ai/v1/user/account', {
+      headers: { Authorization: `Bearer ${key}` },
+      signal: AbortSignal.timeout(10000)
+    }).then(r => {
+      if (!r.ok) throw new Error(`Stability AI returned ${r.status}: ${r.statusText}`);
+      return r.json();
+    })
+  );
+}
+
+/**
  * Check Google Drive API by verifying the service account JSON and
  * doing a minimal files.list call.
  */
@@ -108,14 +127,15 @@ async function checkDrive() {
 export default async function handler(req, res) {
   const start = Date.now();
 
-  const [supabase, openai, gemini, drive] = await Promise.all([
+  const [supabase, openai, gemini, stability, drive] = await Promise.all([
     checkSupabase(),
     checkOpenAI(),
     checkGemini(),
+    checkStability(),
     checkDrive()
   ]);
 
-  const services = { supabase, openai, gemini, drive };
+  const services = { supabase, openai, gemini, stability, drive };
   const allOk = Object.values(services).every(s => s.ok);
 
   const result = {

@@ -31,6 +31,12 @@ function imageExtension(mimeType) {
   return 'jpg';
 }
 
+function providerLabel(provider) {
+  if (provider === 'gemini') return 'Gemini';
+  if (String(provider || '').startsWith('stability')) return 'Stability AI';
+  return 'OpenAI';
+}
+
 async function uploadSubmittedImage(itemId, imageData) {
   const parsed = parseDataUrl(imageData);
   if (!parsed) return '';
@@ -55,6 +61,73 @@ async function uploadSubmittedImage(itemId, imageData) {
   return publicUrl;
 }
 
+function getMissingSchemaColumn(error) {
+  const message = String(error?.message || '');
+  const match = message.match(/'([^']+)' column/i);
+  return match ? match[1] : '';
+}
+
+function isSchemaCacheColumnError(error) {
+  return error?.code === 'PGRST204' || /schema cache/i.test(String(error?.message || ''));
+}
+
+async function upsertQueueRows(rows) {
+  let currentRows = rows;
+  const strippedColumns = [];
+
+  for (let attempt = 0; attempt < 6; attempt++) {
+    const { error } = await supabase
+      .from(QUEUE_TABLE)
+      .upsert(currentRows, { onConflict: 'id', ignoreDuplicates: false });
+
+    if (!error) {
+      if (strippedColumns.length > 0) {
+        console.warn(`[SUBMIT] Queued without optional columns missing from product_queue: ${strippedColumns.join(', ')}`);
+      }
+      return;
+    }
+
+    const missingColumn = getMissingSchemaColumn(error);
+    if (!isSchemaCacheColumnError(error) || !missingColumn) throw error;
+
+    strippedColumns.push(missingColumn);
+    currentRows = currentRows.map(row => {
+      const next = { ...row };
+      delete next[missingColumn];
+      return next;
+    });
+  }
+
+  throw new Error('Could not upsert queue rows after removing missing schema-cache columns');
+}
+
+async function updateQueueItems(itemIds, values) {
+  let currentValues = { ...values };
+  const strippedColumns = [];
+
+  for (let attempt = 0; attempt < 6; attempt++) {
+    const { error } = await supabase
+      .from(QUEUE_TABLE)
+      .update(currentValues)
+      .in('id', itemIds);
+
+    if (!error) {
+      if (strippedColumns.length > 0) {
+        console.warn(`[SUBMIT] Updated queue without optional columns missing from product_queue: ${strippedColumns.join(', ')}`);
+      }
+      return;
+    }
+
+    const missingColumn = getMissingSchemaColumn(error);
+    if (!isSchemaCacheColumnError(error) || !missingColumn) throw error;
+
+    strippedColumns.push(missingColumn);
+    delete currentValues[missingColumn];
+  }
+
+  throw new Error('Could not update queue rows after removing missing schema-cache columns');
+}
+
 async function upsertSubmittedItems(itemIds, submittedItems, activeProvider, resolution) {
   if (!Array.isArray(submittedItems) || submittedItems.length === 0) return;
 
@@ -76,7 +149,7 @@ async function upsertSubmittedItems(itemIds, submittedItems, activeProvider, res
       name: submitted.name || `Item ${id}`,
       image_url: imageUrl,
       status: 'active',
-      sub_text: `Queued for ${activeProvider === 'gemini' ? 'Gemini' : 'OpenAI'} processing...`,
+      sub_text: `Queued for ${providerLabel(activeProvider)} processing...`,
       description: submitted.description || '',
       brand: submitted.brand || '',
       provider: activeProvider,
@@ -88,11 +161,7 @@ async function upsertSubmittedItems(itemIds, submittedItems, activeProvider, res
 
   if (rows.length === 0) return;
 
-  const { error } = await supabase
-    .from(QUEUE_TABLE)
-    .upsert(rows, { onConflict: 'id', ignoreDuplicates: false });
-
-  if (error) throw error;
+  await upsertQueueRows(rows);
 }
 
 export default async function handler(req, res) {
@@ -140,18 +209,13 @@ export default async function handler(req, res) {
 
     // Mark items as active — the background worker in server.js
     // will pick them up on the next poll cycle
-    const { error: updateError } = await supabase
-      .from(QUEUE_TABLE)
-      .update({
-        status: 'active',
-        sub_text: `Queued for ${activeProvider === 'gemini' ? 'Gemini' : 'OpenAI'} processing...`,
-        provider: activeProvider,
-        resolution: resolution || '1K',
-        updated_at: now
-      })
-      .in('id', itemIds);
-
-    if (updateError) throw updateError;
+    await updateQueueItems(itemIds, {
+      status: 'active',
+      sub_text: `Queued for ${providerLabel(activeProvider)} processing...`,
+      provider: activeProvider,
+      resolution: resolution || '1K',
+      updated_at: now
+    });
 
     // Save brand references for items that have them
     if (brands && typeof brands === 'object' && Object.keys(brands).length > 0) {
@@ -162,7 +226,13 @@ export default async function handler(req, res) {
             .from(QUEUE_TABLE)
             .update({ brand: brand.trim(), updated_at: now })
             .eq('id', itemId);
-          if (brandError) console.warn(`[SUBMIT] Failed to save brand for item ${itemId}:`, brandError.message);
+          if (brandError) {
+            if (isSchemaCacheColumnError(brandError) && getMissingSchemaColumn(brandError) === 'brand') {
+              console.warn(`[SUBMIT] Skipping brand for item ${itemId}; product_queue.brand is not in the schema cache yet`);
+            } else {
+              console.warn(`[SUBMIT] Failed to save brand for item ${itemId}:`, brandError.message);
+            }
+          }
         }
       }
     }
