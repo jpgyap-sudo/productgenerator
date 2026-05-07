@@ -100,6 +100,7 @@ export default async function handler(req, res) {
         subText: item.sub_text || '',
         driveFolderId: item.drive_folder_id || '',
         driveFolderName: item.drive_folder_name || '',
+        driveFolderUrl: item.drive_folder_url || '',
         driveUploadStatus: item.drive_upload_status || '',
         driveUploadDone: item.drive_upload_done || 0,
         driveUploadTotal: item.drive_upload_total || 0,

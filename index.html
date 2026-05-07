@@ -2352,6 +2352,7 @@ function archiveCompletedItem(item, viewResults = []) {
     updatedAt: item.updatedAt || new Date().toISOString(),
     driveFolderId: item.driveFolderId || '',
     driveFolderName: item.driveFolderName || '',
+    driveFolderUrl: item.driveFolderUrl || '',
     driveUploadStatus: item.driveUploadStatus || (item.driveFolderName ? 'done' : ''),
     driveUploadDone: item.driveUploadDone || 0,
     driveUploadTotal: item.driveUploadTotal || 0,
@@ -2373,7 +2374,13 @@ function archiveCompletedItem(item, viewResults = []) {
 
 function getDriveStateText(item) {
   const status = item.driveUploadStatus || (item.driveFolderName ? 'done' : '');
-  if (status === 'done') return item.driveFolderName ? `Uploaded to Drive: ${item.driveFolderName}` : 'Uploaded to Drive';
+  if (status === 'done') {
+    const base = item.driveFolderName ? `Uploaded to Drive: ${item.driveFolderName}` : 'Uploaded to Drive';
+    if (item.driveFolderUrl) {
+      return `${base} — <a href="${escHtml(item.driveFolderUrl)}" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:underline;">Open in Drive ↗</a>`;
+    }
+    return base;
+  }
   if (status === 'uploading') return `Uploading to Drive (${item.driveUploadDone || 0}/${item.driveUploadTotal || VIEWS.length})`;
   if (status === 'error') return item.driveUploadError ? `Drive upload failed: ${item.driveUploadError}` : 'Drive upload failed';
   return 'Not uploaded to Drive';
@@ -2981,6 +2988,7 @@ async function saveState() {
         subText: q.subText || '',
         driveFolderId: q.driveFolderId || '',
         driveFolderName: q.driveFolderName || '',
+        driveFolderUrl: q.driveFolderUrl || '',
         driveUploadStatus: q.driveUploadStatus || '',
         driveUploadDone: q.driveUploadDone || 0,
         driveUploadTotal: q.driveUploadTotal || 0,
@@ -4282,6 +4290,9 @@ function driveUploadButtonHtml(item, viewResults = []) {
   const doneCount = viewResults.filter(r => r.status === 'done' && r.imageUrl).length;
   const canUpload = doneCount === VIEWS.length;
   if (status === 'done') {
+    if (item.driveFolderUrl) {
+      return `<a href="${escHtml(item.driveFolderUrl)}" target="_blank" rel="noopener" class="btn-drive-link" id="bdrive-${item.id}" style="display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:6px;background:var(--accent);color:#fff;text-decoration:none;font-size:11px;white-space:nowrap;">Open in Drive ↗</a>`;
+    }
     return `<button class="btn-drive-upload" id="bdrive-${item.id}" type="button" disabled>Drive uploaded</button>`;
   }
   if (status === 'uploading') {
@@ -4300,10 +4311,26 @@ function updateBatchDriveStatus(item) {
   const pct = total > 0 ? Math.min(100, Math.round((done / total) * 100)) : 0;
 
   if (driveBtn) {
-    driveBtn.disabled = status === 'done' || status === 'uploading';
-    if (status === 'done') driveBtn.textContent = 'Drive uploaded';
-    else if (status === 'uploading') driveBtn.textContent = 'Uploading Drive...';
-    else driveBtn.textContent = 'Upload to Drive';
+    if (status === 'done' && item.driveFolderUrl) {
+      // Replace button with "Open in Drive" link
+      const parent = driveBtn.parentNode;
+      if (parent) {
+        const link = document.createElement('a');
+        link.href = item.driveFolderUrl;
+        link.target = '_blank';
+        link.rel = 'noopener';
+        link.className = 'btn-drive-link';
+        link.id = `bdrive-${item.id}`;
+        link.textContent = 'Open in Drive ↗';
+        link.style.cssText = 'display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:6px;background:var(--accent);color:#fff;text-decoration:none;font-size:11px;white-space:nowrap;';
+        parent.replaceChild(link, driveBtn);
+      }
+    } else {
+      driveBtn.disabled = status === 'done' || status === 'uploading';
+      if (status === 'done') driveBtn.textContent = 'Drive uploaded';
+      else if (status === 'uploading') driveBtn.textContent = 'Uploading Drive...';
+      else driveBtn.textContent = 'Upload to Drive';
+    }
   }
 
   if (!wrap) return;
@@ -4324,9 +4351,12 @@ function updateBatchDriveStatus(item) {
       ? `Uploading to Drive (${item.driveFolderName})`
       : 'Uploading to Google Drive';
   } else if (status === 'done') {
-    label.textContent = item.driveFolderName
+    const base = item.driveFolderName
       ? `Uploaded to Drive: ${item.driveFolderName}`
       : 'Uploaded to Google Drive';
+    label.innerHTML = item.driveFolderUrl
+      ? `${base} — <a href="${escHtml(item.driveFolderUrl)}" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:underline;">Open in Drive ↗</a>`
+      : base;
   } else if (status === 'error') {
     label.textContent = item.driveUploadError
       ? `Drive upload failed: ${item.driveUploadError}`
@@ -4365,9 +4395,12 @@ function updateActiveDriveStatus(item) {
       ? `Uploading to Drive (${item.driveFolderName})`
       : 'Uploading to Google Drive';
   } else if (status === 'done') {
-    label.textContent = item.driveFolderName
+    const base = item.driveFolderName
       ? `Uploaded to Drive: ${item.driveFolderName}`
       : 'Uploaded to Google Drive';
+    label.innerHTML = item.driveFolderUrl
+      ? `${base} — <a href="${escHtml(item.driveFolderUrl)}" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:underline;">Open in Drive ↗</a>`
+      : base;
   } else if (status === 'error') {
     label.textContent = item.driveUploadError
       ? `Drive upload failed: ${item.driveUploadError}`
@@ -4677,6 +4710,7 @@ async function uploadBatchToDrive(itemId) {
     if (item) {
       item.driveFolderId = data.folderId || item.driveFolderId || '';
       item.driveFolderName = data.folderName || item.driveFolderName || '';
+      item.driveFolderUrl = data.folderUrl || item.driveFolderUrl || '';
       item.driveUploadStatus = data.success ? 'done' : 'error';
       item.driveUploadDone = data.uploaded || item.driveUploadDone || VIEWS.length;
       item.driveUploadTotal = data.total || item.driveUploadTotal || VIEWS.length;
@@ -5293,6 +5327,7 @@ async function pollStatus() {
           localItem.supabaseUrl = serverItem.imageUrl || localItem.supabaseUrl;
           localItem.driveFolderId = serverItem.driveFolderId || '';
           localItem.driveFolderName = serverItem.driveFolderName || '';
+          localItem.driveFolderUrl = serverItem.driveFolderUrl || '';
           localItem.driveUploadStatus = serverItem.driveUploadStatus || '';
           localItem.driveUploadDone = serverItem.driveUploadDone || 0;
           localItem.driveUploadTotal = serverItem.driveUploadTotal || 0;
