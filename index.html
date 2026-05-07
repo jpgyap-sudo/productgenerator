@@ -2020,8 +2020,6 @@ const API_BASE_CANDIDATES = (() => {
     if (base && !bases.includes(base)) bases.push(base);
   };
   add(API_BASE_URL);
-  // Always add the VPS backend as a fallback candidate
-  add('http://104.248.225.250:3000');
   return bases;
 })();
 
@@ -2044,7 +2042,7 @@ async function fetchApi(path, options = {}) {
   }
 
   const detail = window.location.protocol === 'https:'
-    ? 'Backend route is not reachable from this HTTPS origin. Make sure Caddy/proxy is serving the updated VPS app and restart the Node/PM2 process.'
+    ? 'Backend route is not reachable through the HTTPS site. Refresh the page, then try again.'
     : 'Backend route is not reachable. Make sure the VPS app is running on port 3000 and was restarted after the latest changes.';
   throw new Error(`${detail} Tried: ${attemptedUrls.join(', ')}. Last network error: ${formatError(lastNetworkError, 'Failed to fetch')}`);
 }
