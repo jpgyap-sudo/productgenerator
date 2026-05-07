@@ -1345,7 +1345,7 @@ textarea:focus { outline: none; border-color: var(--text-secondary); }
       </div>
       <div id="agentSection" style="display:none;">
         <div class="block" style="padding-top:0;">
-          <span class="lbl" style="font-size:11px;color:var(--text-muted);">Upload a product catalog PDF and a ZIP of images. The agent extracts product info using DeepSeek AI and selects the best image.</span>
+          <span class="lbl" style="font-size:11px;color:var(--text-muted);">Upload a product catalog PDF and a ZIP of images. The agent extracts product info using DeepSeek AI, selects the best image, and prepares a bulk queue review.</span>
         </div>
         <div class="block">
           <span class="lbl">Step 1: Upload Catalog PDF</span>
@@ -1386,7 +1386,7 @@ textarea:focus { outline: none; border-color: var(--text-secondary); }
             </div>
           </div>
           <div class="block" style="padding-top:0;padding-bottom:0.6rem;">
-            <button class="btn-start" id="agentSubmitBtn" disabled style="width:100%;font-size:12px;padding:8px;">🚀 Submit to Queue</button>
+            <button class="btn-start" id="agentSubmitBtn" disabled style="width:100%;font-size:12px;padding:8px;">+ Add to Bulk Queue</button>
           </div>
         </div>
       </div>
@@ -1432,7 +1432,7 @@ textarea:focus { outline: none; border-color: var(--text-secondary); }
       <!-- ── PENDING PREVIEW (before adding to queue) ──────────── -->
       <div id="pendingArea" style="display:none;">
         <div class="block" style="border-bottom:none;padding-bottom:0.3rem;">
-          <span class="lbl">Preview — add description & confirm</span>
+          <span class="lbl">Bulk Queue Review</span>
         </div>
         <div id="pendingList" class="q-list" style="padding-top:0;"></div>
         <div class="block" style="border-top:1px solid var(--border-light);padding-top:0.6rem;padding-bottom:0.6rem;">
@@ -2038,6 +2038,7 @@ function toast(msg, type = 'info') {
   container.appendChild(el);
   setTimeout(() => { el.style.opacity = '0'; el.style.transition = 'opacity 0.3s'; setTimeout(() => el.remove(), 300); }, 3500);
 }
+const addToast = toast;
 
 function openLightbox(src) {
   lbImg.src = src;
@@ -2384,6 +2385,7 @@ function createCompletedHistoryCard(item, viewResults = [], source = 'archive') 
   const doneCount = viewResults.filter(r => r.status === 'done' && r.imageUrl).length;
   const hasThumb = item.imageUrl || item.dataUrl || item.supabaseUrl;
   const driveStatus = item.driveUploadStatus || (item.driveFolderName ? 'done' : '');
+  const isArchiveOnly = source !== 'supabase';
   const card = document.createElement('div');
   card.className = 'batch-card';
   card.id = `hc-${item.id}`;
@@ -2396,7 +2398,8 @@ function createCompletedHistoryCard(item, viewResults = [], source = 'archive') 
       <div class="batch-info">
         <h3>${escHtml(item.name || `Item ${item.id}`)}</h3>
         <p>${escHtml(getBatchApiText(item))}</p>
-        <p>${doneCount} of ${VIEWS.length} renders stored · ${source === 'supabase' ? 'Supabase' : 'Archive'}</p>
+        <p>${doneCount} of ${VIEWS.length} renders stored · ${source === 'supabase' ? 'Supabase batch' : 'Archive-only batch'}</p>
+        ${isArchiveOnly ? '<p style="color:var(--text-dim);font-size:10px;">Drive upload uses archived image URLs (ZIP/download available)</p>' : ''}
       </div>
       <span class="drive-state ${driveStatus === 'done' ? 'done' : driveStatus === 'error' ? 'error' : ''}">${escHtml(getDriveStateText(item))}</span>
       <div class="batch-actions">
@@ -2648,7 +2651,8 @@ async function saveQueueToSupabase() {
       status: q.status,
       description: q.desc || '',
       brand: q.brand || '',
-      provider: q.provider || provider || 'openai'
+      provider: q.provider || provider || 'openai',
+      drive_folder_name: q.driveFolderName || ''
     }));
 
     if (queueData.length === 0) return;
@@ -2665,6 +2669,7 @@ async function saveQueueToSupabase() {
       if (item.description) row.description = item.description;
       if (item.brand) row.brand = item.brand;
       if (item.provider) row.provider = item.provider;
+      if (item.drive_folder_name) row.drive_folder_name = item.drive_folder_name;
       return row;
     });
 
@@ -3504,6 +3509,23 @@ async function deleteQueueItemFromSupabase(id) {
   }
 }
 
+/**
+ * Soft-delete a queue item by setting archived_at timestamp.
+ * This preserves the row in product_queue so Drive upload still works
+ * from the Completed panel, while hiding it from the active queue.
+ */
+async function archiveQueueItemInSupabase(id) {
+  if (!supabaseClient || !supaConnected) return;
+  try {
+    await supabaseClient
+      .from(SUPA_QUEUE_TABLE)
+      .update({ archived_at: new Date().toISOString() })
+      .eq('id', id);
+  } catch (e) {
+    console.warn('Failed to archive item in Supabase:', e);
+  }
+}
+
 async function deleteCompletedBatch(id) {
   const item = queue.find(q => q.id === id);
   if (item && (item.status === STATUS.WAIT || item.status === STATUS.ACTIVE)) {
@@ -3515,7 +3537,9 @@ async function deleteCompletedBatch(id) {
   if (card) card.remove();
 
   queue = queue.filter(q => q.id !== id);
-  await deleteQueueItemFromSupabase(id);
+  // Soft-delete: archive the item instead of hard-deleting from Supabase
+  // so Drive upload still works from the Completed panel
+  await archiveQueueItemInSupabase(id);
 
   const batchSection = document.getElementById('batch-section');
   if (batchSection && !batchSection.querySelector('[id^="bc-"]')) {
@@ -3529,7 +3553,7 @@ async function deleteCompletedBatch(id) {
   updateCost();
   checkReady();
   await saveState();
-  toast(item ? `Deleted "${item.name}"` : 'Deleted completed batch', 'info');
+  toast(item ? `Archived "${item.name}" (Drive upload still available)` : 'Archived completed batch', 'info');
 }
 
 // ── PENDING PREVIEW ─────────────────────────────────────────────────
@@ -3638,7 +3662,9 @@ async function clearCompletedItems() {
   const batchSection = document.getElementById('batch-section');
   if (batchSection) batchSection.remove();
   queue = queue.filter(q => q.status === STATUS.WAIT || q.status === STATUS.ACTIVE);
-  await Promise.all(completedIds.map(id => deleteQueueItemFromSupabase(id)));
+  // Soft-delete: archive completed items instead of hard-deleting from Supabase
+  // so Drive upload still works from the Completed panel
+  await Promise.all(completedIds.map(id => archiveQueueItemInSupabase(id)));
   // If no items remain and no active section, show welcome state
   if (!queue.length && !document.getElementById('active-section')) {
     welcomeState.style.display = 'block';
@@ -3647,7 +3673,7 @@ async function clearCompletedItems() {
   updateCost();
   checkReady();
   await saveState();
-  toast('Cleared completed items', 'info');
+  toast('Cleared completed items (archived — Drive upload still available)', 'info');
 }
 
 clearAllBtn.addEventListener('click', async () => {
@@ -3664,12 +3690,13 @@ clearAllBtn.addEventListener('click', async () => {
   const activeSec = document.getElementById('active-section');
   if (activeSec) activeSec.remove();
   queue = [];
-  await Promise.all(queueIds.map(id => deleteQueueItemFromSupabase(id)));
+  // Soft-delete: archive items instead of hard-deleting from Supabase
+  await Promise.all(queueIds.map(id => archiveQueueItemInSupabase(id)));
   renderQueue();
   updateCost();
   checkReady();
   await saveState();
-  toast('Queue cleared', 'info');
+  toast('Queue cleared (archived — Drive upload still available)', 'info');
 });
 
 function getActiveCardItem() {
@@ -4434,17 +4461,29 @@ async function dlZipFromUrls(itemId, name, viewResults) {
 async function uploadBatchToDrive(itemId) {
   const archiveItem = getCompletedArchive().find(entry => Number(entry.id) === Number(itemId));
   const item = queue.find(q => q.id === itemId) || archiveItem;
-  const btn = document.getElementById(`bdrive-${itemId}`);
+  // Try both bdrive- (batch card) and hdrive- (history card) button IDs
+  const btn = document.getElementById(`bdrive-${itemId}`) || document.getElementById(`hdrive-${itemId}`);
   if (btn) {
     btn.disabled = true;
     btn.textContent = 'Uploading Drive...';
   }
 
+  // Collect viewResults from archive for fallback if queue item is missing from Supabase
+  const viewResults = lastPollRenderResults[itemId] || archiveItem?.viewResults || [];
+
   try {
+    const body = { itemId };
+    // If we have archived viewResults, send them as fallback so the backend
+    // can upload from image URLs even if the queue item was soft-deleted
+    if (viewResults.length > 0) {
+      body.viewResults = viewResults;
+      body.itemName = item?.name || `Item ${itemId}`;
+    }
+
     const res = await fetchApi('/api/queue/upload-drive', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ itemId })
+      body: JSON.stringify(body)
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
@@ -4457,7 +4496,6 @@ async function uploadBatchToDrive(itemId) {
       item.driveUploadTotal = data.total || item.driveUploadTotal || VIEWS.length;
       item.driveUploadError = data.success ? '' : (data.message || 'Some files failed to upload');
       updateBatchDriveStatus(item);
-      const viewResults = lastPollRenderResults[itemId] || archiveItem?.viewResults || [];
       archiveCompletedItem(item, viewResults);
     }
 
@@ -5553,6 +5591,70 @@ function initUploadAgent() {
     agentAnalyzeBtn.disabled = !selectedPdfFile || !selectedZipFile;
   }
 
+  function renderAgentProductReview(products) {
+    const rows = products.map((product, idx) => {
+      const generatedCode = product.generatedCode || '';
+      return `
+        <div class="agent-product-row" style="border:1px solid var(--border-light);border-radius:6px;padding:8px;margin-bottom:8px;background:var(--surface);">
+          <label style="display:flex;align-items:center;gap:6px;font-weight:700;color:var(--text);margin-bottom:6px;">
+            <input type="checkbox" class="agent-product-select" data-agent-idx="${idx}" checked/>
+            <span>Product ${idx + 1}</span>
+            ${generatedCode ? `<code style="margin-left:auto;background:var(--accent);color:#fff;padding:1px 6px;border-radius:3px;font-size:10px;">${escapeHtml(generatedCode)}</code>` : ''}
+          </label>
+          <div style="display:grid;gap:6px;">
+            <input class="agent-product-name" data-agent-idx="${idx}" type="text" value="${escapeHtml(product.name || `Product ${idx + 1}`)}" style="width:100%;padding:5px;font-size:11px;border:1px solid var(--border-light);border-radius:4px;background:var(--bg);color:var(--text);box-sizing:border-box;" placeholder="Product name"/>
+            <input class="agent-product-brand" data-agent-idx="${idx}" type="text" value="${escapeHtml(product.brand || '')}" style="width:100%;padding:5px;font-size:11px;border:1px solid var(--border-light);border-radius:4px;background:var(--bg);color:var(--text);box-sizing:border-box;" placeholder="Brand"/>
+            <input class="agent-product-code" data-agent-idx="${idx}" type="text" value="${escapeHtml(generatedCode)}" style="width:100%;padding:5px;font-size:11px;border:1px solid var(--border-light);border-radius:4px;background:var(--bg);color:var(--text);box-sizing:border-box;" placeholder="Drive folder code"/>
+            <textarea class="agent-product-desc" data-agent-idx="${idx}" style="width:100%;min-height:72px;font-size:11px;padding:5px;border:1px solid var(--border-light);border-radius:4px;background:var(--bg);color:var(--text);resize:vertical;box-sizing:border-box;" placeholder="Product description">${escapeHtml(product.description || '')}</textarea>
+          </div>
+        </div>`;
+    }).join('');
+
+    return `
+      <div style="font-size:10px;color:var(--text-muted);margin-bottom:8px;">
+        Review extracted products, uncheck anything you do not want, then add them to Bulk Queue.
+      </div>
+      ${rows}`;
+  }
+
+  function getAgentSelectedImage() {
+    if (agentResultData?.selectedImage?.dataUrl) {
+      return {
+        dataUrl: agentResultData.selectedImage.dataUrl,
+        name: agentResultData.selectedImage.name || 'agent-selected-image'
+      };
+    }
+    const firstWithData = agentResultData?.allImages?.find(i => i.dataUrl);
+    return firstWithData
+      ? { dataUrl: firstWithData.dataUrl, name: firstWithData.name || 'agent-selected-image' }
+      : { dataUrl: '', name: '' };
+  }
+
+  function collectAgentProductsForQueue() {
+    if (agentResultData?.products?.length) {
+      return [...agentProductInfo.querySelectorAll('.agent-product-select')]
+        .filter(input => input.checked)
+        .map(input => {
+          const idx = input.dataset.agentIdx;
+          const name = agentProductInfo.querySelector(`.agent-product-name[data-agent-idx="${idx}"]`)?.value.trim() || '';
+          const brand = agentProductInfo.querySelector(`.agent-product-brand[data-agent-idx="${idx}"]`)?.value.trim() || '';
+          const description = agentProductInfo.querySelector(`.agent-product-desc[data-agent-idx="${idx}"]`)?.value.trim() || '';
+          const driveFolderName = agentProductInfo.querySelector(`.agent-product-code[data-agent-idx="${idx}"]`)?.value.trim() || '';
+          return { name, brand, description, driveFolderName };
+        });
+    }
+
+    const nameInput = document.getElementById('agentNameManual');
+    const brandInput = document.getElementById('agentBrandManual');
+    const descEdit = document.getElementById('agentDescEdit');
+    return [{
+      name: nameInput ? nameInput.value.trim() : (selectedPdfFile?.name || 'Agent product').replace(/\.[^.]+$/, ''),
+      brand: brandInput ? brandInput.value.trim() : '',
+      description: descEdit ? descEdit.value.trim() : '',
+      driveFolderName: ''
+    }];
+  }
+
   // ── Analyze button ──
   agentAnalyzeBtn.addEventListener('click', async () => {
     if (!selectedPdfFile || !selectedZipFile) return;
@@ -5595,24 +5697,7 @@ function initUploadAgent() {
       agentProgress.style.display = 'none';
 
       if (data.products && data.products.length > 0) {
-        const product = data.products[0];
-        let html = '';
-        html += `<div style="margin-bottom:6px;"><strong>Product:</strong> ${escapeHtml(product.name)}</div>`;
-        html += `<div style="margin-bottom:6px;"><strong>Brand:</strong> ${escapeHtml(product.brand || '(not detected)')}</div>`;
-        html += `<div style="margin-bottom:6px;"><strong>Category:</strong> ${escapeHtml(product.category || 'N/A')}</div>`;
-        if (product.productCode) {
-          html += `<div style="margin-bottom:6px;"><strong>Original Code:</strong> ${escapeHtml(product.productCode)}</div>`;
-        }
-        if (product.generatedCode) {
-          html += `<div style="margin-bottom:6px;"><strong>Generated Code (folder name):</strong> <code style="background:var(--accent);color:#fff;padding:1px 6px;border-radius:3px;font-size:11px;">${escapeHtml(product.generatedCode)}</code></div>`;
-        }
-        html += `<div><strong>Description:</strong><br/><textarea id="agentDescEdit" style="width:100%;min-height:60px;font-size:11px;padding:4px;border:1px solid var(--border-light);border-radius:4px;background:var(--bg);color:var(--text);resize:vertical;box-sizing:border-box;margin-top:2px;">${escapeHtml(product.description)}</textarea></div>`;
-
-        if (data.products.length > 1) {
-          html += `<div style="margin-top:6px;font-size:10px;color:var(--text-muted);">${data.products.length} products found. Using the first one.</div>`;
-        }
-
-        agentProductInfo.innerHTML = html;
+        agentProductInfo.innerHTML = renderAgentProductReview(data.products);
       } else if (data.warning) {
         agentProductInfo.innerHTML = `<div style="color:var(--warning);font-size:11px;">${escapeHtml(data.warning)}</div>
           <div style="margin-top:4px;"><strong>Raw PDF Text:</strong></div>
@@ -5646,14 +5731,14 @@ function initUploadAgent() {
 
       // Show image count
       if (data.totalImages) {
-        addToast(`Found ${data.totalImages} images in ZIP. Best image selected.`, 'info');
+        toast(`Found ${data.totalImages} images in ZIP. Best image selected.`, 'info');
       }
 
     } catch (err) {
       agentProgress.style.display = 'none';
       agentProductInfo.innerHTML = `<div style="color:var(--danger);font-size:11px;">❌ Error: ${escapeHtml(err.message)}</div>`;
       agentResult.style.display = 'block';
-      addToast(`Agent analysis failed: ${err.message}`, 'error');
+      toast(`Agent analysis failed: ${err.message}`, 'error');
     } finally {
       agentAnalyzeBtn.disabled = false;
     }
@@ -5774,6 +5859,82 @@ function initUploadAgent() {
       agentSubmitBtn.textContent = '🚀 Submit to Queue';
     }
   });
+
+  agentSubmitBtn.addEventListener('click', async (event) => {
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    if (!agentResultData) return;
+
+    agentSubmitBtn.disabled = true;
+    agentSubmitBtn.textContent = 'Adding...';
+
+    try {
+      const products = collectAgentProductsForQueue();
+      if (!products.length) {
+        toast('Select at least one product first.', 'error');
+        agentSubmitBtn.disabled = false;
+        agentSubmitBtn.textContent = '+ Add to Bulk Queue';
+        return;
+      }
+
+      const invalid = products.find(product => !product.name || !product.description);
+      if (invalid) {
+        toast('Each selected product needs a name and description.', 'error');
+        agentSubmitBtn.disabled = false;
+        agentSubmitBtn.textContent = '+ Add to Bulk Queue';
+        return;
+      }
+
+      const selectedImage = getAgentSelectedImage();
+      if (!selectedImage.dataUrl) {
+        toast('No image data available. Please try uploading the ZIP again.', 'error');
+        agentSubmitBtn.disabled = false;
+        agentSubmitBtn.textContent = '+ Add to Bulk Queue';
+        return;
+      }
+
+      for (const product of products) {
+        pendingItems.push({
+          id: nextId++,
+          name: product.driveFolderName || product.name,
+          dataUrl: selectedImage.dataUrl,
+          desc: product.description,
+          brand: product.brand,
+          status: STATUS.WAIT,
+          supabaseUrl: '',
+          driveFolderName: product.driveFolderName || ''
+        });
+      }
+
+      renderPendingList();
+      updateCost();
+      checkReady();
+      await saveState();
+      toast(`Added ${products.length} product${products.length > 1 ? 's' : ''} to Bulk Queue review`, 'success');
+
+      agentResult.style.display = 'none';
+      agentResultData = null;
+      selectedPdfFile = null;
+      selectedZipFile = null;
+      agentPdfInput.value = '';
+      agentZipInput.value = '';
+      agentPdfText.textContent = 'Drop PDF catalog here or click to browse';
+      agentPdfSub.textContent = 'PDF files only · max 50MB';
+      agentPdfIcon.textContent = 'PDF';
+      agentZipText.textContent = 'Drop ZIP file here or click to browse';
+      agentZipSub.textContent = 'ZIP files only · max 50MB';
+      agentZipIcon.textContent = 'ZIP';
+      agentSelectedImg.style.display = 'none';
+      agentSelectedImg.src = '';
+      agentAnalyzeBtn.disabled = true;
+      agentSubmitBtn.textContent = '+ Add to Bulk Queue';
+      renderQueue();
+    } catch (err) {
+      toast(`Add to Bulk Queue failed: ${err.message}`, 'error');
+      agentSubmitBtn.disabled = false;
+      agentSubmitBtn.textContent = '+ Add to Bulk Queue';
+    }
+  }, true);
 }
 
 function escapeHtml(str) {

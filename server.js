@@ -34,7 +34,7 @@ const CONCURRENCY = 5; // Process up to 5 items simultaneously
 const app = express();
 
 // ── Middleware ──
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true }));
 
 // ── CORS (allow frontend from any origin) ──
@@ -163,11 +163,12 @@ async function processNextBatch() {
 
   if (availableSlots <= 0) return;
 
-  // Fetch items that need processing
+  // Fetch items that need processing (exclude archived items)
   const { data: items, error } = await supabase
     .from(QUEUE_TABLE)
     .select('*')
     .in('status', ['active', 'wait'])
+    .is('archived_at', null)
     .order('id', { ascending: true })
     .limit(availableSlots);
 
@@ -309,33 +310,40 @@ async function processItem(itemId, provider = 'openai') {
       const result = results[i];
 
       if (result.status === 'fulfilled' && result.value) {
-        successCount++;
         try {
           const publicUrl = result.value.cdnUrl;
+          if (!publicUrl) {
+            throw new Error('Generator returned no image URL');
+          }
 
-          await supabase
+          const { error: saveError } = await supabase
             .from(RESULTS_TABLE)
             .update({
               status: 'done',
               image_url: publicUrl,
+              error_message: '',
               completed_at: new Date().toISOString(),
               updated_at: new Date().toISOString()
             })
             .eq('queue_item_id', itemId)
             .eq('view_id', view.id);
 
+          if (saveError) throw saveError;
+          successCount++;
         } catch (saveErr) {
           console.error(`[WORKER] Failed to save result for item ${itemId} view ${view.id}:`, saveErr);
+          failCount++;
           await supabase
             .from(RESULTS_TABLE)
             .update({
               status: 'error',
-              error_message: saveErr.message,
+              image_url: '',
+              error_message: saveErr.message || 'Failed to save image URL',
+              completed_at: new Date().toISOString(),
               updated_at: new Date().toISOString()
             })
             .eq('queue_item_id', itemId)
             .eq('view_id', view.id);
-          failCount++;
         }
       } else {
         failCount++;

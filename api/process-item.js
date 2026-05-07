@@ -146,10 +146,12 @@ async function processItem(itemId, resolution, provider = 'fal') {
       const result = results[i];
 
       if (result.status === 'fulfilled' && result.value) {
-        // Success — save the result URL to Supabase
-        successCount++;
+        // Success only counts after the image URL is persisted.
         try {
           const cdnUrl = result.value.cdnUrl;
+          if (!cdnUrl) {
+            throw new Error('Generator returned no image URL');
+          }
 
           // ── Provider-specific URL handling ──
           // fal.ai: Returns CDN URLs (v3.fal.media). We optionally mirror to
@@ -192,29 +194,34 @@ async function processItem(itemId, resolution, provider = 'fal') {
           }
 
           // Update render_results row
-          await supabase
+          const { error: saveError } = await supabase
             .from(RESULTS_TABLE)
             .update({
               status: 'done',
               image_url: publicUrl,
+              error_message: '',
               completed_at: new Date().toISOString(),
               updated_at: new Date().toISOString()
             })
             .eq('queue_item_id', itemId)
             .eq('view_id', view.id);
 
+          if (saveError) throw saveError;
+          successCount++;
         } catch (saveErr) {
           console.error(`Failed to save result for item ${itemId} view ${view.id}:`, saveErr);
+          failCount++;
           await supabase
             .from(RESULTS_TABLE)
             .update({
               status: 'error',
-              error_message: saveErr.message,
+              image_url: '',
+              error_message: saveErr.message || 'Failed to save image URL',
+              completed_at: new Date().toISOString(),
               updated_at: new Date().toISOString()
             })
             .eq('queue_item_id', itemId)
             .eq('view_id', view.id);
-          failCount++;
         }
       } else {
         // Failed

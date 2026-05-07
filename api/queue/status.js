@@ -126,7 +126,13 @@ function fetchQueueItems(itemId) {
     .select('*')
     .order('id', { ascending: true });
 
-  if (itemId) query = query.eq('id', parseInt(itemId, 10));
+  if (itemId) {
+    // When fetching a specific item (e.g., for completed panel), include archived
+    query = query.eq('id', parseInt(itemId, 10));
+  } else {
+    // When fetching the full queue, exclude archived items
+    query = query.is('archived_at', null);
+  }
   return query;
 }
 
@@ -178,6 +184,7 @@ async function ensureRowsForActiveItems(rows, queueItems) {
 
 async function updateQueueStatuses(queueItems, rows) {
   const updates = [];
+  const now = new Date().toISOString();
 
   for (const item of queueItems) {
     if (item.status === 'stopped') continue;
@@ -185,7 +192,23 @@ async function updateQueueStatuses(queueItems, rows) {
     const itemRows = rows.filter(row => row.queue_item_id === item.id);
     if (itemRows.length === 0) continue;
 
-    const doneCount = itemRows.filter(row => row.status === 'done').length;
+    const incompleteDoneRows = itemRows.filter(row => row.status === 'done' && !row.image_url);
+    for (const row of incompleteDoneRows) {
+      await supabase
+        .from(RESULTS_TABLE)
+        .update({
+          status: 'error',
+          image_url: '',
+          error_message: 'Missing stored image URL',
+          completed_at: row.completed_at || now,
+          updated_at: now
+        })
+        .eq('queue_item_id', row.queue_item_id)
+        .eq('view_id', row.view_id);
+    }
+
+    const doneCount = itemRows.filter(row => row.status === 'done' && row.image_url).length;
+    const incompleteDoneCount = incompleteDoneRows.length;
     const errorCount = itemRows.filter(row => row.status === 'error').length;
     const activeCount = itemRows.filter(row => row.status === 'generating' || row.status === 'waiting').length;
 
@@ -198,11 +221,12 @@ async function updateQueueStatuses(queueItems, rows) {
     } else if (doneCount === 4) {
       status = 'done';
       subText = 'All 4 views generated';
-    } else if (errorCount > 0) {
+    } else if (errorCount > 0 || incompleteDoneCount > 0) {
       status = 'error';
-      subText = errorCount === 4
+      const totalErrorCount = errorCount + incompleteDoneCount;
+      subText = totalErrorCount === 4
         ? 'All views failed'
-        : `${doneCount}/4 views generated, ${errorCount} failed`;
+        : `${doneCount}/4 views generated, ${totalErrorCount} failed`;
     }
 
     if (status !== item.status || subText !== item.sub_text) {

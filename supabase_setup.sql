@@ -98,6 +98,7 @@ ALTER TABLE public.product_queue ADD COLUMN IF NOT EXISTS drive_upload_status TE
 ALTER TABLE public.product_queue ADD COLUMN IF NOT EXISTS drive_upload_done INTEGER DEFAULT 0;
 ALTER TABLE public.product_queue ADD COLUMN IF NOT EXISTS drive_upload_total INTEGER DEFAULT 0;
 ALTER TABLE public.product_queue ADD COLUMN IF NOT EXISTS drive_upload_error TEXT DEFAULT '';
+ALTER TABLE public.product_queue ADD COLUMN IF NOT EXISTS archived_at TIMESTAMPTZ DEFAULT NULL;
 
 ALTER TABLE public.render_results ENABLE ROW LEVEL SECURITY;
 

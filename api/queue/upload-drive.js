@@ -1,5 +1,8 @@
 // POST /api/queue/upload-drive
 // Manually uploads a completed queue item's render_results images to Google Drive.
+// Supports two modes:
+//   1. Live mode: itemId references an existing product_queue row
+//   2. Archive fallback: if itemId not found, uses viewResults + itemName from request body
 import { supabase, QUEUE_TABLE, RESULTS_TABLE } from '../../lib/supabase.js';
 import { VIEWS } from '../../lib/fal.js';
 import { uploadRendersToDrive } from '../../lib/drive.js';
@@ -19,6 +22,7 @@ export default async function handler(req, res) {
   }
 
   try {
+    // ── Try to find the queue item in Supabase ──
     const { data: items, error: itemError } = await supabase
       .from(QUEUE_TABLE)
       .select('*')
@@ -27,7 +31,11 @@ export default async function handler(req, res) {
 
     if (itemError) throw itemError;
     const item = items?.[0];
-    if (!item) return res.status(404).json({ error: 'Queue item not found' });
+
+    // ── ARCHIVE FALLBACK: Queue item not found, use request body data ──
+    if (!item) {
+      return await handleArchiveFallback(req, res, itemId);
+    }
 
     if (item.drive_upload_status === 'uploading') {
       return res.status(409).json({ error: 'Google Drive upload is already in progress' });
@@ -119,6 +127,58 @@ export default async function handler(req, res) {
     console.error('[UPLOAD-DRIVE] Error:', error);
     return res.status(500).json({ error: error.message || 'Drive upload failed' });
   }
+}
+
+/**
+ * Handle upload from archived view results when the queue item no longer exists in Supabase.
+ * Accepts viewResults (array of {viewId, imageUrl}) and itemName from the request body.
+ */
+async function handleArchiveFallback(req, res, itemId) {
+  const { viewResults, itemName } = req.body || {};
+
+  if (!viewResults || !Array.isArray(viewResults) || viewResults.length === 0) {
+    return res.status(404).json({
+      error: 'Queue item not found. This completed batch may only exist in browser archive; provide viewResults and itemName to upload from archived image URLs.',
+      code: 'QUEUE_ITEM_NOT_FOUND'
+    });
+  }
+
+  const doneViews = viewResults
+    .filter(r => r.status === 'done' && r.imageUrl)
+    .map(r => ({
+      viewId: r.viewId,
+      viewLabel: getViewLabel(r.viewId),
+      imageUrl: r.imageUrl
+    }));
+
+  if (doneViews.length !== VIEWS.length) {
+    return res.status(400).json({
+      error: `Need ${VIEWS.length} completed render images before uploading to Drive; found ${doneViews.length} in archive`
+    });
+  }
+
+  const name = itemName || `Item ${itemId}`;
+  console.log(`[UPLOAD-DRIVE] Archive fallback: uploading ${doneViews.length} views for "${name}" (item ${itemId})`);
+
+  const driveResult = await uploadRendersToDrive(itemId, name, doneViews, {
+    folderName: '',
+    onProgress: progress => {
+      console.log(`[UPLOAD-DRIVE] Archive progress: ${progress.status} ${progress.uploaded}/${progress.total}`);
+    }
+  });
+
+  const success = driveResult.files.length === doneViews.length;
+  return res.json({
+    success,
+    folderId: driveResult.folderId,
+    folderName: driveResult.folderName,
+    uploaded: driveResult.files.length,
+    total: doneViews.length,
+    fromArchive: true,
+    message: success
+      ? `Uploaded to Google Drive folder ${driveResult.folderName} (from archived images)`
+      : `Uploaded ${driveResult.files.length}/${doneViews.length} files to Drive (from archived images)`
+  });
 }
 
 function getViewLabel(viewId) {
