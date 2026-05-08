@@ -15,3 +15,4 @@ plans/
 logs/
 vps-env.txt
 vps-assets/
+deploy-*.tar.gz
