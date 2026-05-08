@@ -10,14 +10,12 @@
 #  Reload:       sudo caddy reload
 # ═══════════════════════════════════════════════════════════════════
 
-:80 {
-    # Fallback: serve on port 80 without TLS (for direct IP access)
-    # Replace the block above with your domain when you have one.
+render.abcx124.xyz {
     reverse_proxy localhost:3000
 
     header {
         X-Content-Type-Options "nosniff"
-        X-Frame-Options "DENY"
+        X-Frame-Options "SAMEORIGIN"
         X-XSS-Protection "1; mode=block"
         Referrer-Policy "strict-origin-when-cross-origin"
         Permissions-Policy "camera=(), microphone=(), geolocation=()"

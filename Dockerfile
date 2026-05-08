@@ -13,10 +13,10 @@ FROM node:20-slim AS deps
 WORKDIR /app
 
 # Copy only package files first for layer caching
-COPY package.json ./
+COPY package.json package-lock.json ./
 
 # Install production dependencies only
-RUN npm install --omit=dev --ignore-scripts
+RUN npm ci --omit=dev --ignore-scripts
 
 # ── Runtime stage ──
 FROM node:20-slim AS runner
@@ -35,10 +35,11 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY package.json ecosystem.config.cjs ./
 COPY lib/ ./lib/
 COPY api/ ./api/
+COPY index.html ./
 COPY server.js ./
 
-# Create logs directory
-RUN mkdir -p logs
+# Create runtime directories
+RUN mkdir -p logs vps-assets
 
 # Use tini as init (reaps zombies, forwards signals)
 ENTRYPOINT ["/usr/bin/tini", "--"]
