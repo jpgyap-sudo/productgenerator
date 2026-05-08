@@ -10762,15 +10762,266 @@ function initRenderProduct() {
   });
 }
 
+// ══════════════════════════════════════════════════════════════════
+//  RENDER QUEUE — Cloud Queue Panel
+// ══════════════════════════════════════════════════════════════════
+
+let rqPollTimer = null;
+let rqCurrentPage = 1;
+let rqTotalPages = 1;
+const RQ_PAGE_SIZE = 20;
+
+function initRenderQueue() {
+  const toggle = document.getElementById('renderQueueToggle');
+  const panel = document.getElementById('renderQueuePanel');
+  if (!toggle || !panel) return;
+
+  let isOpen = false;
+  function hideAllPanels() {
+    document.querySelectorAll('.main > div[id$="Panel"]').forEach(el => {
+      if (el.id !== 'renderQueuePanel') el.style.display = 'none';
+    });
+  }
+
+  toggle.addEventListener('click', () => {
+    isOpen = !isOpen;
+    toggle.classList.toggle('active', isOpen);
+    if (isOpen) {
+      hideAllPanels();
+      panel.style.display = 'block';
+      fetchQueueBatches();
+      startRqPolling();
+    } else {
+      panel.style.display = 'none';
+      stopRqPolling();
+    }
+  });
+
+  // Search with debounce
+  const searchInput = document.getElementById('rqSearch');
+  let searchTimer;
+  searchInput?.addEventListener('input', () => {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => { rqCurrentPage = 1; fetchQueueBatches(); }, 300);
+  });
+
+  // Status filter
+  document.getElementById('rqStatusFilter')?.addEventListener('change', () => {
+    rqCurrentPage = 1;
+    fetchQueueBatches();
+  });
+
+  // Refresh button
+  document.getElementById('rqRefreshBtn')?.addEventListener('click', fetchQueueBatches);
+
+  // Pagination
+  document.getElementById('rqPrevPage')?.addEventListener('click', () => {
+    if (rqCurrentPage > 1) { rqCurrentPage--; fetchQueueBatches(); }
+  });
+  document.getElementById('rqNextPage')?.addEventListener('click', () => {
+    if (rqCurrentPage < rqTotalPages) { rqCurrentPage++; fetchQueueBatches(); }
+  });
+
+  // Bulk actions
+  document.getElementById('rqPauseAllBtn')?.addEventListener('click', () => postQueueAction('/api/render-queue/pause-all'));
+  document.getElementById('rqResumeAllBtn')?.addEventListener('click', () => postQueueAction('/api/render-queue/resume-all'));
+  document.getElementById('rqCancelAllBtn')?.addEventListener('click', () => {
+    if (confirm('Cancel ALL queued batches? This cannot be undone.')) {
+      postQueueAction('/api/render-queue/cancel-all-queued');
+    }
+  });
+  document.getElementById('rqCleanupBtn')?.addEventListener('click', () => {
+    if (confirm('Delete completed batches older than 7 days?')) {
+      postQueueAction('/api/render-queue/cleanup-completed');
+    }
+  });
+}
+
+function startRqPolling() {
+  stopRqPolling();
+  rqPollTimer = setInterval(fetchQueueBatches, 10000);
+}
+
+function stopRqPolling() {
+  if (rqPollTimer) { clearInterval(rqPollTimer); rqPollTimer = null; }
+}
+
+async function fetchQueueBatches() {
+  const tbody = document.getElementById('rqTbody');
+  const errorDiv = document.getElementById('rqError');
+  if (!tbody) return;
+
+  const search = document.getElementById('rqSearch')?.value || '';
+  const status = document.getElementById('rqStatusFilter')?.value || '';
+
+  try {
+    const params = new URLSearchParams();
+    params.set('page', String(rqCurrentPage));
+    params.set('pageSize', String(RQ_PAGE_SIZE));
+    if (search) params.set('search', search);
+    if (status) params.set('status', status);
+
+    const res = await fetch(`/api/render-queue/batches?${params.toString()}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+
+    errorDiv.style.display = 'none';
+    renderQueueBatches(data);
+  } catch (err) {
+    errorDiv.textContent = 'Failed to load queue: ' + err.message;
+    errorDiv.style.display = 'block';
+    tbody.innerHTML = `<tr><td colspan="8" class="rq-error">Error loading data</td></tr>`;
+  }
+}
+
+function renderQueueBatches(data) {
+  const tbody = document.getElementById('rqTbody');
+  const pagination = document.getElementById('rqPagination');
+  if (!tbody) return;
+
+  const batches = data.batches || data.data || [];
+  const total = data.total || batches.length;
+  rqTotalPages = Math.ceil(total / RQ_PAGE_SIZE) || 1;
+
+  // Update stats
+  const stats = data.stats || {};
+  document.getElementById('rqStatTotal').textContent = stats.total_batches ?? total;
+  document.getElementById('rqStatQueued').textContent = stats.queued_items ?? '—';
+  document.getElementById('rqStatProcessing').textContent = stats.processing_items ?? '—';
+  document.getElementById('rqStatCompleted').textContent = stats.completed_items ?? '—';
+  document.getElementById('rqStatFailed').textContent = stats.failed_items ?? '—';
+  document.getElementById('rqStatNeedsRepair').textContent = stats.needs_repair_items ?? '—';
+
+  if (!batches.length) {
+    tbody.innerHTML = `<tr><td colspan="8" class="rq-empty">No batches found. Add items from Image Canvas to create a queue batch.</td></tr>`;
+    pagination.style.display = 'none';
+    return;
+  }
+
+  let html = '';
+  for (const b of batches) {
+    const status = b.status || 'queued';
+    const priority = b.priority || 'normal';
+    const totalItems = (b.total_items ?? b.item_count ?? 0);
+    const doneItems = (b.completed_items ?? 0) + (b.failed_items ?? 0);
+    const pct = totalItems > 0 ? Math.round((doneItems / totalItems) * 100) : 0;
+
+    const statusBadge = `rq-badge-${status}`;
+    const statusLabel = status.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+    const priorityClass = `rq-priority-${priority}`;
+    const priorityLabel = priority.charAt(0).toUpperCase() + priority.slice(1);
+
+    const progressClass = status === 'completed' ? 'rq-progress-fill-completed'
+      : status === 'failed' ? 'rq-progress-fill-failed'
+      : status === 'processing' ? 'rq-progress-fill-processing'
+      : 'rq-progress-fill-queued';
+
+    // Thumbnails
+    let thumbsHtml = '';
+    const thumbs = b.thumbnails || [];
+    if (thumbs.length > 0) {
+      thumbsHtml = '<div class="rq-thumbs">';
+      for (const t of thumbs.slice(0, 4)) {
+        if (t) {
+          thumbsHtml += `<img class="rq-thumb" src="${t}" alt="thumb" onclick="openLightbox('${t}')" />`;
+        } else {
+          thumbsHtml += `<div class="rq-thumb-placeholder">—</div>`;
+        }
+      }
+      thumbsHtml += '</div>';
+    } else {
+      thumbsHtml = '<div class="rq-thumbs">';
+      for (let i = 0; i < Math.min(4, totalItems || 4); i++) {
+        thumbsHtml += `<div class="rq-thumb-placeholder">${i + 1}</div>`;
+      }
+      thumbsHtml += '</div>';
+    }
+
+    const created = b.created_at ? new Date(b.created_at).toLocaleDateString() : '—';
+    const source = b.source || 'manual';
+
+    html += `<tr>
+      <td><span class="rq-name-cell" title="${b.name || 'Unnamed'}">${b.name || 'Unnamed'}</span></td>
+      <td><span class="rq-badge ${statusBadge}">${statusLabel}</span></td>
+      <td><span class="${priorityClass}">${priorityLabel}</span></td>
+      <td><div class="rq-progress"><div class="rq-progress-bar"><div class="rq-progress-fill ${progressClass}" style="width:${pct}%"></div></div><span class="rq-progress-text">${doneItems}/${totalItems}</span></div></td>
+      <td><span class="rq-source-badge">${source}</span></td>
+      <td>${thumbsHtml}</td>
+      <td style="white-space:nowrap;">${created}</td>
+      <td>${renderQueueActions(b)}</td>
+    </tr>`;
+  }
+
+  tbody.innerHTML = html;
+
+  // Pagination
+  if (rqTotalPages > 1) {
+    pagination.style.display = 'flex';
+    document.getElementById('rqPrevPage').disabled = rqCurrentPage <= 1;
+    document.getElementById('rqNextPage').disabled = rqCurrentPage >= rqTotalPages;
+    document.getElementById('rqPageInfo').textContent = `Page ${rqCurrentPage} of ${rqTotalPages}`;
+  } else {
+    pagination.style.display = 'none';
+  }
+}
+
+function renderQueueActions(batch) {
+  const id = batch.id;
+  const status = batch.status || 'queued';
+  let btns = '';
+
+  if (status === 'queued' || status === 'processing') {
+    btns += `<button class="rq-action-btn" onclick="postQueueAction('/api/render-queue/batches/${id}/pause')" title="Pause">⏸</button>`;
+  }
+  if (status === 'paused') {
+    btns += `<button class="rq-action-btn success" onclick="postQueueAction('/api/render-queue/batches/${id}/resume')" title="Resume">▶</button>`;
+  }
+  if (status === 'queued' || status === 'paused') {
+    btns += `<button class="rq-action-btn danger" onclick="postQueueAction('/api/render-queue/batches/${id}/cancel')" title="Cancel">✕</button>`;
+  }
+  if (status === 'needs_repair') {
+    btns += `<button class="rq-action-btn success" onclick="postQueueAction('/api/render-queue/batches/${id}/move-to-completed-repair-review')" title="Move to Completed for repair review">✓ Review</button>`;
+  }
+
+  return `<div class="rq-actions">${btns}</div>`;
+}
+
+async function postQueueAction(url) {
+  try {
+    const res = await fetch(url, { method: 'POST' });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    // Show toast
+    const toast = document.getElementById('toastContainer');
+    if (toast) {
+      const el = document.createElement('div');
+      el.className = 'toast toast-success';
+      el.textContent = data.message || 'Action completed';
+      toast.appendChild(el);
+      setTimeout(() => el.remove(), 3000);
+    }
+    fetchQueueBatches();
+  } catch (err) {
+    const errorDiv = document.getElementById('rqError');
+    if (errorDiv) {
+      errorDiv.textContent = 'Action failed: ' + err.message;
+      errorDiv.style.display = 'block';
+    }
+  }
+}
+
 // Initialize when DOM is ready
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', () => {
     initDiningChairMatch();
     initRenderProduct();
+    initRenderQueue();
   });
 } else {
   initDiningChairMatch();
   initRenderProduct();
+  initRenderQueue();
 }
 </script>
 </body>
