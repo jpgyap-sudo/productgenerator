@@ -422,7 +422,7 @@ async function processNextBatch() {
     // Reserve the slot IMMEDIATELY to prevent duplicate processing.
     // We create a placeholder promise that gets replaced after setup.
     const setupPromise = (async () => {
-      const provider = item.provider || detectProvider(item) || 'openai';
+      const provider = item.provider || detectProvider(item) || 'openai-mini';
 
       console.log(`[WORKER] Starting item ${item.id} ("${item.name}") with provider: ${provider}`);
 
@@ -524,7 +524,7 @@ async function ensureRenderRows(itemId, provider) {
 /**
  * Process a single queue item: generate all 4 views, save results.
  */
-async function processItem(itemId, provider = 'openai') {
+async function processItem(itemId, provider = 'openai-mini') {
   const now = new Date().toISOString();
 
   // Fetch the item

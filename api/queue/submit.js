@@ -183,8 +183,9 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'itemIds array is required' });
     }
 
-    // Default to openai if no provider specified
-    const activeProvider = provider || 'openai';
+    // Default to the fixed render architecture: GPT-image-1-mini main render
+    // with Gemini QA/fix fallback.
+    const activeProvider = provider || 'openai-mini';
 
     // Validate provider — accept 'openai', 'openai-cheap', 'openai-mini', 'gemini',
     // 'stability', 'stability-cheap', 'stability-mini'
