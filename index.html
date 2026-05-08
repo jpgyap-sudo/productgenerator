@@ -1696,6 +1696,152 @@ textarea:focus { outline: none; border-color: var(--text-secondary); }
   background: var(--surface-2);
   padding: 18px;
 }
+
+/* ── Bulk Match Results Subpage ──────────────────────────────── */
+.bulk-match-results {
+  padding: 18px;
+  min-width: 0;
+  overflow-y: auto;
+  max-height: 700px;
+}
+.bulk-match-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+.bulk-match-head .lbl {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+}
+.bulk-match-head-actions {
+  display: flex;
+  gap: 8px;
+}
+.bulk-match-head-actions .btn-start {
+  width: auto;
+  min-width: auto;
+  margin: 0;
+  padding: 8px 16px;
+  font-size: 12px;
+}
+.bulk-match-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 16px;
+}
+.bulk-match-tile {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  transition: box-shadow var(--transition), border-color var(--transition);
+}
+.bulk-match-tile:hover {
+  border-color: var(--accent);
+  box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+}
+.bulk-match-tile-img-wrap {
+  position: relative;
+  width: 100%;
+  height: 200px;
+  background: var(--surface-2);
+  overflow: hidden;
+}
+.bulk-match-tile-img-wrap img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.bulk-match-tile-body {
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.bulk-match-tile-field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.bulk-match-tile-field label {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.bulk-match-tile-field input,
+.bulk-match-tile-field textarea {
+  font-size: 12px;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface-2);
+  color: var(--text);
+  font-family: inherit;
+  transition: border-color var(--transition);
+  width: 100%;
+  box-sizing: border-box;
+}
+.bulk-match-tile-field input:focus,
+.bulk-match-tile-field textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+  background: var(--surface);
+}
+.bulk-match-tile-field textarea {
+  resize: vertical;
+  min-height: 60px;
+  line-height: 1.4;
+}
+.bulk-match-tile-footer {
+  display: flex;
+  gap: 8px;
+  padding: 0 14px 14px;
+}
+.bulk-match-tile-footer button {
+  flex: 1;
+  font-size: 11px;
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+  transition: all var(--transition);
+  font-weight: 500;
+}
+.bulk-match-tile-footer button:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.bulk-match-tile-footer button.primary {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+.bulk-match-tile-footer button.primary:hover {
+  opacity: 0.85;
+}
+.bulk-match-tile-badge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  font-size: 10px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-weight: 600;
+  backdrop-filter: blur(4px);
+}
+.bulk-match-tile-badge.exact { background: rgba(34,197,94,0.9); color: #fff; }
+.bulk-match-tile-badge.high { background: rgba(59,130,246,0.9); color: #fff; }
+.bulk-match-tile-badge.medium { background: rgba(234,179,8,0.9); color: #fff; }
+.bulk-match-tile-badge.low { background: rgba(239,68,68,0.9); color: #fff; }
 .bulk-render-panel {
   max-width: 1180px;
   margin: 0 auto;
@@ -2793,13 +2939,26 @@ border-top: 1px solid var(--border-light);
         </div>
         <div class="bulk-layout">
           <div class="bulk-stage" id="bulkAgentMount"></div>
-          <div class="bulk-review">
+          <div class="bulk-review" id="bulkReviewPanel">
             <div class="bulk-review-head">
               <span class="lbl">Extraction Review</span>
               <button class="btn-start" id="bulkOpenRenderBtn" type="button">Open Bulk Render</button>
             </div>
             <div class="bulk-upload-empty">
               Analyze the catalog and ZIP on the left, then add selected extracted products to the Bulk Render page for the final queue review.
+            </div>
+          </div>
+          <!-- ── Match Results Subpage (shown after matching) ── -->
+          <div class="bulk-match-results" id="bulkMatchResultsPanel" style="display:none;">
+            <div class="bulk-match-head">
+              <span class="lbl">📋 Matched Products Review</span>
+              <div class="bulk-match-head-actions">
+                <button class="btn-start" id="bulkMatchSaveCanvasBtn" type="button">💾 Save to Final Image Canvas</button>
+                <button class="btn-start" id="bulkMatchAddQueueBtn" type="button" style="background:var(--accent);">➕ Add to Queue</button>
+              </div>
+            </div>
+            <div class="bulk-match-grid" id="bulkMatchGrid">
+              <!-- populated by JS -->
             </div>
           </div>
         </div>
@@ -8298,6 +8457,7 @@ function initUploadAgent() {
     const imageMap = {};
     if (images) images.forEach(img => { imageMap[img.name] = img.dataUrl; });
 
+    // ── Render sidebar cards (existing) ──
     const cards = matches.map((match, idx) => {
       const product = match.product || {};
       const matchedImage = match.matchedImage || {};
@@ -8350,6 +8510,91 @@ function initUploadAgent() {
       });
     });
     updateSubmitButton();
+
+    // ── Render bulk match tiles (new subpage UI) ──
+    const bulkMatchGrid = document.getElementById('bulkMatchGrid');
+    const bulkReviewPanel = document.getElementById('bulkReviewPanel');
+    const bulkMatchResultsPanel = document.getElementById('bulkMatchResultsPanel');
+    if (!bulkMatchGrid) return;
+
+    const tiles = matches.map((match, idx) => {
+      const product = match.product || {};
+      const matchedImage = match.matchedImage || {};
+      const score = match.score || 0;
+      const imageDataUrl = matchedImage.dataUrl || imageMap[matchedImage.name] || '';
+      const productCode = product.generatedCode || '';
+      const productName = product.name || `Product ${idx + 1}`;
+      const productBrand = product.brand || '';
+      const productDesc = product.description || '';
+
+      let badgeClass = 'low';
+      let badgeLabel = `${score}%`;
+      if (score >= 100) { badgeClass = 'exact'; badgeLabel = 'Exact'; }
+      else if (score >= 80) { badgeClass = 'high'; badgeLabel = `${score}%`; }
+      else if (score >= 40) { badgeClass = 'medium'; badgeLabel = `${score}%`; }
+
+      const accepted = agentAcceptedMatches[idx]?.accepted !== false;
+
+      return `<div class="bulk-match-tile" data-tile-idx="${idx}">
+        <div class="bulk-match-tile-img-wrap">
+          <img src="${escapeHtml(imageDataUrl)}" alt="${escapeHtml(matchedImage.name || '')}" onerror="this.style.display='none'"/>
+          <span class="bulk-match-tile-badge ${badgeClass}">${badgeLabel}</span>
+        </div>
+        <div class="bulk-match-tile-body">
+          <div class="bulk-match-tile-field">
+            <label>Name</label>
+            <input type="text" class="tile-name" data-tile-idx="${idx}" value="${escapeHtml(productName)}" placeholder="Product name"/>
+          </div>
+          <div class="bulk-match-tile-field">
+            <label>Brand</label>
+            <input type="text" class="tile-brand" data-tile-idx="${idx}" value="${escapeHtml(productBrand)}" placeholder="Brand"/>
+          </div>
+          <div class="bulk-match-tile-field">
+            <label>Code</label>
+            <input type="text" class="tile-code" data-tile-idx="${idx}" value="${escapeHtml(productCode)}" placeholder="Drive folder code"/>
+          </div>
+          <div class="bulk-match-tile-field">
+            <label>Description</label>
+            <textarea class="tile-desc" data-tile-idx="${idx}" placeholder="Product description">${escapeHtml(productDesc)}</textarea>
+          </div>
+        </div>
+        <div class="bulk-match-tile-footer">
+          <button class="${accepted ? 'primary' : ''}" data-tile-idx="${idx}" data-action="accept">${accepted ? '✓ Accepted' : 'Accept'}</button>
+          <button class="${!accepted ? 'primary' : ''}" data-tile-idx="${idx}" data-action="reject">${!accepted ? '✗ Rejected' : 'Reject'}</button>
+        </div>
+      </div>`;
+    }).join('');
+
+    bulkMatchGrid.innerHTML = tiles;
+
+    // Wire up tile accept/reject buttons
+    bulkMatchGrid.querySelectorAll('.bulk-match-tile-footer button').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const idx = parseInt(btn.dataset.tileIdx, 10);
+        const action = btn.dataset.action;
+        const tile = bulkMatchGrid.querySelector(`.bulk-match-tile[data-tile-idx="${idx}"]`);
+        if (!tile) return;
+
+        if (action === 'accept') {
+          agentAcceptedMatches[idx] = { accepted: true, imageName: matches[idx]?.matchedImage?.name, dataUrl: matches[idx]?.matchedImage?.dataUrl || imageMap[matches[idx]?.matchedImage?.name] || '' };
+          tile.querySelectorAll('button').forEach(b => b.classList.remove('primary'));
+          tile.querySelector('[data-action="accept"]').classList.add('primary');
+          tile.querySelector('[data-action="accept"]').textContent = '✓ Accepted';
+          tile.querySelector('[data-action="reject"]').textContent = 'Reject';
+        } else {
+          agentAcceptedMatches[idx] = { accepted: false, imageName: matches[idx]?.matchedImage?.name, dataUrl: matches[idx]?.matchedImage?.dataUrl || '' };
+          tile.querySelectorAll('button').forEach(b => b.classList.remove('primary'));
+          tile.querySelector('[data-action="reject"]').classList.add('primary');
+          tile.querySelector('[data-action="reject"]').textContent = '✗ Rejected';
+          tile.querySelector('[data-action="accept"]').textContent = 'Accept';
+        }
+        updateSubmitButton();
+      });
+    });
+
+    // Switch view: hide review panel, show match results panel
+    if (bulkReviewPanel) bulkReviewPanel.style.display = 'none';
+    if (bulkMatchResultsPanel) bulkMatchResultsPanel.style.display = 'block';
   }
 
   // ── Handle match card actions ──
@@ -8458,6 +8703,14 @@ function initUploadAgent() {
     agentAcceptedMatches = {};
     agentPhase1.style.display = 'block';
     agentPhase2.style.display = 'none';
+
+    // Reset bulk match results subpage
+    const bulkReviewPanel = document.getElementById('bulkReviewPanel');
+    const bulkMatchResultsPanel = document.getElementById('bulkMatchResultsPanel');
+    const bulkMatchGrid = document.getElementById('bulkMatchGrid');
+    if (bulkReviewPanel) bulkReviewPanel.style.display = 'block';
+    if (bulkMatchResultsPanel) bulkMatchResultsPanel.style.display = 'none';
+    if (bulkMatchGrid) bulkMatchGrid.innerHTML = '';
     agentMatchBtn.disabled = true;
     agentSubmitBtn.disabled = true;
 
@@ -8762,6 +9015,117 @@ function initUploadAgent() {
       agentSubmitBtn.textContent = '+ Add All Matched to Queue';
     }
   });
+
+  // ── Bulk Match: "Save to Final Image Canvas" button ──
+  const bulkMatchSaveCanvasBtn = document.getElementById('bulkMatchSaveCanvasBtn');
+  if (bulkMatchSaveCanvasBtn) {
+    bulkMatchSaveCanvasBtn.addEventListener('click', async () => {
+      const products = collectAgentProductsForQueue();
+      if (!products.length) {
+        toast('No accepted products to save.', 'error');
+        return;
+      }
+
+      bulkMatchSaveCanvasBtn.disabled = true;
+      bulkMatchSaveCanvasBtn.textContent = 'Saving...';
+
+      try {
+        const saveResult = await saveMatchedImages(products, 'agent-upload');
+        if (saveResult.saved > 0) {
+          toast(`✅ Saved ${saveResult.saved} matched image(s) to Final Image Canvas`, 'success');
+        } else if (saveResult.error) {
+          toast(`Save had issues: ${saveResult.error}`, 'warning');
+        } else {
+          toast('No new records were saved.', 'info');
+        }
+      } catch (err) {
+        toast(`Save failed: ${err.message}`, 'error');
+      } finally {
+        bulkMatchSaveCanvasBtn.disabled = false;
+        bulkMatchSaveCanvasBtn.textContent = '💾 Save to Final Image Canvas';
+      }
+    });
+  }
+
+  // ── Bulk Match: "Add to Queue" button ──
+  const bulkMatchAddQueueBtn = document.getElementById('bulkMatchAddQueueBtn');
+  if (bulkMatchAddQueueBtn) {
+    bulkMatchAddQueueBtn.addEventListener('click', async () => {
+      const products = collectAgentProductsForQueue();
+      if (!products.length) {
+        toast('No accepted products to add.', 'error');
+        return;
+      }
+
+      const invalid = products.find(p => !p.name || !p.description);
+      if (invalid) {
+        toast('Each product needs a name and description.', 'error');
+        return;
+      }
+
+      bulkMatchAddQueueBtn.disabled = true;
+      bulkMatchAddQueueBtn.textContent = 'Adding...';
+
+      try {
+        // Save to DB first
+        const saveResult = await saveMatchedImages(products, 'agent-upload');
+        if (saveResult.saved > 0) {
+          toast(`Saved ${saveResult.saved} matched image(s) to database`, 'success');
+        } else if (saveResult.error) {
+          console.warn('Matched images save had issues:', saveResult.error);
+        }
+
+        // Add to pendingItems
+        for (const product of products) {
+          pendingItems.push({
+            id: nextId++,
+            name: product.driveFolderName || product.name,
+            dataUrl: product.dataUrl,
+            desc: product.description,
+            brand: product.brand,
+            status: STATUS.WAIT,
+            supabaseUrl: '',
+            driveFolderName: product.driveFolderName || '',
+            provider: provider || 'openai',
+            resolution: nb2Res || '1K'
+          });
+        }
+
+        renderPendingList();
+        updateCost();
+        checkReady();
+        await saveState();
+        toast(`Added ${products.length} product(s) to Bulk Queue`, 'success');
+        showBulkRenderPanel();
+
+        // Reset agent state
+        agentResult.style.display = 'none';
+        agentResultData = null;
+        agentMatchData = null;
+        agentAcceptedMatches = {};
+        selectedPdfFile = null;
+        selectedZipFile = null;
+        agentPdfInput.value = '';
+        agentZipInput.value = '';
+        agentPdfText.textContent = 'Drop PDF catalog here or click to browse';
+        agentPdfSub.textContent = 'PDF files only · max 50MB';
+        agentPdfIcon.textContent = 'PDF';
+        agentZipText.textContent = 'Drop ZIP file here or click to browse';
+        agentZipSub.textContent = 'ZIP files only · max 50MB';
+        agentZipIcon.textContent = 'ZIP';
+        agentAnalyzeBtn.disabled = true;
+        agentMatchBtn.disabled = true;
+        agentMatchBtn.textContent = '🔗 Match Products to Images';
+        agentSubmitBtn.textContent = '+ Add All Matched to Queue';
+        renderQueue();
+      } catch (err) {
+        toast(`Add to Queue failed: ${err.message}`, 'error');
+      } finally {
+        bulkMatchAddQueueBtn.disabled = false;
+        bulkMatchAddQueueBtn.textContent = '➕ Add to Queue';
+      }
+    });
+  }
 }
 
 // ── Global helper: Save matched images to database (shared by agent + batch processor) ──
