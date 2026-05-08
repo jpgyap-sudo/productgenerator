@@ -44,6 +44,7 @@ import agentMatchedImagesHandler from './api/agent/matched-images.js';
 import agentSaveMatchedPermanentHandler from './api/agent/save-matched-permanent.js';
 import agentMatchedImagesPermanentHandler from './api/agent/matched-images-permanent.js';
 import renderProductHandler from './api/render/product.js';
+import renderQueueRoutes from './api/render-queue/index.js';
 import monitorHandler from './api/monitor.js';
 import rerenderViewHandler from './api/queue/rerender-view.js';
 
@@ -241,6 +242,9 @@ app.post('/api/render/product', renderUpload.single('productImage'), async (req,
     if (!res.headersSent) res.status(500).json({ error: err.message });
   }
 });
+
+// ── Render Queue Routes (cloud-based permanent queue) ──
+app.use('/api/render-queue', renderQueueRoutes);
 
 // ── Temporary Migration Endpoint ──
 // Run Supabase migration for permanent canvas columns

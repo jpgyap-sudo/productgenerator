@@ -1,4 +1,4 @@
-t<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8"/>
@@ -2814,6 +2814,63 @@ border-top: 1px solid var(--border-light);
 .dcm-icon-btn { border:1px solid #30363d; color:#f3f4f6; background:#11161a; border-radius:14px; padding:9px; cursor:pointer; }
 .dcm-mini-btn { border:1px solid #30363d; color:#f3f4f6; background:#11161a; border-radius:14px; padding:10px 16px; font-weight:700; cursor:pointer; }
 @media (max-width:1200px) { .dcm-topbar, .dcm-stats, .dcm-workspace { grid-template-columns:1fr; height:auto; } .dcm-steps { justify-content:flex-start; overflow:auto; } .dcm-top-actions { justify-content:flex-start; } .dcm-canvas-grid { grid-template-columns:1fr; } }
+
+/* ── RENDER QUEUE PANEL ──────────────────────────────────────── */
+.rq-panel { display:flex; flex-direction:column; gap:16px; }
+.rq-stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:10px; }
+.rq-stat-card { background:var(--card-bg); border:1px solid var(--border); border-radius:10px; padding:14px 16px; display:flex; flex-direction:column; gap:4px; }
+.rq-stat-card .rq-stat-label { font-size:11px; color:var(--text-secondary); text-transform:uppercase; letter-spacing:0.5px; }
+.rq-stat-card .rq-stat-value { font-size:22px; font-weight:800; color:var(--text); }
+.rq-stat-card .rq-stat-sub { font-size:11px; color:var(--text-secondary); }
+.rq-toolbar { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+.rq-toolbar .tb-btn { font-size:12px; padding:6px 12px; }
+.rq-search { flex:1; min-width:160px; padding:7px 10px; border:1px solid var(--border); border-radius:6px; background:var(--card-bg); color:var(--text); font-size:13px; }
+.rq-table-wrap { overflow-x:auto; }
+.rq-table { width:100%; border-collapse:collapse; font-size:13px; }
+.rq-table th { text-align:left; padding:8px 10px; border-bottom:2px solid var(--border); color:var(--text-secondary); font-weight:700; font-size:11px; text-transform:uppercase; letter-spacing:0.3px; white-space:nowrap; }
+.rq-table td { padding:8px 10px; border-bottom:1px solid var(--border-light); vertical-align:middle; }
+.rq-table tr:hover td { background:rgba(255,255,255,0.03); }
+.rq-badge { display:inline-block; padding:2px 8px; border-radius:4px; font-size:11px; font-weight:700; }
+.rq-badge-queued { background:#1a3a5c; color:#58a6ff; }
+.rq-badge-processing { background:#3a2d1a; color:#f2c66d; }
+.rq-badge-completed { background:#1a3a2a; color:#3fb950; }
+.rq-badge-failed { background:#3a1a1a; color:#f85149; }
+.rq-badge-paused { background:#2a2a2a; color:#8b949e; }
+.rq-badge-cancelled { background:#2a1a1a; color:#f85149; }
+.rq-badge-needs_repair { background:#3a2d1a; color:#d29922; }
+.rq-priority-high { color:#f85149; font-weight:700; }
+.rq-priority-normal { color:var(--text-secondary); }
+.rq-priority-low { color:#8b949e; }
+.rq-thumbs { display:flex; gap:4px; }
+.rq-thumb { width:48px; height:48px; border-radius:4px; object-fit:cover; border:1px solid var(--border); cursor:pointer; background:var(--card-bg); }
+.rq-thumb-placeholder { width:48px; height:48px; border-radius:4px; border:1px dashed var(--border); display:flex; align-items:center; justify-content:center; font-size:10px; color:var(--text-secondary); background:var(--card-bg); }
+.rq-progress { display:flex; align-items:center; gap:6px; }
+.rq-progress-bar { flex:1; height:6px; background:var(--border-light); border-radius:3px; overflow:hidden; min-width:60px; }
+.rq-progress-fill { height:100%; border-radius:3px; transition:width 0.3s; }
+.rq-progress-fill-queued { background:#58a6ff; }
+.rq-progress-fill-processing { background:#f2c66d; }
+.rq-progress-fill-completed { background:#3fb950; }
+.rq-progress-fill-failed { background:#f85149; }
+.rq-progress-text { font-size:11px; color:var(--text-secondary); white-space:nowrap; }
+.rq-empty { color:var(--text-secondary); padding:24px; text-align:center; font-size:14px; }
+.rq-loading { color:var(--text-secondary); padding:16px; text-align:center; }
+.rq-error { color:#f85149; padding:12px; background:#3a1a1a; border-radius:8px; margin:8px 0; font-size:13px; }
+.rq-actions { display:flex; gap:6px; }
+.rq-action-btn { padding:4px 10px; border:1px solid var(--border); border-radius:4px; background:var(--card-bg); color:var(--text); cursor:pointer; font-size:11px; }
+.rq-action-btn:hover { background:var(--border-light); }
+.rq-action-btn:disabled { opacity:0.4; cursor:not-allowed; }
+.rq-action-btn.danger { color:#f85149; border-color:#f8514940; }
+.rq-action-btn.danger:hover { background:#3a1a1a; }
+.rq-action-btn.success { color:#3fb950; border-color:#3fb95040; }
+.rq-action-btn.success:hover { background:#1a3a2a; }
+.rq-name-cell { max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; cursor:pointer; color:var(--text); }
+.rq-name-cell:hover { color:#58a6ff; }
+.rq-source-badge { font-size:10px; padding:1px 6px; border-radius:3px; background:var(--border-light); color:var(--text-secondary); }
+.rq-pagination { display:flex; align-items:center; justify-content:center; gap:8px; padding:12px 0; font-size:13px; color:var(--text-secondary); }
+.rq-pagination button { padding:4px 10px; border:1px solid var(--border); border-radius:4px; background:var(--card-bg); color:var(--text); cursor:pointer; font-size:12px; }
+.rq-pagination button:disabled { opacity:0.4; cursor:not-allowed; }
+.rq-pagination button:hover:not(:disabled) { background:var(--border-light); }
+.rq-refresh-note { font-size:11px; color:var(--text-secondary); margin-left:auto; }
 </style>
 </head>
 <body>
@@ -2834,6 +2891,7 @@ border-top: 1px solid var(--border-light);
     <button class="tb-btn" id="matchedImagesToggle" title="View saved matched product-image pairs" aria-label="Matched Images">🖼️ Matched</button>
     <button class="tb-btn" id="diningChairMatchToggle" title="Dining chair PDF + ZIP matching workflow" aria-label="Dining Chair Match">🪑 Chair Match</button>
     <button class="tb-btn" id="renderProductToggle" title="Generate 4 product renders with QA pipeline" aria-label="Render Product">🎨 Render</button>
+    <button class="tb-btn" id="renderQueueToggle" title="Cloud render queue — permanent, survives browser close" aria-label="Render Queue">☁️ Queue</button>
     <button class="tb-btn" id="completedToggle" title="Completed render history" aria-label="Completed Batches">✓ Completed</button>
     <button class="tb-btn" id="monitorToggle" title="API health monitoring" aria-label="API Monitor">📡 Monitor</button>
     <button class="tb-btn" id="featureToggle" title="View & edit product feature prompts" aria-label="Product Features">📋 Features</button>
@@ -3464,6 +3522,81 @@ border-top: 1px solid var(--border-light);
         </div>
 
         <div id="renderProductError" style="display:none;margin-top:12px;padding:12px;background:#ffebee;border-radius:8px;color:#c62828;"></div>
+      </div>
+    </div>
+
+    <!-- ── RENDER QUEUE PANEL ──────────────────────────────────── -->
+    <div class="about-panel" id="renderQueuePanel" style="display:none;">
+      <div class="sec-title">
+        <span>☁️ Render Queue — Cloud Queue</span>
+        <span style="font-size:11px;font-weight:400;color:var(--text-secondary);margin-left:auto;">Permanent queue — survives browser close</span>
+      </div>
+      <div class="about-section">
+        <div class="about-card" style="padding:16px;">
+          <div class="rq-panel">
+            <!-- Stats Cards -->
+            <div class="rq-stats" id="rqStats">
+              <div class="rq-stat-card"><span class="rq-stat-label">Total Batches</span><span class="rq-stat-value" id="rqStatTotal">—</span></div>
+              <div class="rq-stat-card"><span class="rq-stat-label">Queued</span><span class="rq-stat-value" id="rqStatQueued">—</span><span class="rq-stat-sub">items waiting</span></div>
+              <div class="rq-stat-card"><span class="rq-stat-label">Processing</span><span class="rq-stat-value" id="rqStatProcessing">—</span><span class="rq-stat-sub">items in progress</span></div>
+              <div class="rq-stat-card"><span class="rq-stat-label">Completed</span><span class="rq-stat-value" id="rqStatCompleted">—</span><span class="rq-stat-sub">items done</span></div>
+              <div class="rq-stat-card"><span class="rq-stat-label">Failed</span><span class="rq-stat-value" id="rqStatFailed">—</span><span class="rq-stat-sub">items with errors</span></div>
+              <div class="rq-stat-card"><span class="rq-stat-label">Needs Repair</span><span class="rq-stat-value" id="rqStatNeedsRepair">—</span><span class="rq-stat-sub">items flagged</span></div>
+            </div>
+
+            <!-- Toolbar -->
+            <div class="rq-toolbar">
+              <input type="text" class="rq-search" id="rqSearch" placeholder="Search batches..." />
+              <select id="rqStatusFilter" style="padding:7px 10px;border:1px solid var(--border);border-radius:6px;background:var(--card-bg);color:var(--text);font-size:13px;">
+                <option value="">All Statuses</option>
+                <option value="queued">Queued</option>
+                <option value="processing">Processing</option>
+                <option value="completed">Completed</option>
+                <option value="failed">Failed</option>
+                <option value="paused">Paused</option>
+                <option value="cancelled">Cancelled</option>
+                <option value="needs_repair">Needs Repair</option>
+              </select>
+              <button class="tb-btn" id="rqRefreshBtn" title="Refresh queue data">🔄 Refresh</button>
+              <button class="tb-btn" id="rqPauseAllBtn" title="Pause all queued batches">⏸ Pause All</button>
+              <button class="tb-btn" id="rqResumeAllBtn" title="Resume all paused batches">▶ Resume All</button>
+              <button class="tb-btn" id="rqCancelAllBtn" title="Cancel all queued batches" style="color:#f85149;">✕ Cancel All Queued</button>
+              <button class="tb-btn" id="rqCleanupBtn" title="Delete completed batches older than 7 days">🗑 Cleanup</button>
+              <span class="rq-refresh-note">Auto-refresh every 10s</span>
+            </div>
+
+            <!-- Error display -->
+            <div class="rq-error" id="rqError" style="display:none;"></div>
+
+            <!-- Table -->
+            <div class="rq-table-wrap">
+              <table class="rq-table" id="rqTable">
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Status</th>
+                    <th>Priority</th>
+                    <th>Progress</th>
+                    <th>Source</th>
+                    <th>Items</th>
+                    <th>Created</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="rqTbody">
+                  <tr><td colspan="8" class="rq-loading">Loading queue data...</td></tr>
+                </tbody>
+              </table>
+            </div>
+
+            <!-- Pagination -->
+            <div class="rq-pagination" id="rqPagination" style="display:none;">
+              <button id="rqPrevPage" disabled>← Prev</button>
+              <span id="rqPageInfo">Page 1</span>
+              <button id="rqNextPage" disabled>Next →</button>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -5000,6 +5133,9 @@ completedClearArchiveBtn?.addEventListener('click', clearCompletedArchive);
       const data = await fetchMonitorStatus();
       renderMonitorStatus(data);
     }
+
+  });
+
   // ── MATCHED IMAGES TOGGLE ─────────────────────────────────────────
   let matchedImagesPanelOpen = false;
   const matchedImagesToggle = document.getElementById('matchedImagesToggle');
