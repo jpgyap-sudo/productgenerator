@@ -2833,6 +2833,7 @@ border-top: 1px solid var(--border-light);
     <button class="tb-btn" id="batchProcessorToggle" title="Batch process PDF catalog + ZIP images" aria-label="Batch Processor">📦 Batch</button>
     <button class="tb-btn" id="matchedImagesToggle" title="View saved matched product-image pairs" aria-label="Matched Images">🖼️ Matched</button>
     <button class="tb-btn" id="diningChairMatchToggle" title="Dining chair PDF + ZIP matching workflow" aria-label="Dining Chair Match">🪑 Chair Match</button>
+    <button class="tb-btn" id="renderProductToggle" title="Generate 4 product renders with QA pipeline" aria-label="Render Product">🎨 Render</button>
     <button class="tb-btn" id="completedToggle" title="Completed render history" aria-label="Completed Batches">✓ Completed</button>
     <button class="tb-btn" id="monitorToggle" title="API health monitoring" aria-label="API Monitor">📡 Monitor</button>
     <button class="tb-btn" id="featureToggle" title="View & edit product feature prompts" aria-label="Product Features">📋 Features</button>
@@ -3410,6 +3411,59 @@ border-top: 1px solid var(--border-light);
           <button class="dcm-gold-outline" id="dcmSaveCanvasBtn">Save to Image Canvas</button>
           <button class="dcm-gold-fill" id="dcmSaveQueueBtn">Save & Add to Queue →</button>
         </footer>
+      </div>
+    </div>
+
+    <!-- ── RENDER PRODUCT PANEL ────────────────────────────────── -->
+    <div class="about-panel" id="renderProductPanel" style="display:none;">
+      <div class="sec-title">
+        <span>🎨 Render Product — QA Pipeline</span>
+        <span style="font-size:11px;font-weight:400;color:var(--text-secondary);margin-left:auto;">GPT main → QA → Gemini fix/fallback</span>
+      </div>
+
+      <div class="about-section">
+        <div class="about-card">
+          <h3>Upload Product Image</h3>
+          <p style="font-size:13px;color:var(--text-secondary);margin:4px 0 12px 0;">
+            Generates 4 views: Front, Side, Isometric, Interior — with automatic QA scoring and corrective fixes.
+          </p>
+          <form id="renderProductForm" style="display:flex;flex-direction:column;gap:10px;">
+            <div>
+              <label style="font-weight:600;font-size:13px;">Product Image *</label>
+              <input type="file" name="productImage" accept="image/*" required style="padding:8px;border:1px solid var(--border);border-radius:6px;width:100%;" />
+            </div>
+            <div style="display:flex;gap:12px;flex-wrap:wrap;">
+              <div style="flex:1;min-width:180px;">
+                <label style="font-weight:600;font-size:13px;">Product Name</label>
+                <input type="text" name="productName" value="Dining Chair" style="padding:8px;border:1px solid var(--border);border-radius:6px;width:100%;" />
+              </div>
+              <div style="flex:1;min-width:180px;">
+                <label style="font-weight:600;font-size:13px;">Brand</label>
+                <input type="text" name="brand" value="Home Atelier" style="padding:8px;border:1px solid var(--border);border-radius:6px;width:100%;" />
+              </div>
+              <div style="flex:1;min-width:140px;">
+                <label style="font-weight:600;font-size:13px;">Mode</label>
+                <select name="mode" style="padding:8px;border:1px solid var(--border);border-radius:6px;width:100%;">
+                  <option value="balanced">Balanced (QA + Fix)</option>
+                  <option value="gpt-only">GPT Only</option>
+                  <option value="gemini-only">Gemini Only</option>
+                </select>
+              </div>
+            </div>
+            <button type="submit" id="renderProductBtn" style="padding:10px 20px;background:var(--accent);color:#fff;border:none;border-radius:8px;font-weight:700;cursor:pointer;font-size:14px;">
+              🚀 Generate 4 Renders
+            </button>
+          </form>
+        </div>
+
+        <!-- Results area -->
+        <div id="renderProductResults" style="display:none;margin-top:16px;">
+          <h3>Results</h3>
+          <div id="renderProductGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:16px;margin-top:12px;"></div>
+          <pre id="renderProductRaw" style="background:var(--bg-secondary);padding:12px;border-radius:8px;font-size:12px;overflow:auto;max-height:300px;margin-top:12px;display:none;"></pre>
+        </div>
+
+        <div id="renderProductError" style="display:none;margin-top:12px;padding:12px;background:#ffebee;border-radius:8px;color:#c62828;"></div>
       </div>
     </div>
 
@@ -10478,11 +10532,109 @@ function initDiningChairMatch() {
   });
 }
 
+// ── Render Product Panel ────────────────────────────────────────
+function initRenderProduct() {
+  const toggle = document.getElementById('renderProductToggle');
+  const panel = document.getElementById('renderProductPanel');
+  const form = document.getElementById('renderProductForm');
+  const results = document.getElementById('renderProductResults');
+  const grid = document.getElementById('renderProductGrid');
+  const raw = document.getElementById('renderProductRaw');
+  const errorDiv = document.getElementById('renderProductError');
+  const btn = document.getElementById('renderProductBtn');
+  let isOpen = false;
+
+  function hideAllPanels() {
+    document.querySelectorAll('.main > div, .dcm-panel, [id$="Panel"]').forEach(el => {
+      if (el.id !== 'renderProductPanel') el.style.display = 'none';
+    });
+  }
+
+  toggle?.addEventListener('click', () => {
+    isOpen = !isOpen;
+    toggle.classList.toggle('active', isOpen);
+    if (isOpen) {
+      hideAllPanels();
+      panel.style.display = 'block';
+    } else {
+      panel.style.display = 'none';
+    }
+  });
+
+  form?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    btn.disabled = true;
+    btn.textContent = '⏳ Generating...';
+    errorDiv.style.display = 'none';
+    results.style.display = 'none';
+    grid.innerHTML = '';
+    raw.style.display = 'none';
+
+    const fd = new FormData(form);
+    try {
+      const res = await fetch('/api/render/product', { method: 'POST', body: fd });
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.error || 'Render failed');
+
+      results.style.display = 'block';
+      grid.innerHTML = '';
+      data.outputs.forEach(out => {
+        const card = document.createElement('div');
+        card.style.cssText = 'border:1px solid var(--border);border-radius:10px;overflow:hidden;background:var(--bg-card);';
+
+        const statusColors = { generated: '#4caf50', fixed: '#ff9800', fallback: '#f44336', failed: '#9e9e9e' };
+        const statusColor = statusColors[out.status] || '#9e9e9e';
+
+        let imgHtml = '';
+        if (out.imageUrl) {
+          imgHtml = `<img src="${out.imageUrl}" alt="${out.view}" style="width:100%;height:180px;object-fit:cover;display:block;" />`;
+        } else {
+          imgHtml = `<div style="height:180px;display:flex;align-items:center;justify-content:center;background:#f5f5f5;color:#999;font-size:13px;">No image</div>`;
+        }
+
+        let qaHtml = '';
+        if (out.qaScore !== undefined) {
+          qaHtml = `
+            <div style="padding:6px 10px;font-size:12px;color:var(--text-secondary);border-top:1px solid var(--border);">
+              <span style="font-weight:700;">Score: ${out.qaScore}</span>
+              <span style="margin-left:8px;color:${statusColor};">${out.qaDecision || out.status}</span>
+              ${out.attempts > 1 ? `<span style="margin-left:8px;">(${out.attempts} attempts)</span>` : ''}
+            </div>`;
+        }
+
+        card.innerHTML = `
+          <div style="padding:8px 10px;font-weight:700;font-size:13px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border);">
+            <span>${out.view}</span>
+            <span style="font-size:11px;padding:2px 8px;border-radius:4px;background:${statusColor}20;color:${statusColor};">${out.status}</span>
+          </div>
+          ${imgHtml}
+          ${qaHtml}
+        `;
+        grid.appendChild(card);
+      });
+
+      // Show raw data toggle
+      raw.textContent = JSON.stringify(data, null, 2);
+      raw.style.display = 'block';
+    } catch (err) {
+      errorDiv.textContent = 'Error: ' + err.message;
+      errorDiv.style.display = 'block';
+    } finally {
+      btn.disabled = false;
+      btn.textContent = '🚀 Generate 4 Renders';
+    }
+  });
+}
+
 // Initialize when DOM is ready
 if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', initDiningChairMatch);
+  document.addEventListener('DOMContentLoaded', () => {
+    initDiningChairMatch();
+    initRenderProduct();
+  });
 } else {
   initDiningChairMatch();
+  initRenderProduct();
 }
 </script>
 </body>

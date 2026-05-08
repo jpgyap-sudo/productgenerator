@@ -14,6 +14,7 @@
 import dotenv from 'dotenv';
 dotenv.config({ override: true });
 import express from 'express';
+import multer from 'multer';
 import { supabase, QUEUE_TABLE, RESULTS_TABLE } from './lib/supabase.js';
 import { VIEWS } from './lib/fal.js';
 import { generateGeminiView } from './lib/gemini.js';
@@ -42,6 +43,7 @@ import agentSaveMatchedHandler from './api/agent/save-matched.js';
 import agentMatchedImagesHandler from './api/agent/matched-images.js';
 import agentSaveMatchedPermanentHandler from './api/agent/save-matched-permanent.js';
 import agentMatchedImagesPermanentHandler from './api/agent/matched-images-permanent.js';
+import renderProductHandler from './api/render/product.js';
 import monitorHandler from './api/monitor.js';
 import rerenderViewHandler from './api/queue/rerender-view.js';
 
@@ -225,6 +227,17 @@ app.post('/api/queue/rerender-view', async (req, res) => {
     await rerenderViewHandler(req, res);
   } catch (err) {
     console.error('[RERENDER-VIEW] Error:', err);
+    if (!res.headersSent) res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Render Product Route (with QA pipeline) ──
+const renderUpload = multer({ dest: 'uploads/' });
+app.post('/api/render/product', renderUpload.single('productImage'), async (req, res) => {
+  try {
+    await renderProductHandler(req, res);
+  } catch (err) {
+    console.error('[RENDER-PRODUCT] Error:', err);
     if (!res.headersSent) res.status(500).json({ error: err.message });
   }
 });
