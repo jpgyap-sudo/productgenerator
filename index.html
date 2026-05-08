@@ -2686,6 +2686,134 @@ border-top: 1px solid var(--border-light);
   .toast { font-size: 11px; padding: 8px 12px; max-width: 260px; }
   .toast-container { bottom: 12px; right: 12px; gap: 6px; }
 }
+
+/* ── DINING CHAIR MATCHING PANEL ─────────────────────────────── */
+.dcm-panel { display:none; }
+.dcm-panel.active { display:block; }
+.dcm-shell { min-height:100vh; padding:14px; background:radial-gradient(circle at top left,rgba(229,192,123,.12),transparent 30%),#080b0d; color:#f5f5f5; }
+.dcm-topbar { height:72px; display:grid; grid-template-columns:360px 1fr 280px; align-items:center; border-bottom:1px solid #24282d; gap:20px; }
+.dcm-brand { display:flex; gap:14px; align-items:center; }
+.dcm-brand-icon { width:42px; height:42px; display:grid; place-items:center; color:#e5c07b; border:1px solid #e5c07b; border-radius:10px; font-size:22px; }
+.dcm-brand h1 { font-size:22px; line-height:1; text-transform:uppercase; letter-spacing:.02em; margin:0; color:#f2c66d; }
+.dcm-brand p { margin:7px 0 0; color:#b8bec6; }
+.dcm-steps { display:flex; justify-content:center; gap:13px; align-items:center; }
+.dcm-step { display:flex; gap:8px; align-items:center; color:#aab0b6; font-weight:700; }
+.dcm-step span:first-child { width:28px; height:28px; border-radius:50%; display:grid; place-items:center; background:#2b3036; color:#e6e9ed; }
+.dcm-step-done span:first-child { color:#74d16b; border:1px solid #74d16b; background:transparent; }
+.dcm-step-active { color:white; position:relative; }
+.dcm-step-active span:first-child { background:#e5c07b; color:#121212; }
+.dcm-step-active::after { content:""; position:absolute; height:2px; background:#e5c07b; left:0; right:28px; bottom:-24px; }
+.dcm-top-actions { display:flex; justify-content:flex-end; gap:12px; }
+.dcm-close-btn { border:1px solid #30363d; color:#f3f4f6; background:#11161a; border-radius:14px; padding:10px 16px; font-weight:700; cursor:pointer; }
+.dcm-stats { display:grid; grid-template-columns:1.4fr 1.4fr .8fr .8fr .8fr 1.8fr; gap:12px; margin-top:10px; }
+.dcm-stat-card, .dcm-number-stat, .dcm-progress-card, .dcm-panel, .dcm-review-card { background:linear-gradient(180deg,#13181d,#0f1317); border:1px solid #242a30; border-radius:10px; box-shadow:0 20px 50px rgba(0,0,0,.25); }
+.dcm-stat-card { padding:18px 20px; display:flex; gap:16px; align-items:center; }
+.dcm-file-icon { width:44px; height:44px; display:grid; place-items:center; color:#e95c54; border:1px solid #e95c54; border-radius:8px; font-size:20px; }
+.dcm-stat-card p, .dcm-number-stat p, .dcm-progress-card p { color:#f3f4f6; font-weight:800; margin-bottom:5px; }
+.dcm-stat-card strong { display:block; color:white; }
+.dcm-stat-card small { color:#42e66b; font-weight:800; }
+.dcm-number-stat { padding:20px 24px; }
+.dcm-number-stat strong { font-size:32px; display:block; line-height:1; }
+.dcm-number-stat small, .dcm-progress-card small { color:#b6bdc5; }
+.dcm-num-good, .dcm-score-good { color:#55e45c; }
+.dcm-num-warn, .dcm-score-warn { color:#ffd05f; }
+.dcm-num-bad, .dcm-score-bad { color:#ff6666; }
+.dcm-progress-card { padding:20px 24px; }
+.dcm-progress-card strong { display:block; margin:6px 0 14px; }
+.dcm-progress { height:11px; border-radius:999px; background:#22282d; overflow:hidden; }
+.dcm-progress span { display:block; height:100%; background:#66c23b; }
+.dcm-workspace { display:grid; grid-template-columns:1.05fr 1.4fr 1.2fr; gap:10px; margin-top:10px; min-height:635px; }
+.dcm-panel { padding:15px; overflow:hidden; }
+.dcm-panel-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; }
+.dcm-panel-header h2 { font-size:15px; text-transform:uppercase; margin:0; }
+.dcm-panel-header > div { display:flex; gap:10px; align-items:center; }
+.dcm-search-box { height:42px; display:flex; align-items:center; gap:9px; background:#0b1013; border:1px solid #2a3036; border-radius:8px; padding:0 12px; color:#a9b0b8; }
+.dcm-search-box input { background:transparent; border:0; outline:0; color:white; width:100%; }
+.dcm-search-box button { background:transparent; color:#d5d8dc; border:0; cursor:pointer; }
+.dcm-product-list { display:flex; flex-direction:column; gap:10px; margin-top:14px; max-height:530px; overflow:auto; padding-right:4px; }
+.dcm-product-card { text-align:left; width:100%; display:grid; grid-template-columns:92px 1fr 36px; gap:14px; align-items:center; background:#0d1216; border:1px solid #293038; border-radius:8px; padding:11px; color:white; cursor:pointer; }
+.dcm-product-card.dcm-selected { border-color:#e5c07b; box-shadow:inset 0 0 0 1px rgba(229,192,123,.3),0 0 25px rgba(229,192,123,.08); }
+.dcm-product-card img { width:92px; height:92px; object-fit:cover; border-radius:4px; background:white; }
+.dcm-product-line { display:flex; align-items:center; gap:10px; }
+.dcm-product-line strong { font-size:17px; }
+.dcm-product-info p { margin:6px 0 3px; color:#f5f6f7; }
+.dcm-product-info small { color:#d3d6da; }
+.dcm-score-row { display:flex; gap:9px; margin-top:7px; color:#c0c6cd; font-size:13px; }
+.dcm-badge { font-size:12px; padding:4px 8px; border-radius:6px; font-weight:800; white-space:nowrap; }
+.dcm-badge-auto, .dcm-badge-accepted { background:rgba(45,171,70,.25); color:#68eb72; border:1px solid rgba(76,218,93,.35); }
+.dcm-badge-review { background:rgba(229,192,123,.22); color:#ffd36d; border:1px solid rgba(229,192,123,.35); }
+.dcm-badge-none, .dcm-badge-rejected { background:rgba(205,70,70,.25); color:#ff8b7f; border:1px solid rgba(250,104,104,.35); }
+.dcm-select-dot { width:29px; height:29px; border-radius:50%; border:1px solid #59616a; display:grid; place-items:center; color:#4be15d; }
+.dcm-pagination { display:flex; gap:8px; align-items:center; justify-content:center; margin-top:12px; }
+.dcm-pagination button { background:#14191e; border:1px solid #272d35; color:#f3f4f6; border-radius:7px; min-width:34px; height:34px; cursor:pointer; }
+.dcm-pagination .dcm-active-page { color:#e5c07b; border-color:#e5c07b; }
+.dcm-review-panel { display:flex; flex-direction:column; gap:14px; }
+.dcm-review-nav button { width:34px; height:34px; border-radius:8px; border:1px solid #303740; background:#14191e; color:white; cursor:pointer; }
+.dcm-review-card { padding:20px; }
+.dcm-section-title { display:flex; gap:9px; align-items:center; text-transform:uppercase; font-weight:900; margin-bottom:16px; }
+.dcm-section-title button { margin-left:auto; border:1px solid #343c44; background:#12171b; color:white; padding:8px 13px; border-radius:8px; cursor:pointer; }
+.dcm-detail-layout { display:grid; grid-template-columns:220px 1fr; gap:24px; }
+.dcm-large-product, .dcm-large-match { width:100%; aspect-ratio:1; object-fit:cover; background:white; border-radius:6px; }
+.dcm-detail-table { position:relative; }
+.dcm-detail-table h2 { margin:0 0 8px; }
+.dcm-detail-table dl { display:grid; grid-template-columns:105px 1fr; gap:12px; margin-top:16px; }
+.dcm-detail-table dt { color:#aeb5bd; }
+.dcm-detail-table dd { margin:0; color:white; }
+.dcm-matched-with { display:flex; justify-content:center; align-items:center; gap:40px; color:#e5c07b; text-transform:uppercase; }
+.dcm-matched-with span { color:#b8bec6; font-size:24px; }
+.dcm-image-match-card { display:grid; grid-template-columns:260px 1fr; gap:24px; align-items:center; }
+.dcm-match-meta h3 { margin:0 0 10px; text-transform:uppercase; font-size:15px; }
+.dcm-match-meta h2 { font-size:17px; margin:0 0 8px; }
+.dcm-match-meta > p { color:#b9c0c8; padding-bottom:14px; border-bottom:1px solid #2c333a; }
+.dcm-meta-grid { display:grid; grid-template-columns:130px 1fr; gap:12px; margin-top:14px; align-items:center; }
+.dcm-meta-grid span { color:#aab2ba; }
+.dcm-meta-grid p { color:white; line-height:1.5; }
+.dcm-review-actions { display:grid; grid-template-columns:1fr 1fr 1.3fr .8fr; gap:10px; margin-top:auto; }
+.dcm-review-actions button { border:1px solid #303740; border-radius:8px; color:white; padding:14px 12px; display:flex; gap:8px; justify-content:center; align-items:center; font-weight:900; cursor:pointer; }
+.dcm-accept { background:#21883b; }
+.dcm-reject { background:#7e2d2d; }
+.dcm-outline, .dcm-skip { background:#0d1216; }
+.dcm-tabs { display:grid; grid-template-columns:repeat(4,1fr); gap:6px; margin:12px 0; border-bottom:1px solid #293039; }
+.dcm-tabs button { color:#b8c0c8; background:transparent; border:0; padding:10px 0; cursor:pointer; }
+.dcm-tabs button.dcm-tab-active { color:#e5c07b; border-bottom:2px solid #e5c07b; }
+.dcm-image-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; max-height:520px; overflow:auto; padding-right:6px; }
+.dcm-image-tile { position:relative; text-align:left; background:#0d1216; border:1px solid #293039; border-radius:8px; padding:7px; color:white; cursor:pointer; }
+.dcm-image-tile.dcm-selected { border-color:#e5c07b; box-shadow:0 0 0 1px rgba(229,192,123,.35); }
+.dcm-image-tile img { width:100%; height:130px; object-fit:cover; border-radius:4px; background:white; }
+.dcm-image-tile strong { display:block; font-size:12px; margin-top:7px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.dcm-image-tile small { color:#aeb6be; display:block; margin-top:4px; }
+.dcm-used-tag, .dcm-unused-tag { position:absolute; right:8px; bottom:7px; font-size:11px; padding:3px 7px; border-radius:5px; }
+.dcm-used-tag { color:#58e466; border:1px solid rgba(85,228,92,.45); background:rgba(85,228,92,.12); }
+.dcm-unused-tag { color:#c1c8cf; border:1px solid #4a5562; background:rgba(255,255,255,.04); }
+.dcm-image-footer { display:flex; gap:8px; align-items:center; color:#adb5bd; margin-top:12px; }
+.dcm-image-footer button { height:32px; min-width:32px; border-radius:6px; border:1px solid #2e353d; color:white; background:#11161a; cursor:pointer; }
+.dcm-active-view { color:#e5c07b !important; border-color:#e5c07b !important; }
+.dcm-image-footer span:nth-of-type(2) { margin-left:auto; }
+.dcm-bottom-actions { display:flex; gap:10px; align-items:center; margin-top:12px; }
+.dcm-bottom-actions .dcm-spacer { flex:1; }
+.dcm-bottom-actions .dcm-warning { color:#f4c85d; border-color:rgba(229,192,123,.5); }
+.dcm-gold-outline { color:#f2c66d !important; border-color:#e5c07b !important; }
+.dcm-gold-fill { background:linear-gradient(135deg,#f2ce75,#e2ad4b) !important; color:#111 !important; border-color:#e5c07b !important; }
+.dcm-canvas-panel { margin-top:12px; padding:14px; border:1px solid #242a30; border-radius:10px; background:linear-gradient(180deg,#11161a,#0b0f12); }
+.dcm-canvas-head { display:flex; justify-content:space-between; align-items:center; gap:16px; margin-bottom:10px; }
+.dcm-canvas-head h2 { margin:0; font-size:15px; text-transform:uppercase; }
+.dcm-canvas-head p { color:#aeb6be; margin-top:4px; }
+.dcm-canvas-head strong { color:#f2c66d; border:1px solid rgba(229,192,123,.45); padding:8px 12px; border-radius:999px; }
+.dcm-toast-note { border:1px solid rgba(229,192,123,.45); background:rgba(229,192,123,.1); color:#f5d179; padding:10px 12px; border-radius:8px; margin-bottom:10px; font-weight:800; }
+.dcm-canvas-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; }
+.dcm-canvas-item { display:grid; grid-template-columns:76px 1fr; gap:10px; padding:10px; background:#0c1115; border:1px solid #283039; border-radius:8px; }
+.dcm-canvas-item.dcm-has-duplicate { border-color:#e5c07b; box-shadow:inset 0 0 0 1px rgba(229,192,123,.2); }
+.dcm-canvas-item img { width:76px; height:76px; object-fit:cover; background:white; border-radius:5px; }
+.dcm-canvas-title { display:flex; justify-content:space-between; gap:10px; align-items:center; }
+.dcm-canvas-title strong { color:white; }
+.dcm-canvas-title span { color:#8f98a3; font-size:11px; white-space:nowrap; }
+.dcm-canvas-item p { margin:5px 0 3px; color:#dce1e6; }
+.dcm-canvas-item small { display:block; color:#aab3bc; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.dcm-canvas-item em { display:block; color:#f2c66d; font-style:normal; margin-top:6px; font-size:12px; font-weight:800; }
+.dcm-empty-canvas { grid-column:1/-1; color:#9da6af; padding:16px; border:1px dashed #303842; border-radius:8px; text-align:center; }
+.dcm-icon-btn { border:1px solid #30363d; color:#f3f4f6; background:#11161a; border-radius:14px; padding:9px; cursor:pointer; }
+.dcm-mini-btn { border:1px solid #30363d; color:#f3f4f6; background:#11161a; border-radius:14px; padding:10px 16px; font-weight:700; cursor:pointer; }
+@media (max-width:1200px) { .dcm-topbar, .dcm-stats, .dcm-workspace { grid-template-columns:1fr; height:auto; } .dcm-steps { justify-content:flex-start; overflow:auto; } .dcm-top-actions { justify-content:flex-start; } .dcm-canvas-grid { grid-template-columns:1fr; } }
 </style>
 </head>
 <body>
@@ -2704,6 +2832,7 @@ border-top: 1px solid var(--border-light);
     <button class="tb-btn" id="bulkRenderToggle" title="Review bulk items before rendering" aria-label="Bulk Render">Bulk Render</button>
     <button class="tb-btn" id="batchProcessorToggle" title="Batch process PDF catalog + ZIP images" aria-label="Batch Processor">📦 Batch</button>
     <button class="tb-btn" id="matchedImagesToggle" title="View saved matched product-image pairs" aria-label="Matched Images">🖼️ Matched</button>
+    <button class="tb-btn" id="diningChairMatchToggle" title="Dining chair PDF + ZIP matching workflow" aria-label="Dining Chair Match">🪑 Chair Match</button>
     <button class="tb-btn" id="completedToggle" title="Completed render history" aria-label="Completed Batches">✓ Completed</button>
     <button class="tb-btn" id="monitorToggle" title="API health monitoring" aria-label="API Monitor">📡 Monitor</button>
     <button class="tb-btn" id="featureToggle" title="View & edit product feature prompts" aria-label="Product Features">📋 Features</button>
@@ -3121,6 +3250,166 @@ border-top: 1px solid var(--border-light);
         <div class="matched-detail-content" id="matchedDetailContent">
           <!-- populated by JS -->
         </div>
+      </div>
+    </div>
+
+    <!-- ── DINING CHAIR MATCHING PANEL ─────────────────────────── -->
+    <div class="dcm-panel" id="diningChairMatchPanel" style="display:none;">
+      <div class="dcm-shell">
+        <!-- Top Bar -->
+        <header class="dcm-topbar">
+          <div class="dcm-brand">
+            <div class="dcm-brand-icon">🪑</div>
+            <div>
+              <h1>Dining Chair Matching</h1>
+              <p>Match PDF dining chair products with ZIP source images</p>
+            </div>
+          </div>
+          <div class="dcm-steps">
+            <div class="dcm-step dcm-step-done"><span>1</span> Upload</div>
+            <div class="dcm-step dcm-step-done"><span>2</span> Extract</div>
+            <div class="dcm-step dcm-step-active"><span>3</span> Match</div>
+            <div class="dcm-step"><span>4</span> Review</div>
+            <div class="dcm-step"><span>5</span> Save Canvas</div>
+          </div>
+          <div class="dcm-top-actions">
+            <button class="dcm-close-btn" id="dcmCloseBtn" title="Close panel">✕</button>
+          </div>
+        </header>
+
+        <!-- Stats Row -->
+        <section class="dcm-stats">
+          <div class="dcm-stat-card">
+            <div class="dcm-file-icon">📄</div>
+            <div><p>PDF Catalog</p><strong id="dcmPdfName">Dining Chairs Catalog.pdf</strong><small id="dcmPdfStats">127 products extracted</small></div>
+          </div>
+          <div class="dcm-stat-card">
+            <div class="dcm-file-icon" style="color:#e5c07b;border-color:#e5c07b;">🗜️</div>
+            <div><p>ZIP Archive</p><strong id="dcmZipName">Dining_Chairs_Images.zip</strong><small id="dcmZipStats">248 images extracted</small></div>
+          </div>
+          <div class="dcm-number-stat"><p>Matched</p><strong class="dcm-num-good" id="dcmMatchedCount">96</strong><small id="dcmMatchedPct">75.6%</small></div>
+          <div class="dcm-number-stat"><p>Needs Review</p><strong class="dcm-num-warn" id="dcmReviewCount">31</strong><small id="dcmReviewPct">24.4%</small></div>
+          <div class="dcm-number-stat"><p>No Match</p><strong class="dcm-num-bad" id="dcmNoMatchCount">0</strong><small id="dcmNoMatchPct">0%</small></div>
+          <div class="dcm-progress-card">
+            <p>Overall Progress</p>
+            <strong id="dcmProgressText">127 / 127 reviewed</strong>
+            <div class="dcm-progress"><span id="dcmProgressBar" style="width:100%"></span></div>
+          </div>
+        </section>
+
+        <!-- Workspace: 3 columns -->
+        <main class="dcm-workspace">
+          <!-- Left: Product List -->
+          <aside class="dcm-panel dcm-product-panel">
+            <div class="dcm-panel-header">
+              <h2>PDF Products (<span id="dcmProductCount">127</span>)</h2>
+              <div><button class="dcm-icon-btn" id="dcmFilterProductsBtn" title="Filter">🔍</button><button class="dcm-mini-btn">Filter</button></div>
+            </div>
+            <div class="dcm-search-box">
+              <span>🔍</span>
+              <input type="text" id="dcmProductSearch" placeholder="Search by code, name, brand..." />
+            </div>
+            <div class="dcm-product-list" id="dcmProductList">
+              <!-- populated by JS -->
+            </div>
+            <div class="dcm-pagination" id="dcmProductPagination">
+              <button id="dcmPrevPage">◀</button>
+              <button class="dcm-active-page">1</button>
+              <button>2</button>
+              <button>3</button>
+              <span>...</span>
+              <button>13</button>
+              <button id="dcmNextPage">▶</button>
+            </div>
+          </aside>
+
+          <!-- Center: Match Review -->
+          <section class="dcm-panel dcm-review-panel">
+            <div class="dcm-panel-header">
+              <h2>Match Review</h2>
+              <div class="dcm-review-nav">
+                <span id="dcmReviewPosition">1 of 127</span>
+                <button id="dcmPrevReview">◀</button>
+                <button id="dcmNextReview">▶</button>
+              </div>
+            </div>
+
+            <div class="dcm-review-card dcm-product-detail-card">
+              <div class="dcm-section-title">📄 PDF Product Details <button id="dcmEditProduct">Edit</button></div>
+              <div class="dcm-detail-layout" id="dcmProductDetail">
+                <!-- populated by JS -->
+              </div>
+            </div>
+
+            <div class="dcm-matched-with"><span>↑</span><strong>Matched With</strong><span>↓</span></div>
+
+            <div class="dcm-review-card dcm-image-match-card" id="dcmImageMatchCard">
+              <!-- populated by JS -->
+            </div>
+
+            <div class="dcm-review-actions">
+              <button class="dcm-accept" id="dcmAcceptBtn">✓ Accept Match</button>
+              <button class="dcm-reject" id="dcmRejectBtn">✕ Reject Match</button>
+              <button class="dcm-outline" id="dcmPickDifferentBtn">↻ Pick Different Image</button>
+              <button class="dcm-skip" id="dcmSkipBtn">⏭ Skip</button>
+            </div>
+          </section>
+
+          <!-- Right: ZIP Image Browser -->
+          <aside class="dcm-panel dcm-image-panel">
+            <div class="dcm-panel-header">
+              <h2>ZIP Image Browser (<span id="dcmImageCount">248</span>)</h2>
+              <button class="dcm-icon-btn" id="dcmRefreshImages">↻</button>
+            </div>
+            <div class="dcm-search-box">
+              <span>🔍</span>
+              <input type="text" id="dcmImageSearch" placeholder="Search by filename, code..." />
+              <button id="dcmImageFilterBtn">🔍</button>
+            </div>
+            <div class="dcm-tabs">
+              <button class="dcm-tab-active" data-filter="all">All (248)</button>
+              <button data-filter="unused">Unused (152)</button>
+              <button data-filter="matched">Matched (96)</button>
+              <button data-filter="rejected">Rejected (0)</button>
+            </div>
+            <div class="dcm-image-grid" id="dcmImageGrid">
+              <!-- populated by JS -->
+            </div>
+            <div class="dcm-image-footer">
+              <span>View</span>
+              <button class="dcm-active-view">▦</button>
+              <button>☰</button>
+              <span id="dcmImageRange">Showing 1–12 of 248</span>
+              <button id="dcmPrevImages">◀</button>
+              <button id="dcmNextImages">▶</button>
+            </div>
+          </aside>
+        </main>
+
+        <!-- Permanent Image Canvas -->
+        <section class="dcm-canvas-panel">
+          <div class="dcm-canvas-head">
+            <div>
+              <h2>Permanent Image Canvas</h2>
+              <p>Saved dining chair matches persist in browser storage. Use Supabase for production persistence.</p>
+            </div>
+            <strong id="dcmCanvasCount">0 saved</strong>
+          </div>
+          <div class="dcm-toast-note" id="dcmCanvasNotice" style="display:none;"></div>
+          <div class="dcm-canvas-grid" id="dcmCanvasGrid">
+            <!-- populated by JS -->
+          </div>
+        </section>
+
+        <!-- Bottom Actions -->
+        <footer class="dcm-bottom-actions">
+          <button id="dcmExportBtn">⬇ Export Match Report</button>
+          <button id="dcmViewLogsBtn">View Logs</button>
+          <div class="dcm-spacer"></div>
+          <button class="dcm-warning" id="dcmReviewLowBtn">Review Low Confidence (31)</button>
+          <button class="dcm-gold-outline" id="dcmSaveCanvasBtn">Save to Image Canvas</button>
+          <button class="dcm-gold-fill" id="dcmSaveQueueBtn">Save & Add to Queue →</button>
+        </footer>
       </div>
     </div>
 
@@ -9693,6 +9982,507 @@ function escapeHtml(str) {
   const div = document.createElement('div');
   div.textContent = str;
   return div.innerHTML;
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  DINING CHAIR MATCHING — Vanilla JS port of React UI
+// ══════════════════════════════════════════════════════════════════
+
+const DCM_CANVAS_KEY = 'dcm-canvas-records-v1';
+
+// ── Mock Data ──
+const dcmChairImages = [
+  'https://images.unsplash.com/photo-1598300042247-d088f8ab3a91?auto=format&fit=crop&w=500&q=80',
+  'https://images.unsplash.com/photo-1503602642458-232111445657?auto=format&fit=crop&w=500&q=80',
+  'https://images.unsplash.com/photo-1519947486511-46149fa0a254?auto=format&fit=crop&w=500&q=80',
+  'https://images.unsplash.com/photo-1541558869434-2840d308329a?auto=format&fit=crop&w=500&q=80',
+  'https://images.unsplash.com/photo-1561677978-583a8c7a4b43?auto=format&fit=crop&w=500&q=80'
+];
+
+const dcmProducts = [
+  { id:'p1', productCode:'HACH-005R', name:'Dining Chair', brand:'Minotti', category:'Dining Chair', description:'Upholstered dining chair with curved backrest, solid wood legs, and premium fabric.', image:dcmChairImages[0], matchScore:96, matchType:'Exact', status:'auto' },
+  { id:'p2', productCode:'HACH-008R', name:'Dining Chair', brand:'Minotti', category:'Dining Chair', description:'Modern dining chair with soft rounded shell and slim dark legs.', image:dcmChairImages[1], matchScore:72, matchType:'Code in Filename', status:'review' },
+  { id:'p3', productCode:'HACH-010R', name:'Dining Chair', brand:'Minotti', category:'Dining Chair', description:'Dining chair extracted from PDF but no confident source image has been detected.', image:dcmChairImages[2], matchScore:0, matchType:'No Match', status:'none' },
+  { id:'p4', productCode:'HACH-012R', name:'Dining Chair', brand:'Poliform', category:'Dining Chair', description:'Slim premium dining chair with upholstered seat and contemporary luxury silhouette.', image:dcmChairImages[3], matchScore:91, matchType:'Code in Filename', status:'auto' },
+  { id:'p5', productCode:'HACH-015R', name:'Dining Chair', brand:'B&B Italia', category:'Dining Chair', description:'Soft dining chair with warm beige upholstery and elegant residential proportions.', image:dcmChairImages[4], matchScore:64, matchType:'Token Overlap', status:'review' }
+];
+
+const dcmZipImages = [
+  { id:'z1', filename:'chair_hach-005_front.jpg', width:1200, height:1200, sizeKb:320, format:'JPG', image:dcmChairImages[0], usedBy:'HACH-005R' },
+  { id:'z2', filename:'chair_hach-005_side.jpg', width:1200, height:1200, sizeKb:295, format:'JPG', image:dcmChairImages[1], usedBy:'HACH-005R' },
+  { id:'z3', filename:'chair_hach-005_back.jpg', width:1200, height:1200, sizeKb:310, format:'JPG', image:dcmChairImages[2], usedBy:'HACH-005R' },
+  { id:'z4', filename:'chair_hach-007_front.jpg', width:1200, height:1200, sizeKb:338, format:'JPG', image:dcmChairImages[3] },
+  { id:'z5', filename:'chair_hach-008_front.jpg', width:1200, height:1200, sizeKb:347, format:'JPG', image:dcmChairImages[4] },
+  { id:'z6', filename:'chair_hach-009_front.jpg', width:1200, height:1200, sizeKb:301, format:'JPG', image:dcmChairImages[1] },
+  { id:'z7', filename:'chair_hach-010_front.jpg', width:1200, height:1200, sizeKb:289, format:'JPG', image:dcmChairImages[2] },
+  { id:'z8', filename:'chair_hach-011_front.jpg', width:1200, height:1200, sizeKb:315, format:'JPG', image:dcmChairImages[0] },
+  { id:'z9', filename:'chair_hach-012_front.jpg', width:1200, height:1200, sizeKb:326, format:'JPG', image:dcmChairImages[3] }
+];
+
+// ── Canvas Store ──
+function dcmLoadCanvasRecords() {
+  try {
+    const raw = localStorage.getItem(DCM_CANVAS_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch { return []; }
+}
+
+function dcmPersistCanvasRecords(records) {
+  localStorage.setItem(DCM_CANVAS_KEY, JSON.stringify(records));
+}
+
+function dcmNormalize(value) {
+  return String(value).trim().toLowerCase().replace(/[^a-z0-9]+/g, '');
+}
+
+function dcmDetectDuplicates(existing, product, image) {
+  const notices = [];
+  const productCode = dcmNormalize(product.productCode);
+  const imageName = dcmNormalize(image.filename);
+  const visualHash = dcmNormalize(`${image.filename}-${image.width}-${image.height}-${image.sizeKb}`);
+  for (const rec of existing) {
+    if (productCode && dcmNormalize(rec.productCode) === productCode) {
+      notices.push({ type:'product-code', message:`Duplicate product code detected: ${product.productCode} was already saved on ${dcmFormatTime(rec.savedAt)}.`, matchedCanvasId:rec.id, matchedAt:rec.savedAt });
+    }
+    if (imageName && dcmNormalize(rec.imageName) === imageName) {
+      notices.push({ type:'image-filename', message:`Duplicate source image detected: ${image.filename} is already linked to ${rec.productCode}.`, matchedCanvasId:rec.id, matchedAt:rec.savedAt });
+    }
+    const recHash = dcmNormalize(`${rec.imageName}-${rec.imageWidth}-${rec.imageHeight}-${rec.imageSizeKb}`);
+    if (visualHash && recHash === visualHash) {
+      notices.push({ type:'visual-hash', message:'Possible replicate image detected: same filename, dimensions, and size as a saved canvas item.', matchedCanvasId:rec.id, matchedAt:rec.savedAt });
+    }
+  }
+  const deduped = new Map();
+  for (const n of notices) deduped.set(`${n.type}-${n.matchedCanvasId}`, n);
+  return Array.from(deduped.values());
+}
+
+function dcmBuildCanvasRecord(product, image, existing) {
+  const now = new Date().toISOString();
+  const notices = dcmDetectDuplicates(existing, product, image);
+  const dupText = notices.length ? `\n\n⚠ Duplicate / replicate notices:\n${notices.map(n => `- ${n.message}`).join('\n')}` : '';
+  return {
+    id: crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    productCode: product.productCode,
+    productName: product.name,
+    productBrand: product.brand,
+    category: 'Dining Chair',
+    originalDescription: product.description,
+    description: product.description + dupText,
+    imageName: image.filename,
+    imageUrl: image.image,
+    imageWidth: image.width,
+    imageHeight: image.height,
+    imageSizeKb: image.sizeKb,
+    matchScore: product.matchScore,
+    matchType: product.matchType,
+    sourceBatch: 'dining-chair-matching-ui',
+    sourcePdf: 'Dining Chairs Catalog.pdf',
+    sourceZip: 'Dining_Chairs_Images.zip',
+    duplicateNotices: notices,
+    savedAt: now,
+    updatedAt: now,
+    status: 'saved'
+  };
+}
+
+function dcmSaveCanvasRecord(product, image) {
+  const existing = dcmLoadCanvasRecords();
+  const record = dcmBuildCanvasRecord(product, image, existing);
+  const next = [record, ...existing];
+  dcmPersistCanvasRecords(next);
+  return { record, records: next };
+}
+
+function dcmFormatTime(value) {
+  try { return new Intl.DateTimeFormat(undefined, { year:'numeric', month:'short', day:'2-digit', hour:'2-digit', minute:'2-digit' }).format(new Date(value)); }
+  catch { return value; }
+}
+
+// ── State ──
+let dcmState = {
+  products: JSON.parse(JSON.stringify(dcmProducts)),
+  zipImages: JSON.parse(JSON.stringify(dcmZipImages)),
+  selectedProductId: 'p1',
+  selectedImageId: 'z1',
+  imageFilter: 'all',
+  query: '',
+  canvasRecords: dcmLoadCanvasRecords(),
+  canvasNotice: '',
+  productPage: 0,
+  imagePage: 0,
+  productsPerPage: 10,
+  imagesPerPage: 12
+};
+
+function dcmGetSelectedProduct() { return dcmState.products.find(p => p.id === dcmState.selectedProductId) || dcmState.products[0]; }
+function dcmGetSelectedImage() { return dcmState.zipImages.find(img => img.id === dcmState.selectedImageId) || dcmState.zipImages[0]; }
+
+function dcmStatusLabel(status) {
+  const map = { auto:'Auto Matched', review:'Needs Review', none:'No Match', accepted:'Accepted', rejected:'Rejected' };
+  return map[status] || status;
+}
+
+function dcmStatusClass(status) {
+  return `dcm-badge dcm-badge-${status}`;
+}
+
+// ── Render Functions ──
+function dcmRenderStats() {
+  const products = dcmState.products;
+  const matched = products.filter(p => ['auto','accepted'].includes(p.status)).length;
+  const review = products.filter(p => p.status === 'review').length;
+  const noMatch = products.filter(p => p.status === 'none').length;
+  const total = products.length;
+  document.getElementById('dcmMatchedCount').textContent = matched;
+  document.getElementById('dcmMatchedPct').textContent = total ? `${(matched/total*100).toFixed(1)}%` : '0%';
+  document.getElementById('dcmReviewCount').textContent = review;
+  document.getElementById('dcmReviewPct').textContent = total ? `${(review/total*100).toFixed(1)}%` : '0%';
+  document.getElementById('dcmNoMatchCount').textContent = noMatch;
+  document.getElementById('dcmNoMatchPct').textContent = total ? `${(noMatch/total*100).toFixed(1)}%` : '0%';
+  document.getElementById('dcmProgressText').textContent = `${total} / ${total} reviewed`;
+  document.getElementById('dcmProgressBar').style.width = '100%';
+}
+
+function dcmRenderProductList() {
+  const list = document.getElementById('dcmProductList');
+  const products = dcmState.products;
+  const page = dcmState.productPage;
+  const perPage = dcmState.productsPerPage;
+  const start = page * perPage;
+  const end = start + perPage;
+  const pageItems = products.slice(start, end);
+  const totalPages = Math.ceil(products.length / perPage);
+
+  list.innerHTML = pageItems.map(p => `
+    <div class="dcm-product-card ${p.id === dcmState.selectedProductId ? 'dcm-selected' : ''}" data-id="${p.id}">
+      <img src="${p.image}" alt="${p.productCode}" />
+      <div class="dcm-product-info">
+        <div class="dcm-product-line"><strong>${escapeHtml(p.productCode)}</strong><span class="${dcmStatusClass(p.status)}">${dcmStatusLabel(p.status)}</span></div>
+        <p>${escapeHtml(p.name)}</p>
+        <small>${escapeHtml(p.brand)}</small>
+        <div class="dcm-score-row">
+          <span class="${p.matchScore > 80 ? 'dcm-score-good' : p.matchScore > 0 ? 'dcm-score-warn' : 'dcm-score-bad'}">Score: ${p.matchScore}%</span>
+          <i>•</i><span>${escapeHtml(p.matchType)}</span>
+        </div>
+      </div>
+      <span class="dcm-select-dot">${['auto','accepted'].includes(p.status) ? '✓' : ''}</span>
+    </div>
+  `).join('');
+
+  // Click handlers
+  list.querySelectorAll('.dcm-product-card').forEach(card => {
+    card.addEventListener('click', () => {
+      dcmState.selectedProductId = card.dataset.id;
+      dcmRenderProductList();
+      dcmRenderReview();
+    });
+  });
+
+  // Pagination
+  const pag = document.getElementById('dcmProductPagination');
+  let pagHtml = '';
+  pagHtml += `<button id="dcmPrevPageBtn" ${page === 0 ? 'disabled style="opacity:0.4"' : ''}>◀</button>`;
+  for (let i = 0; i < totalPages; i++) {
+    if (i === page) pagHtml += `<button class="dcm-active-page">${i+1}</button>`;
+    else if (i < 3 || i >= totalPages - 1 || Math.abs(i - page) <= 1) pagHtml += `<button data-page="${i}">${i+1}</button>`;
+    else if (i === 3 && page > 3) pagHtml += `<span>...</span>`;
+  }
+  pagHtml += `<button id="dcmNextPageBtn" ${page >= totalPages - 1 ? 'disabled style="opacity:0.4"' : ''}>▶</button>`;
+  pag.innerHTML = pagHtml;
+
+  document.getElementById('dcmPrevPageBtn')?.addEventListener('click', () => { if (dcmState.productPage > 0) { dcmState.productPage--; dcmRenderProductList(); dcmRenderReview(); }});
+  document.getElementById('dcmNextPageBtn')?.addEventListener('click', () => { if (dcmState.productPage < totalPages - 1) { dcmState.productPage++; dcmRenderProductList(); dcmRenderReview(); }});
+  pag.querySelectorAll('button[data-page]').forEach(btn => btn.addEventListener('click', () => { dcmState.productPage = parseInt(btn.dataset.page); dcmRenderProductList(); dcmRenderReview(); }));
+
+  document.getElementById('dcmProductCount').textContent = products.length;
+}
+
+function dcmRenderReview() {
+  const product = dcmGetSelectedProduct();
+  const image = dcmGetSelectedImage();
+  const total = dcmState.products.length;
+  const idx = dcmState.products.findIndex(p => p.id === product.id);
+  document.getElementById('dcmReviewPosition').textContent = `${idx + 1} of ${total}`;
+
+  // Product detail
+  document.getElementById('dcmProductDetail').innerHTML = `
+    <img class="dcm-large-product" src="${product.image}" alt="${product.productCode}" />
+    <div class="dcm-detail-table">
+      <h2>${escapeHtml(product.productCode)}</h2>
+      <span class="${dcmStatusClass(product.status)}">${dcmStatusLabel(product.status)}</span>
+      <dl>
+        <dt>Name</dt><dd>${escapeHtml(product.name)}</dd>
+        <dt>Brand</dt><dd>${escapeHtml(product.brand)}</dd>
+        <dt>Category</dt><dd>${escapeHtml(product.category)}</dd>
+        <dt>Product Code</dt><dd>${escapeHtml(product.productCode)}</dd>
+        <dt>Description</dt><dd>${escapeHtml(product.description)}</dd>
+      </dl>
+    </div>
+  `;
+
+  // Image match
+  document.getElementById('dcmImageMatchCard').innerHTML = `
+    <img class="dcm-large-match" src="${image.image}" alt="${image.filename}" />
+    <div class="dcm-match-meta">
+      <h3>ZIP Image Match</h3>
+      <h2>${escapeHtml(image.filename)}</h2>
+      <p>${image.width} × ${image.height} · ${image.sizeKb} KB · ${image.format}</p>
+      <div class="dcm-meta-grid">
+        <span>Match Score</span><strong class="dcm-score-good">${product.matchScore}%</strong>
+        <span>Match Type</span><strong>${escapeHtml(product.matchType)}</strong>
+        <span>AI Verification</span><strong class="dcm-badge dcm-badge-auto">High Confidence</strong>
+        <span>Reason</span><p>Product code found in filename and visual chair structure matches.</p>
+      </div>
+    </div>
+  `;
+}
+
+function dcmRenderImageGrid() {
+  const grid = document.getElementById('dcmImageGrid');
+  const images = dcmState.zipImages;
+  const filter = dcmState.imageFilter;
+  const query = dcmState.query.toLowerCase();
+  const page = dcmState.imagePage;
+  const perPage = dcmState.imagesPerPage;
+
+  let filtered = images;
+  if (filter === 'unused') filtered = images.filter(img => !img.usedBy);
+  else if (filter === 'matched') filtered = images.filter(img => img.usedBy);
+  else if (filter === 'rejected') filtered = images.filter(img => img.rejected);
+
+  if (query) {
+    filtered = filtered.filter(img => img.filename.toLowerCase().includes(query) || (img.usedBy || '').toLowerCase().includes(query));
+  }
+
+  const start = page * perPage;
+  const end = start + perPage;
+  const pageItems = filtered.slice(start, end);
+  const totalPages = Math.ceil(filtered.length / perPage);
+
+  grid.innerHTML = pageItems.map(img => `
+    <div class="dcm-image-tile ${img.id === dcmState.selectedImageId ? 'dcm-selected' : ''}" data-id="${img.id}">
+      <img src="${img.image}" alt="${img.filename}" />
+      <strong>${escapeHtml(img.filename)}</strong>
+      <small>${img.width} × ${img.height}</small>
+      <span class="${img.usedBy ? 'dcm-used-tag' : 'dcm-unused-tag'}">${img.usedBy ? 'Used' : 'Unused'}</span>
+    </div>
+  `).join('');
+
+  grid.querySelectorAll('.dcm-image-tile').forEach(tile => {
+    tile.addEventListener('click', () => {
+      dcmState.selectedImageId = tile.dataset.id;
+      dcmRenderImageGrid();
+      dcmRenderReview();
+    });
+  });
+
+  document.getElementById('dcmImageCount').textContent = images.length;
+  document.getElementById('dcmImageRange').textContent = `Showing ${start+1}–${Math.min(end, filtered.length)} of ${filtered.length}`;
+
+  // Update tab counts
+  const total = images.length;
+  const unused = images.filter(i => !i.usedBy).length;
+  const matched = images.filter(i => i.usedBy).length;
+  const rejected = images.filter(i => i.rejected).length;
+  const tabs = document.querySelectorAll('.dcm-tabs button');
+  if (tabs[0]) tabs[0].textContent = `All (${total})`;
+  if (tabs[1]) tabs[1].textContent = `Unused (${unused})`;
+  if (tabs[2]) tabs[2].textContent = `Matched (${matched})`;
+  if (tabs[3]) tabs[3].textContent = `Rejected (${rejected})`;
+}
+
+function dcmRenderCanvas() {
+  const records = dcmState.canvasRecords;
+  const grid = document.getElementById('dcmCanvasGrid');
+  document.getElementById('dcmCanvasCount').textContent = `${records.length} saved`;
+
+  const notice = document.getElementById('dcmCanvasNotice');
+  if (dcmState.canvasNotice) {
+    notice.textContent = dcmState.canvasNotice;
+    notice.style.display = 'block';
+  } else {
+    notice.style.display = 'none';
+  }
+
+  if (records.length === 0) {
+    grid.innerHTML = '<div class="dcm-empty-canvas">No permanent matches saved yet.</div>';
+    return;
+  }
+
+  grid.innerHTML = records.slice(0, 4).map(item => `
+    <article class="dcm-canvas-item ${item.duplicateNotices && item.duplicateNotices.length ? 'dcm-has-duplicate' : ''}">
+      <img src="${item.imageUrl}" alt="${item.productCode}" />
+      <div>
+        <div class="dcm-canvas-title"><strong>${escapeHtml(item.productCode)}</strong><span>${dcmFormatTime(item.savedAt)}</span></div>
+        <p>${escapeHtml(item.productName)} · ${escapeHtml(item.productBrand)}</p>
+        <small>${escapeHtml(item.imageName)}</small>
+        ${item.duplicateNotices && item.duplicateNotices.length ? '<em>⚠ Replicate notice added to description</em>' : ''}
+      </div>
+    </article>
+  `).join('');
+}
+
+function dcmRenderAll() {
+  dcmRenderStats();
+  dcmRenderProductList();
+  dcmRenderReview();
+  dcmRenderImageGrid();
+  dcmRenderCanvas();
+}
+
+// ── Actions ──
+function dcmUpdateStatus(status) {
+  const product = dcmGetSelectedProduct();
+  dcmState.products = dcmState.products.map(p => p.id === product.id ? { ...p, status } : p);
+  const next = dcmState.products.find(p => p.id !== product.id && (p.status === 'review' || p.status === 'none'));
+  if (next) dcmState.selectedProductId = next.id;
+  dcmRenderAll();
+}
+
+function dcmSaveToCanvas(addToQueue = false) {
+  const product = dcmGetSelectedProduct();
+  const image = dcmGetSelectedImage();
+  const { record, records } = dcmSaveCanvasRecord(product, image);
+  dcmState.canvasRecords = records;
+  dcmState.canvasNotice = record.duplicateNotices && record.duplicateNotices.length
+    ? `Saved with ${record.duplicateNotices.length} duplicate/replicate notice(s). Check the item description.`
+    : addToQueue
+      ? 'Saved permanently to Image Canvas and prepared for render queue.'
+      : 'Saved permanently to Image Canvas with timestamp.';
+  dcmRenderCanvas();
+}
+
+// ── Init ──
+function initDiningChairMatch() {
+  const toggle = document.getElementById('diningChairMatchToggle');
+  const panel = document.getElementById('diningChairMatchPanel');
+  const closeBtn = document.getElementById('dcmCloseBtn');
+  let isOpen = false;
+
+  // Hide other panels when opening
+  function hideAllPanels() {
+    document.querySelectorAll('.main > div, .dcm-panel').forEach(el => {
+      if (el.id !== 'diningChairMatchPanel') el.style.display = 'none';
+    });
+    // Also hide other panel containers
+    document.querySelectorAll('[id$="Panel"]').forEach(el => {
+      if (el.id !== 'diningChairMatchPanel') el.style.display = 'none';
+    });
+  }
+
+  toggle?.addEventListener('click', () => {
+    isOpen = !isOpen;
+    toggle.classList.toggle('active', isOpen);
+    if (isOpen) {
+      hideAllPanels();
+      panel.style.display = 'block';
+      dcmRenderAll();
+    } else {
+      panel.style.display = 'none';
+    }
+  });
+
+  closeBtn?.addEventListener('click', () => {
+    isOpen = false;
+    toggle.classList.remove('active');
+    panel.style.display = 'none';
+  });
+
+  // Accept
+  document.getElementById('dcmAcceptBtn')?.addEventListener('click', () => dcmUpdateStatus('accepted'));
+  // Reject
+  document.getElementById('dcmRejectBtn')?.addEventListener('click', () => dcmUpdateStatus('rejected'));
+  // Skip
+  document.getElementById('dcmSkipBtn')?.addEventListener('click', () => {
+    const product = dcmGetSelectedProduct();
+    const next = dcmState.products.find(p => p.id !== product.id);
+    if (next) { dcmState.selectedProductId = next.id; dcmRenderAll(); }
+  });
+  // Pick Different - just cycle to next image
+  document.getElementById('dcmPickDifferentBtn')?.addEventListener('click', () => {
+    const currentIdx = dcmState.zipImages.findIndex(img => img.id === dcmState.selectedImageId);
+    const nextIdx = (currentIdx + 1) % dcmState.zipImages.length;
+    dcmState.selectedImageId = dcmState.zipImages[nextIdx].id;
+    dcmRenderImageGrid();
+    dcmRenderReview();
+  });
+
+  // Save to Canvas
+  document.getElementById('dcmSaveCanvasBtn')?.addEventListener('click', () => dcmSaveToCanvas(false));
+  document.getElementById('dcmSaveQueueBtn')?.addEventListener('click', () => dcmSaveToCanvas(true));
+
+  // Image search
+  document.getElementById('dcmImageSearch')?.addEventListener('input', (e) => {
+    dcmState.query = e.target.value;
+    dcmState.imagePage = 0;
+    dcmRenderImageGrid();
+  });
+
+  // Product search
+  document.getElementById('dcmProductSearch')?.addEventListener('input', (e) => {
+    const q = e.target.value.toLowerCase();
+    if (!q) {
+      dcmState.products = JSON.parse(JSON.stringify(dcmProducts));
+    } else {
+      dcmState.products = JSON.parse(JSON.stringify(dcmProducts)).filter(p =>
+        p.productCode.toLowerCase().includes(q) ||
+        p.name.toLowerCase().includes(q) ||
+        p.brand.toLowerCase().includes(q)
+      );
+    }
+    dcmState.productPage = 0;
+    dcmRenderProductList();
+    dcmRenderStats();
+  });
+
+  // Image tabs
+  document.querySelectorAll('.dcm-tabs button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.dcm-tabs button').forEach(b => b.classList.remove('dcm-tab-active'));
+      btn.classList.add('dcm-tab-active');
+      dcmState.imageFilter = btn.dataset.filter;
+      dcmState.imagePage = 0;
+      dcmRenderImageGrid();
+    });
+  });
+
+  // Review nav
+  document.getElementById('dcmPrevReview')?.addEventListener('click', () => {
+    const idx = dcmState.products.findIndex(p => p.id === dcmState.selectedProductId);
+    if (idx > 0) { dcmState.selectedProductId = dcmState.products[idx - 1].id; dcmRenderProductList(); dcmRenderReview(); }
+  });
+  document.getElementById('dcmNextReview')?.addEventListener('click', () => {
+    const idx = dcmState.products.findIndex(p => p.id === dcmState.selectedProductId);
+    if (idx < dcmState.products.length - 1) { dcmState.selectedProductId = dcmState.products[idx + 1].id; dcmRenderProductList(); dcmRenderReview(); }
+  });
+
+  // Image pagination
+  document.getElementById('dcmPrevImages')?.addEventListener('click', () => {
+    if (dcmState.imagePage > 0) { dcmState.imagePage--; dcmRenderImageGrid(); }
+  });
+  document.getElementById('dcmNextImages')?.addEventListener('click', () => {
+    const filtered = dcmState.zipImages.filter(img => {
+      if (dcmState.imageFilter === 'unused') return !img.usedBy;
+      if (dcmState.imageFilter === 'matched') return img.usedBy;
+      if (dcmState.imageFilter === 'rejected') return img.rejected;
+      return true;
+    });
+    if ((dcmState.imagePage + 1) * dcmState.imagesPerPage < filtered.length) { dcmState.imagePage++; dcmRenderImageGrid(); }
+  });
+
+  // Review low confidence
+  document.getElementById('dcmReviewLowBtn')?.addEventListener('click', () => {
+    const low = dcmState.products.find(p => p.status === 'review' || p.status === 'none');
+    if (low) { dcmState.selectedProductId = low.id; dcmRenderProductList(); dcmRenderReview(); }
+  });
+}
+
+// Initialize when DOM is ready
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initDiningChairMatch);
+} else {
+  initDiningChairMatch();
 }
 </script>
 </body>

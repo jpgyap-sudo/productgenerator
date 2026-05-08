@@ -35,12 +35,13 @@ import completedHandler from './api/queue/completed.js';
 import downloadZipHandler from './api/queue/download-zip.js';
 import uploadDriveHandler from './api/queue/upload-drive.js';
 import saveStateHandler from './api/queue/save-state.js';
-import webhookHandler from './api/fal-webhook.js';
 import agentProcessHandler from './api/agent/process.js';
 import agentMatchHandler from './api/agent/match.js';
 import agentSubmitHandler from './api/agent/submit.js';
 import agentSaveMatchedHandler from './api/agent/save-matched.js';
 import agentMatchedImagesHandler from './api/agent/matched-images.js';
+import agentSaveMatchedPermanentHandler from './api/agent/save-matched-permanent.js';
+import agentMatchedImagesPermanentHandler from './api/agent/matched-images-permanent.js';
 import monitorHandler from './api/monitor.js';
 import rerenderViewHandler from './api/queue/rerender-view.js';
 
@@ -146,16 +147,6 @@ app.post('/api/queue/save-state', async (req, res) => {
   }
 });
 
-app.post('/api/fal-webhook', async (req, res) => {
-  try {
-    const result = await webhookHandler(req, res);
-    if (!res.headersSent) res.json(result);
-  } catch (err) {
-    console.error('[WEBHOOK] Error:', err);
-    if (!res.headersSent) res.status(500).json({ error: err.message });
-  }
-});
-
 // ── Uploading Agent Routes ──
 app.post('/api/agent/process', async (req, res) => {
   try {
@@ -208,12 +199,119 @@ app.get('/api/agent/matched-images', async (req, res) => {
   }
 });
 
+// ── Permanent Canvas Routes ──
+app.post('/api/agent/save-matched-permanent', async (req, res) => {
+  try {
+    const result = await agentSaveMatchedPermanentHandler(req, res);
+    if (!res.headersSent) res.json(result);
+  } catch (err) {
+    console.error('[SAVE-MATCHED-PERMANENT] Error:', err);
+    if (!res.headersSent) res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/agent/matched-images-permanent', async (req, res) => {
+  try {
+    const result = await agentMatchedImagesPermanentHandler(req, res);
+    if (!res.headersSent) res.json(result);
+  } catch (err) {
+    console.error('[MATCHED-IMAGES-PERMANENT] Error:', err);
+    if (!res.headersSent) res.status(500).json({ error: err.message });
+  }
+});
+
 app.post('/api/queue/rerender-view', async (req, res) => {
   try {
     await rerenderViewHandler(req, res);
   } catch (err) {
     console.error('[RERENDER-VIEW] Error:', err);
     if (!res.headersSent) res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Temporary Migration Endpoint ──
+// Run Supabase migration for permanent canvas columns
+// Call: curl -X POST http://localhost:3000/api/admin/run-migration
+app.post('/api/admin/run-migration', async (req, res) => {
+  try {
+    console.log('[MIGRATION] Starting permanent canvas migration...');
+    const pkg = await import('pg');
+    const { Client } = pkg.default;
+    const projectRef = process.env.SUPABASE_URL.replace('https://', '').replace('.supabase.co', '').trim();
+    const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+    const configs = [
+      { connectionString: `postgresql://postgres.${projectRef}:${SUPABASE_SERVICE_ROLE_KEY}@aws-0-ap-southeast-1.pooler.supabase.com:5432/postgres`, label: 'Session pooler (5432)' },
+      { connectionString: `postgresql://postgres.${projectRef}:${SUPABASE_SERVICE_ROLE_KEY}@aws-0-ap-southeast-1.pooler.supabase.com:6543/postgres`, label: 'Transaction pooler (6543)' },
+    ];
+
+    let client = null;
+    for (const cfg of configs) {
+      try {
+        console.log(`[MIGRATION] Trying ${cfg.label}...`);
+        const c = new Client({ connectionString: cfg.connectionString, connectionTimeoutMillis: 15000 });
+        await c.connect();
+        console.log(`[MIGRATION] Connected via ${cfg.label}`);
+        client = c;
+        break;
+      } catch (err) {
+        console.log(`[MIGRATION] ${cfg.label} failed: ${err.message}`);
+      }
+    }
+
+    if (!client) {
+      return res.status(500).json({ error: 'Could not connect to database via any method' });
+    }
+
+    const results = [];
+
+    // Add columns
+    const alterStatements = [
+      `ALTER TABLE public.matched_images ADD COLUMN IF NOT EXISTS category TEXT DEFAULT 'Dining Chair';`,
+      `ALTER TABLE public.matched_images ADD COLUMN IF NOT EXISTS original_description TEXT DEFAULT '';`,
+      `ALTER TABLE public.matched_images ADD COLUMN IF NOT EXISTS image_hash TEXT DEFAULT '';`,
+      `ALTER TABLE public.matched_images ADD COLUMN IF NOT EXISTS duplicate_notices JSONB DEFAULT '[]'::jsonb;`,
+      `ALTER TABLE public.matched_images ADD COLUMN IF NOT EXISTS saved_at TIMESTAMPTZ DEFAULT NOW();`,
+    ];
+
+    for (const sql of alterStatements) {
+      const colName = sql.match(/ADD COLUMN IF NOT EXISTS (\w+)/)?.[1] || 'unknown';
+      console.log(`[MIGRATION] Adding column: ${colName}...`);
+      await client.query(sql);
+      results.push({ action: 'add_column', name: colName, status: 'ok' });
+      console.log(`[MIGRATION]   ✓ ${colName} added`);
+    }
+
+    // Create indexes
+    const indexStatements = [
+      `CREATE INDEX IF NOT EXISTS idx_matched_images_product_code ON public.matched_images(product_code);`,
+      `CREATE INDEX IF NOT EXISTS idx_matched_images_image_name ON public.matched_images(image_name);`,
+      `CREATE INDEX IF NOT EXISTS idx_matched_images_image_hash ON public.matched_images(image_hash);`,
+      `CREATE INDEX IF NOT EXISTS idx_matched_images_saved_at ON public.matched_images(saved_at DESC);`,
+      `CREATE INDEX IF NOT EXISTS idx_matched_images_category ON public.matched_images(category);`,
+    ];
+
+    for (const sql of indexStatements) {
+      const idxName = sql.match(/CREATE INDEX IF NOT EXISTS (\w+)/)?.[1] || 'unknown';
+      console.log(`[MIGRATION] Creating index: ${idxName}...`);
+      await client.query(sql);
+      results.push({ action: 'create_index', name: idxName, status: 'ok' });
+      console.log(`[MIGRATION]   ✓ ${idxName} created`);
+    }
+
+    // Verify
+    const { rows } = await client.query(`
+      SELECT column_name, data_type FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'matched_images'
+      ORDER BY ordinal_position;
+    `);
+
+    await client.end();
+    console.log('[MIGRATION] Migration complete!');
+    res.json({ success: true, results, columns: rows });
+  } catch (err) {
+    console.error('[MIGRATION] Error:', err);
+    res.status(500).json({ error: err.message });
   }
 });
 
