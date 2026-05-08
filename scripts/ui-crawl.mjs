@@ -7,7 +7,7 @@ import WebSocket from 'ws';
 const chromePath = process.env.CHROME_PATH
   || 'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe';
 const remotePort = Number(process.env.CDP_PORT || 9223);
-const baseUrl = process.env.UI_URL || 'http://localhost:3000';
+const baseUrl = process.env.UI_URL || 'http://104.248.225.250:3000';
 const outDir = process.env.UI_CRAWL_OUT || 'C:\\tmp\\product-ui-crawl';
 
 if (!existsSync(chromePath)) {
@@ -82,7 +82,16 @@ class Cdp {
 }
 
 await waitForCdp();
-const page = await json(`http://127.0.0.1:${remotePort}/json/new?${encodeURIComponent(baseUrl)}`, { method: 'PUT' });
+
+// Get existing page targets and use the first one, or create new
+const targets = await json(`http://127.0.0.1:${remotePort}/json`);
+let page;
+if (targets.length > 0 && targets[0].webSocketDebuggerUrl) {
+  page = targets[0];
+} else {
+  page = await json(`http://127.0.0.1:${remotePort}/json/new`, { method: 'PUT' });
+}
+
 const cdp = new Cdp(page.webSocketDebuggerUrl);
 await cdp.open();
 await cdp.send('Page.enable');
@@ -111,8 +120,9 @@ cdp.ws.on('message', data => {
   }
 });
 
+// Navigate to the actual app URL
 await cdp.send('Page.navigate', { url: baseUrl });
-await delay(3500);
+await delay(4000);
 
 async function evaluate(expression) {
   const result = await cdp.send('Runtime.evaluate', {
@@ -134,27 +144,39 @@ async function screenshot(name) {
   return file;
 }
 
+// Check current URL
+const currentUrl = await evaluate('location.href');
+console.log(`Navigated to: ${currentUrl}`);
+
 const crawlResult = await evaluate(`(async () => {
   const wait = ms => new Promise(r => setTimeout(r, ms));
+  
+  // Map of button IDs to their expected panel IDs
+  // Using the actual IDs from the HTML
   const ids = [
-    ['bulkUploadToggle', 'bulkUploadPanel'],
-    ['bulkRenderToggle', 'bulkRenderPanel'],
-    ['batchProcessorToggle', 'batchProcessorPanel'],
-    ['matchedImagesToggle', 'matchedImagesPanel'],
-    ['diningChairMatchToggle', 'diningChairMatchPanel'],
-    ['renderProductToggle', 'renderProductPanel'],
-    ['renderQueueToggle', 'renderQueuePanel'],
     ['completedToggle', 'completedPanel'],
     ['monitorToggle', 'monitorPanel'],
     ['featureToggle', 'featurePanel'],
-    ['aboutToggle', 'aboutPanel']
+    ['aboutToggle', 'aboutPanel'],
+    ['queueLogToggle', 'queueLogPanel'],
+    ['logToggle', 'logPanel']
   ];
+  
+  // Also test topbar buttons that toggle panels
+  const topbarIds = [
+    ['diningChairMatchToggle', 'diningChairMatchPanel'],
+    ['renderProductToggle', 'renderProductPanel'],
+    ['renderQueueToggle', 'renderQueuePanel'],
+    ['matchedImagesToggle', 'matchedImagesPanel']
+  ];
+  
   const visible = el => {
     if (!el) return false;
     const cs = getComputedStyle(el);
     const r = el.getBoundingClientRect();
     return cs.display !== 'none' && cs.visibility !== 'hidden' && r.width > 0 && r.height > 0;
   };
+  
   const state = label => ({
     label,
     title: document.title,
@@ -168,8 +190,11 @@ const crawlResult = await evaluate(`(async () => {
     leftMost: Math.min(...Array.from(document.querySelectorAll('body *')).map(el => el.getBoundingClientRect().left).filter(Number.isFinite)),
     errors: []
   });
+  
   const results = [];
   results.push(state('initial'));
+  
+  // Test sidebar toggle buttons
   for (const [buttonId, expectedPanel] of ids) {
     const btn = document.getElementById(buttonId);
     if (!btn) {
@@ -177,7 +202,7 @@ const crawlResult = await evaluate(`(async () => {
       continue;
     }
     btn.click();
-    await wait(buttonId === 'renderQueueToggle' || buttonId === 'monitorToggle' || buttonId === 'completedToggle' || buttonId === 'matchedImagesToggle' ? 1400 : 350);
+    await wait(500);
     const s = state(buttonId);
     s.expectedPanel = expectedPanel;
     s.expectedVisible = visible(document.getElementById(expectedPanel));
@@ -185,52 +210,90 @@ const crawlResult = await evaluate(`(async () => {
     s.panelText = (document.getElementById(expectedPanel)?.innerText || '').slice(0, 220);
     results.push(s);
   }
-
-  const interaction = {};
-  document.getElementById('aboutToggle')?.click();
-  await wait(200);
-  document.getElementById('resolutionEditBtn')?.click();
-  await wait(100);
-  const res1k = document.querySelector('[data-res="1K"]');
-  interaction.res1kEnabledBeforeClick = !!res1k && !res1k.disabled;
-  res1k?.click();
-  await wait(150);
-  interaction.resolutionNote = document.getElementById('resNote')?.textContent || '';
-  interaction.activeResolution = document.querySelector('[data-res].active')?.dataset.res || '';
-  interaction.providerButtonDisabled = !!document.querySelector('[data-provider="openai-mini"]')?.disabled;
-
-  document.getElementById('queueLogToggle')?.click();
-  await wait(150);
-  interaction.queueLogVisible = visible(document.getElementById('queueLogPanel'));
-  document.getElementById('logToggle')?.click();
-  await wait(150);
-  interaction.failureLogVisible = visible(document.getElementById('logPanel'));
-
-  document.getElementById('dmToggle')?.click();
-  await wait(150);
-  interaction.darkModeClass = document.body.className;
-  document.getElementById('sidebarToggle')?.click();
-  await wait(150);
-  interaction.layoutClassAfterSidebarToggle = document.querySelector('.layout')?.className || '';
-
-  const input = document.getElementById('fileInput');
-  if (input) {
-    const b64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
-    const bin = atob(b64);
-    const bytes = new Uint8Array([...bin].map(ch => ch.charCodeAt(0)));
-    const file = new File([bytes], 'ui-crawl-chair.png', { type: 'image/png' });
-    const dt = new DataTransfer();
-    dt.items.add(file);
-    input.files = dt.files;
-    input.dispatchEvent(new Event('change', { bubbles: true }));
-    await wait(500);
+  
+  // Test topbar toggle buttons
+  for (const [buttonId, expectedPanel] of topbarIds) {
+    const btn = document.getElementById(buttonId);
+    if (!btn) {
+      results.push({ label: buttonId, missingButton: true, expectedPanel });
+      continue;
+    }
+    btn.click();
+    await wait(800);
+    const s = state(buttonId);
+    s.expectedPanel = expectedPanel;
+    s.expectedVisible = visible(document.getElementById(expectedPanel));
+    s.buttonActive = btn.classList.contains('active');
+    s.panelText = (document.getElementById(expectedPanel)?.innerText || '').slice(0, 220);
+    results.push(s);
   }
-  interaction.pendingAreaVisible = visible(document.getElementById('pendingArea'));
-  interaction.pendingItems = document.querySelectorAll('#pendingList .q-item').length;
-  interaction.confirmAddEnabled = !document.getElementById('confirmAddBtn')?.disabled;
-  interaction.bulkRenderVisibleAfterUpload = visible(document.getElementById('bulkRenderPanel'));
-  interaction.queueCount = document.getElementById('qCount')?.textContent || '';
-
+  
+  const interaction = {};
+  
+  // Test dark mode toggle
+  const dmToggle = document.getElementById('dmToggle');
+  if (dmToggle) {
+    dmToggle.click();
+    await wait(200);
+    interaction.darkModeClass = document.body.className;
+    dmToggle.click();
+    await wait(200);
+    interaction.darkModeToggledBack = document.body.className;
+  }
+  
+  // Test sidebar toggle
+  const sidebarToggle = document.getElementById('sidebarToggle');
+  if (sidebarToggle) {
+    sidebarToggle.click();
+    await wait(200);
+    interaction.layoutClassAfterSidebarToggle = document.querySelector('.layout')?.className || '';
+    sidebarToggle.click();
+    await wait(200);
+  }
+  
+  // Test resolution buttons
+  const resEditBtn = document.getElementById('resolutionEditBtn');
+  if (resEditBtn) {
+    resEditBtn.click();
+    await wait(100);
+    const res1k = document.querySelector('[data-res="1K"]');
+    interaction.res1kEnabledBeforeClick = !!res1k && !res1k.disabled;
+    if (res1k) res1k.click();
+    await wait(150);
+    interaction.resolutionNote = document.getElementById('resNote')?.textContent || '';
+    interaction.activeResolution = document.querySelector('[data-res].active')?.dataset.res || '';
+  }
+  
+  // Test provider buttons
+  const providerEditBtn = document.getElementById('providerEditBtn');
+  if (providerEditBtn) {
+    providerEditBtn.click();
+    await wait(100);
+    interaction.providerButtonDisabled = !!document.querySelector('[data-provider="openai-mini"]')?.disabled;
+  }
+  
+  // Check sidebar elements
+  interaction.sidebarElements = {
+    agentToggle: !!document.getElementById('agentToggle'),
+    agentSection: visible(document.getElementById('agentSection')),
+    dropZone: visible(document.getElementById('dropZone')),
+    pendingArea: visible(document.getElementById('pendingArea')),
+    clearBtns: !!document.getElementById('clearBtns'),
+    qCount: document.getElementById('qCount')?.textContent || ''
+  };
+  
+  // Check topbar buttons
+  interaction.topbarButtons = {};
+  ['completedToggle', 'monitorToggle', 'featureToggle', 'aboutToggle',
+   'diningChairMatchToggle', 'renderProductToggle', 'renderQueueToggle',
+   'matchedImagesToggle', 'dmToggle', 'sidebarToggle'].forEach(id => {
+    const el = document.getElementById(id);
+    interaction.topbarButtons[id] = !!el;
+  });
+  
+  // Check for console errors in the page
+  interaction.jsErrors = window.__capturedErrors || [];
+  
   return {
     results,
     interaction,
@@ -238,7 +301,8 @@ const crawlResult = await evaluate(`(async () => {
     domStats: {
       buttons: document.querySelectorAll('button').length,
       inputs: document.querySelectorAll('input, textarea, select').length,
-      panels: document.querySelectorAll('[id$="Panel"]').length
+      panels: document.querySelectorAll('[id$="Panel"]').length,
+      totalElements: document.querySelectorAll('*').length
     }
   };
 })()`);

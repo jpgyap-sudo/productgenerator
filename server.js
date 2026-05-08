@@ -332,6 +332,15 @@ app.post('/api/admin/run-migration', async (req, res) => {
   }
 });
 
+// ── Favicon ──
+app.get('/favicon.ico', (req, res) => {
+  res.setHeader('Content-Type', 'image/x-icon');
+  // Return a minimal 1x1 transparent favicon to avoid 404s
+  // This is a valid ICO file (68 bytes) that browsers accept silently
+  const ico = Buffer.from('AAABAAEAEBACAAEAAQCwAAAAFgAAACgAAAAQAAAAIAAAAAEAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP///wAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA', 'base64');
+  res.send(ico);
+});
+
 // ── Serve static frontend ──
 app.use('/vps-assets', express.static(VPS_ASSET_ROOT, {
   maxAge: '5m'
@@ -548,6 +557,11 @@ async function processItem(itemId, provider = 'openai-mini') {
     return;
   }
 
+  // Warn if description is empty — AI renders will be lower quality
+  if (!desc || desc.trim().length < 5) {
+    console.warn(`[WORKER] Item ${itemId} ("${item.name || 'unnamed'}") has no meaningful description — AI render quality may be degraded`);
+  }
+
   try {
     const { data: existingRows, error: existingRowsError } = await supabase
       .from(RESULTS_TABLE)
@@ -601,16 +615,16 @@ async function processItem(itemId, provider = 'openai-mini') {
       viewsToGenerate.map(view => generateFn(view, desc, imageUrl, item.resolution || '1K', brand, genOptions))
     );
 
-    // If Gemini failed due to quota, retry with OpenAI
+    // If Gemini failed due to quota or timeout, retry with OpenAI
     if (provider === 'gemini') {
       const geminiFailCount = results.filter(r => r.status === 'rejected').length;
       if (geminiFailCount > 0) {
-        const isQuotaError = results.some(r =>
+        const shouldFallback = results.some(r =>
           r.status === 'rejected' &&
-          /quota|rate.limi|resource.exhausted|too.many.request/i.test(r.reason?.message || '')
+          /quota|rate.limi|resource.exhausted|too.many.request|timeout|abort/i.test(r.reason?.message || '')
         );
-        if (isQuotaError) {
-          console.log(`[WORKER] Gemini quota exceeded for item ${itemId}, retrying with OpenAI...`);
+        if (shouldFallback) {
+          console.log(`[WORKER] Gemini quota/timeout for item ${itemId} (${geminiFailCount} failed views), retrying with OpenAI...`);
           const fallbackResults = await Promise.allSettled(
             viewsToGenerate.map((view, i) => {
               if (results[i].status === 'fulfilled') return Promise.resolve(results[i].value);

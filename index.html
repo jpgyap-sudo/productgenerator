@@ -249,6 +249,13 @@ body {
   grid-template-columns: var(--sidebar-w) 1fr;
   height: calc(100vh - 52px);
 }
+@media (max-width: 1280px) {
+  :root { --sidebar-w: 260px; }
+}
+@media (max-width: 1024px) {
+  :root { --sidebar-w: 240px; }
+  .main { padding: 1rem; }
+}
 @media (max-width: 768px) {
   .sidebar-toggle { display: inline-block; }
   .layout {
@@ -544,7 +551,7 @@ textarea:focus { outline: none; border-color: var(--text-secondary); }
 /* ── TOPBAR TAB BUTTON ───────────────────────────────────────── */
 .tb-btn {
   background: none; border: 1px solid #3a3a3a; color: #888;
-  cursor: pointer; font-size: 11px; padding: 4px 10px;
+  cursor: pointer; font-size: 12px; padding: 3px 8px;
   border-radius: var(--radius-sm); line-height: 1;
   flex-shrink: 0; font-weight: 500; white-space: nowrap;
   transition: all var(--transition);
@@ -1051,20 +1058,22 @@ textarea:focus { outline: none; border-color: var(--text-secondary); }
 
 /* ── TOAST ───────────────────────────────────────────────────── */
 .toast-container {
-  position: fixed; bottom: 20px; right: 20px; z-index: 999;
+  position: fixed; top: 60px; right: 20px; z-index: 999;
   display: flex; flex-direction: column; gap: 8px;
+  pointer-events: none;
 }
 .toast {
   padding: 10px 16px; border-radius: var(--radius);
   font-size: 12px; font-weight: 500;
-  box-shadow: var(--shadow);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
   animation: toast-in 0.3s ease;
-  max-width: 320px;
+  max-width: 360px;
+  pointer-events: auto;
 }
 .toast.info { background: var(--topbar-bg); color: var(--topbar-text); }
 .toast.error { background: var(--error); color: #fff; }
 .toast.success { background: var(--success); color: #fff; }
-@keyframes toast-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes toast-in { from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: translateX(0); } }
 
 /* ── ZIP PROGRESS ────────────────────────────────────────────── */
 .zip-progress {
@@ -2512,7 +2521,7 @@ text-overflow: ellipsis;
 }
 .batch-match-grid {
 display: grid;
-grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
 gap: 12px;
 max-height: 520px;
 overflow-y: auto;
@@ -2533,8 +2542,8 @@ gap: 10px;
 margin-bottom: 8px;
 }
 .batch-match-card .bmc-thumb {
-width: 64px;
-height: 64px;
+width: 72px;
+height: 72px;
 border-radius: 6px;
 object-fit: cover;
 border: 1px solid var(--border-light);
@@ -3028,6 +3037,11 @@ border-top: 1px solid var(--border-light);
 .rq-name-cell:hover { color:#58a6ff; }
 .rq-source-badge { font-size:10px; padding:1px 6px; border-radius:3px; background:var(--border-light); color:var(--text-secondary); }
 .rq-pagination { display:flex; align-items:center; justify-content:center; gap:8px; padding:12px 0; font-size:13px; color:var(--text-secondary); }
+.rq-sortable { cursor:pointer; user-select:none; }
+.rq-sortable:hover { color:var(--accent); }
+.rq-sort-icon { font-size:10px; margin-left:3px; }
+.rq-sort-asc .rq-sort-icon::after { content:'▲'; }
+.rq-sort-desc .rq-sort-icon::after { content:'▼'; }
 .rq-pagination button { padding:4px 10px; border:1px solid var(--border); border-radius:4px; background:var(--card-bg); color:var(--text); cursor:pointer; font-size:12px; }
 .rq-pagination button:disabled { opacity:0.4; cursor:not-allowed; }
 .rq-pagination button:hover:not(:disabled) { background:var(--border-light); }
@@ -3455,7 +3469,7 @@ border-top: 1px solid var(--border-light);
             <span class="txt" id="agentPdfText">Drop PDF catalog here or click to browse</span>
             <span class="sub" id="agentPdfSub">PDF files only · max 50MB</span>
           </label>
-          <input type="file" id="agentPdfInput" accept=".pdf,application/pdf" style="position:absolute;left:-9999px;top:-9999px;"/>
+          <input type="file" id="agentPdfInput" accept=".pdf,application/pdf" style="position:absolute;opacity:0;width:0;height:0;overflow:hidden;"/>
         </div>
         <div class="block">
           <span class="lbl">Step 2: Upload Images ZIP</span>
@@ -3464,7 +3478,7 @@ border-top: 1px solid var(--border-light);
             <span class="txt" id="agentZipText">Drop ZIP file here or click to browse</span>
             <span class="sub" id="agentZipSub">ZIP files only · max 50MB</span>
           </label>
-          <input type="file" id="agentZipInput" accept=".zip,application/zip,application/x-zip-compressed" style="position:absolute;left:-9999px;top:-9999px;"/>
+          <input type="file" id="agentZipInput" accept=".zip,application/zip,application/x-zip-compressed" style="position:absolute;opacity:0;width:0;height:0;overflow:hidden;"/>
         </div>
         <div class="block" style="padding-top:0;padding-bottom:0;">
           <button class="btn-start" id="agentAnalyzeBtn" disabled style="width:100%;font-size:12px;padding:8px;">🔍 Analyze & Extract</button>
@@ -3539,7 +3553,7 @@ border-top: 1px solid var(--border-light);
           <span class="txt">Click to select product images</span>
           <span class="sub">PNG · JPG · WEBP · multiple OK · max 10MB each</span>
         </label>
-        <input type="file" id="fileInput" accept="image/*" multiple style="position:absolute;left:-9999px;top:-9999px;"/>
+        <input type="file" id="fileInput" accept="image/*" multiple style="position:absolute;opacity:0;width:0;height:0;overflow:hidden;"/>
       </div>
 
       <!-- ── PENDING PREVIEW (before adding to queue) ──────────── -->
@@ -3783,13 +3797,13 @@ border-top: 1px solid var(--border-light);
               <span class="batch-upload-text" id="batchPdfText">Drop PDF catalog here or click to browse</span>
               <span class="batch-upload-sub" id="batchPdfSub">PDF files only · max 50MB</span>
             </label>
-            <input type="file" id="batchPdfInput" accept=".pdf,application/pdf" style="position:absolute;left:-9999px;top:-9999px;"/>
+            <input type="file" id="batchPdfInput" accept=".pdf,application/pdf" style="position:absolute;opacity:0;width:0;height:0;overflow:hidden;"/>
             <label for="batchZipInput" class="batch-upload-box" id="batchZipDropZone">
               <span class="batch-upload-icon" id="batchZipIcon">🗜️</span>
               <span class="batch-upload-text" id="batchZipText">Drop ZIP of product images here</span>
               <span class="batch-upload-sub" id="batchZipSub">ZIP files only · max 50MB</span>
             </label>
-            <input type="file" id="batchZipInput" accept=".zip,application/zip,application/x-zip-compressed" style="position:absolute;left:-9999px;top:-9999px;"/>
+            <input type="file" id="batchZipInput" accept=".zip,application/zip,application/x-zip-compressed" style="position:absolute;opacity:0;width:0;height:0;overflow:hidden;"/>
           </div>
           <div class="batch-analyze-row">
             <button class="batch-btn" id="batchAnalyzeBtn" disabled>🔍 Analyze & Extract</button>
@@ -3864,6 +3878,14 @@ border-top: 1px solid var(--border-light);
       <div class="monitor-foot">
         <span class="monitor-timestamp" id="monitorTimestamp">Last checked: —</span>
         <span class="monitor-summary" id="monitorSummary"></span>
+        <span style="margin-left:auto;display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-secondary);">
+          <span>Auto-refresh</span>
+          <label class="toggle-switch" style="width:32px;height:18px;">
+            <input type="checkbox" id="monitorAutoRefreshToggle" checked/>
+            <span class="toggle-slider"></span>
+          </label>
+          <span id="monitorCountdown" style="font-size:10px;color:var(--text-muted);min-width:40px;">15s</span>
+        </span>
       </div>
     </div>
 
@@ -4221,13 +4243,13 @@ border-top: 1px solid var(--border-light);
               <table class="rq-table" id="rqTable">
                 <thead>
                   <tr>
-                    <th>Name</th>
-                    <th>Status</th>
-                    <th>Priority</th>
+                    <th class="rq-sortable" data-sort-key="name" title="Sort by name">Name <span class="rq-sort-icon"></span></th>
+                    <th class="rq-sortable" data-sort-key="status" title="Sort by status">Status <span class="rq-sort-icon"></span></th>
+                    <th class="rq-sortable" data-sort-key="priority" title="Sort by priority">Priority <span class="rq-sort-icon"></span></th>
                     <th>Progress</th>
-                    <th>Source</th>
+                    <th class="rq-sortable" data-sort-key="source" title="Sort by source">Source <span class="rq-sort-icon"></span></th>
                     <th>Items</th>
-                    <th>Created</th>
+                    <th class="rq-sortable" data-sort-key="created_at" title="Sort by date">Created <span class="rq-sort-icon"></span></th>
                     <th>Actions</th>
                   </tr>
                 </thead>
@@ -4867,6 +4889,37 @@ lbClose.addEventListener('click', closeLightbox);
 document.getElementById('lbDownload').addEventListener('click', dlFromLightbox);
 lightbox.addEventListener('click', e => { if (e.target === lightbox) closeLightbox(); });
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeLightbox(); });
+
+// ── GLOBAL KEYBOARD SHORTCUTS ──────────────────────────────────────────
+document.addEventListener('keydown', (e) => {
+  // Ctrl+Enter: Start queue processing
+  if (e.ctrlKey && e.key === 'Enter') {
+    e.preventDefault();
+    const startBtn = document.getElementById('startBtn');
+    if (startBtn && !startBtn.disabled) {
+      startBtn.click();
+      toast('▶️ Queue processing started via shortcut', 'info');
+    }
+    return;
+  }
+
+  // Ctrl+U: Trigger file upload
+  if (e.ctrlKey && (e.key === 'u' || e.key === 'U')) {
+    e.preventDefault();
+    const fileInput = document.getElementById('fileInput');
+    if (fileInput) {
+      fileInput.click();
+      toast('📁 File picker opened via shortcut', 'info');
+    }
+    return;
+  }
+
+  // Esc: Close all open panels (already handled above for lightbox)
+  if (e.key === 'Escape') {
+    // Close any open pickers in batch match
+    document.querySelectorAll('.bmc-picker').forEach(p => p.style.display = 'none');
+  }
+});
 
 // ── SIDEBAR TOGGLE (MOBILE) ─────────────────────────────────────────
 const sidebarToggle = document.getElementById('sidebarToggle');
@@ -5736,24 +5789,38 @@ queueLogClear.addEventListener('click', clearQueueLog);
 completedToggle.addEventListener('click', async () => {
   completedPanelOpen = !completedPanelOpen;
   completedToggle.classList.toggle('active', completedPanelOpen);
-  completedPanel.style.display = completedPanelOpen ? 'block' : 'none';
-  welcomeState.style.display = completedPanelOpen ? 'none' : 'flex';
-  hideWorkspacePanels();
 
+  // Hide all other panels first to prevent layout conflicts
+  hideWorkspacePanels();
   featurePanel.style.display = 'none';
   document.getElementById('aboutPanel').style.display = 'none';
   queueLogPanel.style.display = 'none';
   logPanel.style.display = 'none';
+  monitorPanel.style.display = 'none';
   featureToggle.classList.remove('active');
   if (aboutToggle) aboutToggle.classList.remove('active');
+  monitorToggle?.classList.remove('active');
   featurePanelOpen = false;
   aboutPanelOpen = false;
-
-  if (completedPanelOpen) await initCompletedRenders();
-  monitorPanel.style.display = 'none';
-  monitorToggle?.classList.remove('active');
   monitorPanelOpen = false;
   if (monitorInterval) { clearInterval(monitorInterval); monitorInterval = null; }
+
+  // Show/hide the completed panel
+  completedPanel.style.display = completedPanelOpen ? 'block' : 'none';
+  welcomeState.style.display = completedPanelOpen ? 'none' : 'flex';
+
+  // Load data asynchronously — panel stays visible even if loading fails
+  if (completedPanelOpen) {
+    try {
+      await initCompletedRenders();
+    } catch (err) {
+      console.error('Failed to load completed renders:', err);
+      const el = getCrElements();
+      if (el && el.content) {
+        el.content.innerHTML = '<div class="cr-empty">⚠️ Error loading completed batches. <button onclick="initCompletedRenders()" style="background:var(--accent);color:#fff;border:none;border-radius:4px;padding:4px 12px;cursor:pointer;margin-left:8px;">Retry</button></div>';
+      }
+    }
+  }
 });
 
 completedRefreshBtn?.addEventListener('click', initCompletedRenders);
@@ -6058,6 +6125,47 @@ document.querySelectorAll('.cr-nav-item').forEach(btn => {
     }
   }
 
+  // Auto-refresh toggle and countdown
+  let monitorCountdown = 15;
+  let monitorCountdownTimer = null;
+  const monitorAutoRefreshToggle = document.getElementById('monitorAutoRefreshToggle');
+  const monitorCountdownEl = document.getElementById('monitorCountdown');
+
+  function resetMonitorCountdown() {
+    monitorCountdown = 15;
+    if (monitorCountdownEl) monitorCountdownEl.textContent = '15s';
+  }
+
+  function startMonitorCountdown() {
+    stopMonitorCountdown();
+    if (!monitorAutoRefreshToggle?.checked) return;
+    monitorCountdown = 15;
+    monitorCountdownTimer = setInterval(() => {
+      monitorCountdown--;
+      if (monitorCountdownEl) monitorCountdownEl.textContent = monitorCountdown + 's';
+      if (monitorCountdown <= 0) {
+        resetMonitorCountdown();
+        if (monitorPanelOpen && monitorAutoRefreshToggle?.checked) {
+          fetchMonitorStatus().then(renderMonitorStatus);
+        }
+      }
+    }, 1000);
+  }
+
+  function stopMonitorCountdown() {
+    if (monitorCountdownTimer) { clearInterval(monitorCountdownTimer); monitorCountdownTimer = null; }
+  }
+
+  monitorAutoRefreshToggle?.addEventListener('change', () => {
+    if (monitorAutoRefreshToggle.checked && monitorPanelOpen) {
+      resetMonitorCountdown();
+      startMonitorCountdown();
+    } else {
+      stopMonitorCountdown();
+      if (monitorCountdownEl) monitorCountdownEl.textContent = '—';
+    }
+  });
+
   monitorToggle?.addEventListener('click', () => {
     monitorPanelOpen = !monitorPanelOpen;
     monitorToggle.classList.toggle('active', monitorPanelOpen);
@@ -6076,12 +6184,17 @@ document.querySelectorAll('.cr-nav-item').forEach(btn => {
     aboutPanelOpen = false;
     completedPanelOpen = false;
     if (monitorInterval) { clearInterval(monitorInterval); monitorInterval = null; }
+    stopMonitorCountdown();
     if (monitorPanelOpen) {
       fetchMonitorStatus().then(renderMonitorStatus);
       monitorInterval = setInterval(async () => {
         const data = await fetchMonitorStatus();
         renderMonitorStatus(data);
+        resetMonitorCountdown();
       }, 15000);
+      if (monitorAutoRefreshToggle?.checked) {
+        startMonitorCountdown();
+      }
     }
   });
 
@@ -6089,8 +6202,8 @@ document.querySelectorAll('.cr-nav-item').forEach(btn => {
     if (monitorPanelOpen) {
       const data = await fetchMonitorStatus();
       renderMonitorStatus(data);
+      resetMonitorCountdown();
     }
-
   });
 
   // ── MATCHED IMAGES SUBPAGE ────────────────────────────────────────
@@ -7547,21 +7660,23 @@ apiKeySave.addEventListener('click', () => {
   saveApiKeyFromInput();
 });
 
-// ── API KEY COPY PROTECTION ────────────────────────────────────────
-// Prevent right-click context menu on the API key input
-apiKeyEl.addEventListener('contextmenu', e => e.preventDefault());
-// Prevent copy, cut, and paste events
-apiKeyEl.addEventListener('copy', e => e.preventDefault());
-apiKeyEl.addEventListener('cut', e => e.preventDefault());
-apiKeyEl.addEventListener('paste', e => e.preventDefault());
-// Block Ctrl+C, Ctrl+Ins (copy), Shift+Ins (paste), Ctrl+V (paste) via keydown
-apiKeyEl.addEventListener('keydown', e => {
-  if (
-    (e.ctrlKey && (e.key === 'c' || e.key === 'C' || e.key === 'v' || e.key === 'V' || e.key === 'x' || e.key === 'X' || e.key === 'Insert')) ||
-    (e.shiftKey && e.key === 'Insert')
-  ) {
-    e.preventDefault();
-  }
+// ── API KEY INPUT UX ───────────────────────────────────────────────
+// Use password field with toggle visibility instead of copy protection
+// Create a toggle button for API key visibility
+const apiKeyToggleBtn = document.createElement('button');
+apiKeyToggleBtn.type = 'button';
+apiKeyToggleBtn.className = 'api-save-btn';
+apiKeyToggleBtn.textContent = '👁';
+apiKeyToggleBtn.title = 'Toggle API key visibility';
+apiKeyToggleBtn.style.marginLeft = '4px';
+apiKeyToggleBtn.style.padding = '6px 8px';
+apiKeyToggleBtn.style.fontSize = '14px';
+apiKeyEl.parentNode.insertBefore(apiKeyToggleBtn, apiKeyEl.nextSibling);
+
+apiKeyToggleBtn.addEventListener('click', () => {
+  const isPassword = apiKeyEl.type === 'password';
+  apiKeyEl.type = isPassword ? 'text' : 'password';
+  apiKeyToggleBtn.textContent = isPassword ? '🙈' : '👁';
 });
 
 // ── RESOLUTION PICKER ──────────────────────────────────────────────
@@ -7984,6 +8099,7 @@ confirmAddBtn.addEventListener('click', async () => {
 
 // ── CLEAR BUTTONS ─────────────────────────────────────────────────
 clearDoneBtn.addEventListener('click', async () => {
+  if (!confirm('Clear all completed/errored items from the queue? They will be archived (Drive upload still available).')) return;
   await clearCompletedItems();
 });
 
@@ -8021,6 +8137,7 @@ clearAllBtn.addEventListener('click', async () => {
     toast('Cannot clear while processing', 'error');
     return;
   }
+  if (!confirm('Clear ALL items from the queue? This will archive everything (Drive upload still available).')) return;
   const queueIds = queue.map(q => q.id);
   // Remove all batch cards from DOM
   document.querySelectorAll('[id^="bc-"]').forEach(el => el.remove());
@@ -10917,6 +11034,15 @@ function initBatchProcessor() {
       batchProductGrid.innerHTML = '<div style="font-size:13px;color:var(--text-muted);padding:24px;text-align:center;">No products extracted.</div>';
       return;
     }
+
+    // Add a "Select All" header row
+    const selectAllId = 'batchSelectAllCheckbox';
+    const headerHtml = `<div class="batch-select-all-header" style="display:flex;align-items:center;gap:8px;padding:6px 4px;margin-bottom:4px;border-bottom:1px solid var(--border-light);">
+      <input type="checkbox" id="${selectAllId}" checked style="cursor:pointer;"/>
+      <label for="${selectAllId}" style="font-size:12px;font-weight:600;color:var(--text-secondary);cursor:pointer;">Select / Deselect All</label>
+      <span style="font-size:11px;color:var(--text-muted);margin-left:auto;" id="batchSelectedCount">${products.length} / ${products.length} selected</span>
+    </div>`;
+
     const cards = products.map((product, idx) => {
       const code = product.generatedCode || '';
       return `<div class="batch-product-card" data-batch-idx="${idx}">
@@ -10931,7 +11057,33 @@ function initBatchProcessor() {
         <textarea class="bpc-field bpc-desc" data-batch-idx="${idx}" placeholder="Product description">${escapeHtml(product.description || '')}</textarea>
       </div>`;
     }).join('');
-    batchProductGrid.innerHTML = cards;
+    batchProductGrid.innerHTML = headerHtml + cards;
+
+    // Wire up Select All checkbox
+    const selectAllCheckbox = document.getElementById(selectAllId);
+    if (selectAllCheckbox) {
+      selectAllCheckbox.addEventListener('change', () => {
+        const checked = selectAllCheckbox.checked;
+        document.querySelectorAll('.bpc-select').forEach(cb => cb.checked = checked);
+        updateBatchSelectedCount();
+      });
+    }
+
+    // Wire up individual checkboxes to update the select-all state
+    document.querySelectorAll('.bpc-select').forEach(cb => {
+      cb.addEventListener('change', updateBatchSelectedCount);
+    });
+
+    function updateBatchSelectedCount() {
+      const total = document.querySelectorAll('.bpc-select').length;
+      const checked = document.querySelectorAll('.bpc-select:checked').length;
+      const countEl = document.getElementById('batchSelectedCount');
+      if (countEl) countEl.textContent = `${checked} / ${total} selected`;
+      if (selectAllCheckbox) {
+        selectAllCheckbox.checked = checked === total;
+        selectAllCheckbox.indeterminate = checked > 0 && checked < total;
+      }
+    }
   }
 
   // ── Render image gallery (Step 2) ──
@@ -11205,6 +11357,24 @@ function initBatchProcessor() {
     batchMatchBtn.disabled = true;
     batchMatchBtn.textContent = 'Matching...';
 
+    // Show progress indicator in the batch match area
+    let matchProgressEl = document.getElementById('batchMatchProgress');
+    if (!matchProgressEl) {
+      matchProgressEl = document.createElement('div');
+      matchProgressEl.id = 'batchMatchProgress';
+      matchProgressEl.style.cssText = 'display:flex;align-items:center;gap:8px;padding:8px 12px;font-size:12px;color:var(--text-secondary);background:var(--surface-2);border-radius:6px;margin-top:8px;';
+      batchMatchBtn.parentNode.insertBefore(matchProgressEl, batchMatchBtn.nextSibling);
+    }
+    matchProgressEl.style.display = 'flex';
+    matchProgressEl.innerHTML = '<span class="spinner" style="display:inline-block;width:14px;height:14px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin 0.6s linear infinite;"></span> Matching products to images... (analyzing names, codes, and visual features)';
+    // Add spin keyframe if not exists
+    if (!document.getElementById('batchSpinStyle')) {
+      const style = document.createElement('style');
+      style.id = 'batchSpinStyle';
+      style.textContent = '@keyframes spin { to { transform: rotate(360deg); } }';
+      document.head.appendChild(style);
+    }
+
     try {
       const res = await fetchApi('/api/agent/match', {
         method: 'POST',
@@ -11253,9 +11423,20 @@ function initBatchProcessor() {
       batchStep3.style.display = 'block';
 
       const matchCount = data.matches?.length || 0;
+      // Update progress indicator with result
+      const matchProgressEl = document.getElementById('batchMatchProgress');
+      if (matchProgressEl) {
+        matchProgressEl.innerHTML = `✅ Matched ${matchCount} product(s) to images`;
+        setTimeout(() => { matchProgressEl.style.display = 'none'; }, 3000);
+      }
       toast(`Matched ${matchCount} product(s) to images. Review each match, then click "+ Add All Matched to Queue".`, 'info');
 
     } catch (err) {
+      const matchProgressEl = document.getElementById('batchMatchProgress');
+      if (matchProgressEl) {
+        matchProgressEl.innerHTML = `❌ Matching failed: ${escapeHtml(err.message)}`;
+        setTimeout(() => { matchProgressEl.style.display = 'none'; }, 5000);
+      }
       toast(`Matching failed: ${err.message}`, 'error');
     } finally {
       batchMatchBtn.disabled = false;
@@ -12051,6 +12232,61 @@ function initRenderQueue() {
     if (confirm('Delete completed batches older than 7 days?')) {
       postQueueAction('/api/render-queue/cleanup-completed');
     }
+  });
+
+  // ── Column sorting ──
+  let rqSortKey = null;
+  let rqSortDir = 'asc';
+
+  document.querySelectorAll('.rq-sortable').forEach(th => {
+    th.addEventListener('click', () => {
+      const key = th.dataset.sortKey;
+      if (!key) return;
+
+      // Toggle direction if same column, else reset to asc
+      if (rqSortKey === key) {
+        rqSortDir = rqSortDir === 'asc' ? 'desc' : 'asc';
+      } else {
+        rqSortKey = key;
+        rqSortDir = 'asc';
+      }
+
+      // Update header indicators
+      document.querySelectorAll('.rq-sortable').forEach(h => {
+        h.classList.remove('rq-sort-asc', 'rq-sort-desc');
+      });
+      th.classList.add(rqSortDir === 'asc' ? 'rq-sort-asc' : 'rq-sort-desc');
+
+      // Sort the current data client-side and re-render
+      const tbody = document.getElementById('rqTbody');
+      if (!tbody) return;
+
+      const rows = Array.from(tbody.querySelectorAll('tr'));
+      // Only sort if we have data rows (not the empty/error row)
+      if (rows.length === 1 && (rows[0].classList.contains('rq-empty') || rows[0].classList.contains('rq-error'))) return;
+
+      const sortedRows = rows.sort((a, b) => {
+        // Get the cell content for the sort key column
+        const cellIndex = Array.from(th.parentNode.children).indexOf(th);
+        const aVal = a.children[cellIndex]?.textContent?.trim().toLowerCase() || '';
+        const bVal = b.children[cellIndex]?.textContent?.trim().toLowerCase() || '';
+
+        // Try numeric comparison first
+        const aNum = parseFloat(aVal.replace(/[^0-9.-]/g, ''));
+        const bNum = parseFloat(bVal.replace(/[^0-9.-]/g, ''));
+        if (!isNaN(aNum) && !isNaN(bNum)) {
+          return rqSortDir === 'asc' ? aNum - bNum : bNum - aNum;
+        }
+
+        // String comparison
+        if (aVal < bVal) return rqSortDir === 'asc' ? -1 : 1;
+        if (aVal > bVal) return rqSortDir === 'asc' ? 1 : -1;
+        return 0;
+      });
+
+      // Re-append sorted rows
+      sortedRows.forEach(row => tbody.appendChild(row));
+    });
   });
 }
 
