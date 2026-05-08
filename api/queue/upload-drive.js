@@ -18,8 +18,13 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Valid itemId is required' });
   }
 
-  if (!process.env.GOOGLE_SERVICE_ACCOUNT_JSON) {
-    return res.status(400).json({ error: 'GOOGLE_SERVICE_ACCOUNT_JSON environment variable is not set' });
+  // Need either OAuth2 (GOOGLE_DRIVE_REFRESH_TOKEN) or Service Account
+  const hasOAuth2 = !!(process.env.GOOGLE_DRIVE_CLIENT_ID && process.env.GOOGLE_DRIVE_CLIENT_SECRET && process.env.GOOGLE_DRIVE_REFRESH_TOKEN);
+  const hasServiceAccount = !!process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
+  if (!hasOAuth2 && !hasServiceAccount) {
+    return res.status(400).json({
+      error: 'No Google Drive auth configured. Set GOOGLE_DRIVE_REFRESH_TOKEN (OAuth2) or GOOGLE_SERVICE_ACCOUNT_JSON (service account)'
+    });
   }
 
   try {

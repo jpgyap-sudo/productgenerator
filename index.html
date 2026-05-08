@@ -1741,6 +1741,7 @@ textarea:focus { outline: none; border-color: var(--text-secondary); }
         <span class="pulse done"></span>
         <span class="sec-title-text">Completed Batches</span>
         <span style="font-size:11px;font-weight:400;color:var(--text-secondary);margin-left:auto;">Saved render URLs from Supabase and this browser</span>
+        <button class="btn-clear" id="completedClearArchiveBtn" type="button">Clear archive</button>
         <button class="btn-dl-all" id="completedRefreshBtn" type="button">Refresh</button>
       </div>
       <div class="completed-list" id="completedList"></div>
@@ -2074,11 +2075,11 @@ function buildDesc(desc) {
 
 function homeuPrompt(view, desc) {
   const d = buildDesc(desc);
-  const fidelity = `Use ONLY the exact uploaded reference product image for ${d}. Maintain 100% product fidelity: do not redesign, reinterpret, replace, improve, recolor, resize disproportionately, add/remove cushions, change legs/base/frame, alter materials, or change structure. The product must remain the same object with the same proportions, color, material, silhouette, texture, and visible details.`;
+  const fidelity = `Use the uploaded reference product image as the design source for ${d}. Preserve the product identity: same proportions, color, material, silhouette, texture, and visible design details. You may rotate the product/camera to the requested view and conservatively infer hidden surfaces from the visible design. Do not redesign, replace, recolor, resize disproportionately, add/remove cushions, change legs/base/frame, or change structure.`;
   const productShot = `Generate one separate image only, not a collage or grid. White background, centered product photography, clean premium catalog lighting, soft realistic shadows, no extra furniture or decor.`;
-  if (view.id === 1) return `${fidelity} ${productShot} Image 1: front view of the chair.`;
-  if (view.id === 2) return `${fidelity} ${productShot} Image 2: side view of the chair.`;
-  if (view.id === 3) return `${fidelity} ${productShot} Image 3: isometric 45-degree view of the chair.`;
+  if (view.id === 1) return `${fidelity} ${productShot} Image 1: straight-on front view of the chair, camera centered on the front face.`;
+  if (view.id === 2) return `${fidelity} ${productShot} Image 2: true side profile view of the chair, rotated 90 degrees from the front view. The front face should not be visible except a thin edge; show the product depth clearly.`;
+  if (view.id === 3) return `${fidelity} ${productShot} Image 3: three-quarter isometric catalog view, product rotated about 45 degrees from the front with both front and side visible, slightly elevated camera, not a straight front view.`;
   return `${fidelity} Generate one separate image only, not a collage or grid. Image 4: full luxury modern dining room interior scene using the EXACT same chair as the main furniture. Place it naturally in a high-end condominium or architect-designed luxury home setting with premium materials such as marble, travertine, wood veneer, brushed metal, linen or boucle textures, soft natural daylight, balanced exposure, realistic grounding shadows, correct scale and perspective, eye-level camera, and Homeu-style neutral luxury tones: beige, taupe, cream, warm gray, black accents, walnut or oak. Supporting decor such as rugs, pendant lights, wall art, curtains, vases, books, or trays is allowed only if it does not overpower the chair. The scene must look like a real photographed luxury property listing or interior design magazine image.`;
 }
 
@@ -2291,6 +2292,7 @@ const completedToggle = document.getElementById('completedToggle');
 const completedPanel = document.getElementById('completedPanel');
 const completedList = document.getElementById('completedList');
 const completedRefreshBtn = document.getElementById('completedRefreshBtn');
+const completedClearArchiveBtn = document.getElementById('completedClearArchiveBtn');
 const monitorToggle = document.getElementById('monitorToggle');
 const monitorPanel = document.getElementById('monitorPanel');
 const monitorGrid = document.getElementById('monitorGrid');
@@ -2719,7 +2721,7 @@ function archiveCompletedItem(item, viewResults = []) {
     driveFolderId: item.driveFolderId || '',
     driveFolderName: item.driveFolderName || '',
     driveFolderUrl: item.driveFolderUrl || '',
-    driveUploadStatus: item.driveUploadStatus || (item.driveFolderName ? 'done' : ''),
+    driveUploadStatus: item.driveUploadStatus || (item.driveFolderName && item.driveFolderUrl ? 'done' : ''),
     driveUploadDone: item.driveUploadDone || 0,
     driveUploadTotal: item.driveUploadTotal || 0,
     driveUploadError: item.driveUploadError || '',
@@ -2739,7 +2741,7 @@ function archiveCompletedItem(item, viewResults = []) {
 }
 
 function getDriveStateText(item) {
-  const status = item.driveUploadStatus || (item.driveFolderName ? 'done' : '');
+  const status = item.driveUploadStatus || (item.driveFolderName && item.driveFolderUrl ? 'done' : '');
   if (status === 'done') {
     const base = item.driveFolderName ? `Uploaded to Drive: ${item.driveFolderName}` : 'Uploaded to Drive';
     if (item.driveFolderUrl) {
@@ -2749,6 +2751,8 @@ function getDriveStateText(item) {
   }
   if (status === 'uploading') return `Uploading to Drive (${item.driveUploadDone || 0}/${item.driveUploadTotal || VIEWS.length})`;
   if (status === 'error') return item.driveUploadError ? `Drive upload failed: ${item.driveUploadError}` : 'Drive upload failed';
+  // Old service-account upload without folder URL — show as not uploaded
+  if (item.driveFolderName && !item.driveFolderUrl) return 'Previously uploaded (wrong location) — re-upload available';
   return 'Not uploaded to Drive';
 }
 
@@ -2920,6 +2924,7 @@ function createCompletedHistoryCard(item, viewResults = [], source = 'archive') 
         ${driveUploadButtonHtml(item, viewResults).replace(`id="bdrive-${item.id}"`, `id="hdrive-${item.id}"`)}
         <button class="btn-zip" id="hzip-${item.id}" type="button" ${doneCount ? '' : 'disabled'}>⬇ ZIP</button>
         <button class="btn-retry-batch" id="hregen-${item.id}" type="button">↻ Re-generate</button>
+        <button class="btn-clear" id="hdel-${item.id}" type="button">Remove</button>
       </div>
     </div>
     <div class="batch-grid" id="hgrid-${item.id}"></div>
@@ -2949,6 +2954,7 @@ function createCompletedHistoryCard(item, viewResults = [], source = 'archive') 
 
   card.querySelector(`#hzip-${item.id}`)?.addEventListener('click', e => downloadHistoryZip(item.id, item.name || `Item_${item.id}`, viewResults, e.currentTarget));
   card.querySelector(`#hregen-${item.id}`)?.addEventListener('click', () => retryItemFromHistory(item.id));
+  card.querySelector(`#hdel-${item.id}`)?.addEventListener('click', () => deleteCompletedBatch(item.id));
   card.querySelector(`#hdrive-${item.id}`)?.addEventListener('click', () => uploadBatchToDrive(item.id));
   return card;
 }
@@ -3060,6 +3066,7 @@ completedToggle.addEventListener('click', async () => {
 });
 
 completedRefreshBtn?.addEventListener('click', renderCompletedPanel);
+completedClearArchiveBtn?.addEventListener('click', clearCompletedArchive);
 
   // ── API MONITOR TOGGLE ─────────────────────────────────────────────
   const SERVICE_LABELS = {
@@ -3806,7 +3813,7 @@ const DEFAULT_FEATURE_PROMPTS = [
 ];
 
 /** Current feature prompts (editable by user) */
-const FEATURE_PROMPTS_VERSION = 'homeu-v2';
+const FEATURE_PROMPTS_VERSION = 'homeu-v3';
 let featurePrompts = localStorage.getItem('featurePromptsVersion') === FEATURE_PROMPTS_VERSION
   ? JSON.parse(localStorage.getItem('featurePrompts')) || null
   : null;
@@ -4863,10 +4870,13 @@ function driveProgressHtml(item) {
 }
 
 function driveUploadButtonHtml(item, viewResults = []) {
-  const status = item.driveUploadStatus || (item.driveFolderName ? 'done' : '');
+  const status = item.driveUploadStatus || (item.driveFolderName && item.driveFolderUrl ? 'done' : '');
   const doneCount = viewResults.filter(r => r.status === 'done' && r.imageUrl).length;
   const canUpload = doneCount === VIEWS.length;
-  if (status === 'done') {
+  // Allow re-upload if the old upload was done by the service account (wrong location)
+  // or if the folder URL doesn't look valid
+  const oldUploadWrongLocation = status === 'done' && item.driveFolderName && !item.driveFolderUrl;
+  if (status === 'done' && !oldUploadWrongLocation) {
     if (item.driveFolderUrl) {
       return `<a href="${escHtml(item.driveFolderUrl)}" target="_blank" rel="noopener" class="btn-drive-link" id="bdrive-${item.id}" style="display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:6px;background:var(--accent);color:#fff;text-decoration:none;font-size:11px;white-space:nowrap;">Open in Drive ↗</a>`;
     }
@@ -4875,20 +4885,23 @@ function driveUploadButtonHtml(item, viewResults = []) {
   if (status === 'uploading') {
     return `<button class="btn-drive-upload" id="bdrive-${item.id}" type="button" disabled>Uploading Drive...</button>`;
   }
-  return `<button class="btn-drive-upload" id="bdrive-${item.id}" type="button" ${canUpload ? '' : 'disabled'}>Upload to Drive</button>`;
+  // Show re-upload button for old service-account uploads (no folder URL)
+  const btnLabel = oldUploadWrongLocation ? 'Re-upload to Drive' : 'Upload to Drive';
+  return `<button class="btn-drive-upload" id="bdrive-${item.id}" type="button" ${canUpload ? '' : 'disabled'}>${btnLabel}</button>`;
 }
 
 function updateBatchDriveStatus(item) {
   const wrap = document.getElementById(`dprog-${item.id}`);
   const driveBtn = document.getElementById(`bdrive-${item.id}`);
 
-  const status = item.driveUploadStatus || (item.driveFolderName ? 'done' : '');
+  const status = item.driveUploadStatus || (item.driveFolderName && item.driveFolderUrl ? 'done' : '');
+  const oldUploadWrongLocation = status === 'done' && item.driveFolderName && !item.driveFolderUrl;
   const total = Number(item.driveUploadTotal || VIEWS.length);
-  const done = Number(item.driveUploadDone || (status === 'done' ? total : 0));
+  const done = Number(item.driveUploadDone || (status === 'done' && !oldUploadWrongLocation ? total : 0));
   const pct = total > 0 ? Math.min(100, Math.round((done / total) * 100)) : 0;
 
   if (driveBtn) {
-    if (status === 'done' && item.driveFolderUrl) {
+    if (status === 'done' && !oldUploadWrongLocation && item.driveFolderUrl) {
       // Replace button with "Open in Drive" link
       const parent = driveBtn.parentNode;
       if (parent) {
@@ -4903,8 +4916,11 @@ function updateBatchDriveStatus(item) {
         parent.replaceChild(link, driveBtn);
       }
     } else {
-      driveBtn.disabled = status === 'done' || status === 'uploading';
-      if (status === 'done') driveBtn.textContent = 'Drive uploaded';
+      // For old service-account uploads (no folder URL), allow re-upload
+      const isOldWrongUpload = status === 'done' && item.driveFolderName && !item.driveFolderUrl;
+      driveBtn.disabled = (status === 'done' && !isOldWrongUpload) || status === 'uploading';
+      if (status === 'done' && isOldWrongUpload) driveBtn.textContent = 'Re-upload to Drive';
+      else if (status === 'done') driveBtn.textContent = 'Drive uploaded';
       else if (status === 'uploading') driveBtn.textContent = 'Uploading Drive...';
       else driveBtn.textContent = 'Upload to Drive';
     }

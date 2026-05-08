@@ -262,15 +262,12 @@ async function processNextBatch() {
         : provider.includes('cheap') || provider.includes('mini')
           ? 'OpenAI (cheap/mini)'
           : 'OpenAI';
-    await supabase
-      .from(QUEUE_TABLE)
-      .update({
-        status: 'active',
-        sub_text: `Generating 4 views with ${providerLabel}...`,
-        provider,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', item.id);
+    await updateQueueItemFields(item.id, {
+      status: 'active',
+      sub_text: `Generating 4 views with ${providerLabel}...`,
+      provider,
+      updated_at: new Date().toISOString()
+    });
 
     // Ensure render_results rows exist
     await ensureRenderRows(item.id, provider);
@@ -372,7 +369,26 @@ async function processItem(itemId, provider = 'openai') {
   }
 
   try {
-    // Mark all views as generating
+    const { data: existingRows, error: existingRowsError } = await supabase
+      .from(RESULTS_TABLE)
+      .select('view_id, status, image_url')
+      .eq('queue_item_id', itemId);
+
+    if (existingRowsError) throw existingRowsError;
+
+    const completedViewIds = new Set(
+      (existingRows || [])
+        .filter(row => row.status === 'done' && row.image_url)
+        .map(row => Number(row.view_id))
+    );
+    const viewsToGenerate = VIEWS.filter(view => !completedViewIds.has(Number(view.id)));
+
+    if (viewsToGenerate.length === 0) {
+      await updateItemStatus(itemId, 'done', 'All 4 views generated');
+      return;
+    }
+
+    // Mark unfinished views as generating
     const providerLabel = provider.startsWith('stability')
       ? provider.includes('cheap') || provider.includes('mini')
         ? 'Stability AI (cheap/mini)'
@@ -383,9 +399,10 @@ async function processItem(itemId, provider = 'openai') {
           ? 'OpenAI (cheap/mini)'
           : 'OpenAI';
     await updateItemStatus(itemId, 'active', `Generating 4 views with ${providerLabel}...`);
-    await updateAllViewStatuses(itemId, 'generating', null);
+    await updateViewStatuses(itemId, viewsToGenerate.map(view => view.id), 'generating', null);
 
-    // Generate all 4 views in parallel
+    // Generate unfinished views in parallel. Completed views are preserved for
+    // retry flows so successful renders are not charged/regenerated again.
     const isStability = provider.startsWith('stability');
     const isGemini = provider === 'gemini';
     const generateFn = isStability
@@ -398,7 +415,7 @@ async function processItem(itemId, provider = 'openai') {
     // resolve the model (e.g., 'openai-cheap' → dall-e-2, 'stability-cheap' → sdxl-turbo)
     const genOptions = { provider };
     let results = await Promise.allSettled(
-      VIEWS.map(view => generateFn(view, desc, imageUrl, item.resolution || '1K', brand, genOptions))
+      viewsToGenerate.map(view => generateFn(view, desc, imageUrl, item.resolution || '1K', brand, genOptions))
     );
 
     // If Gemini failed due to quota, retry with OpenAI
@@ -412,7 +429,7 @@ async function processItem(itemId, provider = 'openai') {
         if (isQuotaError) {
           console.log(`[WORKER] Gemini quota exceeded for item ${itemId}, retrying with OpenAI...`);
           const fallbackResults = await Promise.allSettled(
-            VIEWS.map((view, i) => {
+            viewsToGenerate.map((view, i) => {
               if (results[i].status === 'fulfilled') return Promise.resolve(results[i].value);
               return generateOpenAIView(view, desc, imageUrl, item.resolution || '1K', brand, { provider: 'openai' });
             })
@@ -423,11 +440,11 @@ async function processItem(itemId, provider = 'openai') {
     }
 
     // Save results
-    let successCount = 0;
+    let successCount = completedViewIds.size;
     let failCount = 0;
 
-    for (let i = 0; i < VIEWS.length; i++) {
-      const view = VIEWS[i];
+    for (let i = 0; i < viewsToGenerate.length; i++) {
+      const view = viewsToGenerate[i];
       const result = results[i];
 
       if (result.status === 'fulfilled' && result.value) {
@@ -719,14 +736,64 @@ async function updateItemStatus(itemId, status, subText) {
   const updateData = { status, updated_at: now };
   if (subText) updateData.sub_text = subText;
 
-  const { error } = await supabase
-    .from(QUEUE_TABLE)
-    .update(updateData)
-    .eq('id', itemId);
+  await updateQueueItemFields(itemId, updateData);
+}
 
-  if (error) {
-    console.error(`[WORKER] Failed to update item ${itemId} status:`, error.message);
+async function updateQueueItemFields(itemId, fields) {
+  let updateData = { ...fields };
+  const strippedColumns = [];
+
+  for (let attempt = 0; attempt < 8; attempt++) {
+    if (Object.keys(updateData).length === 0) return;
+
+    const { error } = await supabase
+      .from(QUEUE_TABLE)
+      .update(updateData)
+      .eq('id', itemId);
+
+    if (!error) {
+      if (strippedColumns.length > 0) {
+        console.warn(`[WORKER] Updated item ${itemId} without optional columns missing from product_queue: ${strippedColumns.join(', ')}`);
+      }
+      return;
+    }
+
+    const missingColumn = getMissingSchemaColumn(error);
+    if (!isMissingColumnError(error) || !missingColumn || !(missingColumn in updateData)) {
+      console.error(`[WORKER] Failed to update item ${itemId} status:`, error.message);
+      return;
+    }
+
+    strippedColumns.push(missingColumn);
+    delete updateData[missingColumn];
   }
+
+  console.error(`[WORKER] Failed to update item ${itemId}: too many missing schema columns`);
+}
+
+function getMissingSchemaColumn(error) {
+  const message = String(error?.message || '');
+  const quoted = message.match(/'([^']+)' column/i);
+  if (quoted) return quoted[1];
+  const plain = message.match(/column\s+([a-zA-Z0-9_]+)\s+does not exist/i);
+  if (plain) return plain[1];
+
+  for (const column of [
+    'sub_text',
+    'provider',
+    'resolution',
+    'drive_folder_name',
+    'drive_folder_id',
+    'drive_folder_url',
+    'drive_upload_status',
+    'drive_upload_done',
+    'drive_upload_total',
+    'drive_upload_error'
+  ]) {
+    if (message.includes(column)) return column;
+  }
+
+  return '';
 }
 
 async function updateAllViewStatuses(itemId, status, errorMessage) {
@@ -740,6 +807,26 @@ async function updateAllViewStatuses(itemId, status, errorMessage) {
     .from(RESULTS_TABLE)
     .update(updateData)
     .eq('queue_item_id', itemId);
+
+  if (error) {
+    console.error(`[WORKER] Failed to update view statuses for item ${itemId}:`, error.message);
+  }
+}
+
+async function updateViewStatuses(itemId, viewIds, status, errorMessage) {
+  if (!Array.isArray(viewIds) || viewIds.length === 0) return;
+
+  const now = new Date().toISOString();
+  const updateData = { status, updated_at: now };
+  if (errorMessage) updateData.error_message = errorMessage;
+  if (status === 'generating') updateData.started_at = now;
+  if (status === 'done' || status === 'error') updateData.completed_at = now;
+
+  const { error } = await supabase
+    .from(RESULTS_TABLE)
+    .update(updateData)
+    .eq('queue_item_id', itemId)
+    .in('view_id', viewIds);
 
   if (error) {
     console.error(`[WORKER] Failed to update view statuses for item ${itemId}:`, error.message);
