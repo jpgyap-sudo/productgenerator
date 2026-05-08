@@ -144,10 +144,9 @@ async function upsertSubmittedItems(itemIds, submittedItems, activeProvider, res
       imageUrl = await uploadSubmittedImage(id, submitted.imageData);
     }
 
-    rows.push({
+    const row = {
       id,
       name: submitted.name || `Item ${id}`,
-      image_url: imageUrl,
       status: 'active',
       sub_text: `Queued for ${providerLabel(activeProvider)} processing...`,
       description: submitted.description || '',
@@ -156,7 +155,14 @@ async function upsertSubmittedItems(itemIds, submittedItems, activeProvider, res
       resolution: resolution || '1K',
       drive_folder_name: submitted.driveFolderName || '',
       updated_at: now
-    });
+    };
+
+    // Do not overwrite an existing queued image with an empty value. A missing
+    // reference image is rejected after the upsert once existing DB rows are
+    // loaded, so new bad submissions fail loudly instead of rendering 0/4.
+    if (imageUrl) row.image_url = imageUrl;
+
+    rows.push(row);
   }
 
   if (rows.length === 0) return;
@@ -203,6 +209,13 @@ export default async function handler(req, res) {
     if (fetchError) throw fetchError;
     if (!items || items.length === 0) {
       return res.status(404).json({ error: 'No items found' });
+    }
+
+    const missingImages = items.filter(item => !item.image_url);
+    if (missingImages.length > 0) {
+      return res.status(400).json({
+        error: `Cannot render without reference image: ${missingImages.map(item => item.name || `Item ${item.id}`).join(', ')}`
+      });
     }
 
     const now = new Date().toISOString();

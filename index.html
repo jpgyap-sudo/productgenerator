@@ -9330,8 +9330,15 @@ function initUploadAgent() {
       // Reset accepted matches
       agentAcceptedMatches = {};
       if (data.matches) {
+        const imageMap = {};
+        (agentResultData.allImages || []).forEach(img => { imageMap[img.name] = img.dataUrl; });
         data.matches.forEach((m, idx) => {
-          agentAcceptedMatches[idx] = { accepted: true, imageName: m.matchedImage?.name, dataUrl: m.matchedImage?.dataUrl };
+          const imageName = m.matchedImage?.name || '';
+          agentAcceptedMatches[idx] = {
+            accepted: true,
+            imageName,
+            dataUrl: m.matchedImage?.dataUrl || imageMap[imageName] || ''
+          };
         });
       }
 
@@ -10051,8 +10058,15 @@ function initBatchProcessor() {
       // Reset accepted matches — each product gets its OWN image
       batchAcceptedMatches = {};
       if (data.matches) {
+        const imageMap = {};
+        (batchResultData.allImages || []).forEach(img => { imageMap[img.name] = img.dataUrl; });
         data.matches.forEach((m, idx) => {
-          batchAcceptedMatches[idx] = { accepted: true, imageName: m.matchedImage?.name, dataUrl: m.matchedImage?.dataUrl };
+          const imageName = m.matchedImage?.name || '';
+          batchAcceptedMatches[idx] = {
+            accepted: true,
+            imageName,
+            dataUrl: m.matchedImage?.dataUrl || imageMap[imageName] || ''
+          };
         });
       }
 
