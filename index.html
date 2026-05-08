@@ -3664,7 +3664,11 @@ function createCompletedHistoryCard(item, viewResults = [], source = 'archive') 
         <h3>${escHtml(item.name || `Item ${item.id}`)}</h3>
         <p>${escHtml(getBatchApiText(item))}</p>
         <p style="font-size:11px;color:var(--text-secondary);">${(() => {
-          const ts = item.updatedAt ? new Date(item.updatedAt) : null;
+          // Fall back to latest view completedAt if batch-level updatedAt is missing (old archives)
+          const rawTs = item.updatedAt
+            || viewResults.map(r => r.completedAt).filter(Boolean).sort().pop()
+            || null;
+          const ts = rawTs ? new Date(rawTs) : null;
           const dateStr = ts ? ts.toLocaleDateString('en-SG', { year:'numeric', month:'short', day:'numeric' }) : '';
           const timeStr = ts ? ts.toLocaleTimeString('en-SG', { hour:'2-digit', minute:'2-digit', hour12:false }) : '';
           const cost = getEstimatedCost(item, doneCount);
