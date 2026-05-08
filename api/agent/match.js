@@ -81,6 +81,8 @@ export default async function handler(req, res) {
 
     // Step 3: Gemini visual search fallback for products with no pattern match
     // Products with score < 40 or no matchedImage get a second chance via visual search
+    // NOTE: For catalogs where product codes (e.g. CH-790) don't match image filenames
+    // (e.g. xref14), ALL products will fall through to visual search — this is expected.
     const unmatchedProducts = matchResult.matches.filter(m =>
       !m.matchedImage || m.score < 40
     );
