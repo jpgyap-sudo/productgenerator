@@ -3,7 +3,10 @@ import crypto from 'node:crypto';
 import dotenv from 'dotenv';
 dotenv.config({ override: true });
 
-const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, {
+  auth: { persistSession: false },
+  realtime: { transport: WebSocket }
+});
 
 function normalize(value = '') {
   return String(value).trim().toLowerCase().replace(/[^a-z0-9]+/g, '');
