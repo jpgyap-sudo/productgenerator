@@ -4292,8 +4292,11 @@ async function deleteCompletedBatch(id) {
 
   const card = document.getElementById(`bc-${id}`);
   if (card) card.remove();
+  const historyCard = document.getElementById(`hc-${id}`);
+  if (historyCard) historyCard.remove();
 
   queue = queue.filter(q => q.id !== id);
+  saveCompletedArchive(getCompletedArchive().filter(entry => Number(entry.id) !== Number(id)));
   // Soft-delete: archive the item instead of hard-deleting from Supabase
   // so Drive upload still works from the Completed panel
   await archiveQueueItemInSupabase(id);
@@ -4313,9 +4316,47 @@ async function deleteCompletedBatch(id) {
   checkReady();
   await saveState();
   toast(item ? `Archived "${item.name}" (Drive upload still available)` : 'Archived completed batch', 'info');
+  if (completedPanelOpen) await renderCompletedPanel();
 }
 
 // ── PENDING PREVIEW ─────────────────────────────────────────────────
+async function clearCompletedArchive() {
+  const records = getMergedCompletedRecords();
+  if (!records.length) {
+    toast('No completed archive to clear', 'info');
+    return;
+  }
+
+  const ok = window.confirm(`Remove ${records.length} completed batch${records.length > 1 ? 'es' : ''} from the archive? This hides old completed cards, but does not delete files from Google Drive.`);
+  if (!ok) return;
+
+  const ids = records.map(record => Number(record.item.id)).filter(Number.isFinite);
+  const idSet = new Set(ids);
+
+  saveCompletedArchive([]);
+  vpsCompletedArchive = [];
+  await clearCompletedBatchesFromVps(ids);
+  await Promise.all(ids.map(id => archiveQueueItemInSupabase(id)));
+
+  queue = queue.filter(q => !idSet.has(Number(q.id)));
+  document.querySelectorAll('[id^="bc-"], [id^="hc-"]').forEach(card => {
+    const id = Number(card.id.slice(3));
+    if (idSet.has(id)) card.remove();
+  });
+
+  const batchSection = document.getElementById('batch-section');
+  if (batchSection && !batchSection.querySelector('[id^="bc-"]')) {
+    batchSection.remove();
+  }
+
+  renderQueue();
+  updateCost();
+  checkReady();
+  await saveState();
+  await renderCompletedPanel();
+  toast('Completed archive cleared', 'success');
+}
+
 function renderPendingList() {
   if (!pendingItems.length) {
     pendingArea.style.display = 'none';

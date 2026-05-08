@@ -237,10 +237,26 @@ export default async function handler(req, res) {
       }
     }
 
-    // Create waiting render result rows for all 4 views
+    const { data: existingResults, error: existingResultsError } = await supabase
+      .from(RESULTS_TABLE)
+      .select('queue_item_id, view_id, status, image_url')
+      .in('queue_item_id', itemIds);
+
+    if (existingResultsError) throw existingResultsError;
+
+    const completedViews = new Set(
+      (existingResults || [])
+        .filter(row => row.status === 'done' && row.image_url)
+        .map(row => `${row.queue_item_id}:${row.view_id}`)
+    );
+
+    // Create waiting render result rows only for views that still need work.
+    // This keeps "Retry failed" from wiping successful images and regenerating
+    // the whole batch.
     const resultRows = [];
     for (const item of items) {
       for (const view of VIEWS) {
+        if (completedViews.has(`${item.id}:${view.id}`)) continue;
         resultRows.push({
           queue_item_id: item.id,
           view_id: view.id,
@@ -258,11 +274,13 @@ export default async function handler(req, res) {
       }
     }
 
-    const { error: upsertError } = await supabase
-      .from(RESULTS_TABLE)
-      .upsert(resultRows, { onConflict: 'queue_item_id,view_id' });
+    if (resultRows.length > 0) {
+      const { error: upsertError } = await supabase
+        .from(RESULTS_TABLE)
+        .upsert(resultRows, { onConflict: 'queue_item_id,view_id' });
 
-    if (upsertError) throw upsertError;
+      if (upsertError) throw upsertError;
+    }
 
     console.log(`[SUBMIT] Queued ${items.length} item(s) for ${activeProvider} processing`);
 
