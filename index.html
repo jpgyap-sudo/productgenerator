@@ -4179,7 +4179,7 @@ function createCompletedHistoryCard(item, viewResults = [], source = 'archive') 
         <div class="bslot-label">Img ${v.id} — ${v.label}${providerBadge}</div>
         <div class="bslot-actions">
           <button class="btn-dl1" type="button" data-url="${r.imageUrl}" data-name="${item.name}_img${v.id}">⬇ Download</button>
-          <button class="btn-rerender-view" type="button" data-item-id="${item.id}" data-view-id="${v.id}" title="Re-render this view with Gemini Flash">↻ Gemini</button>
+          <button class="btn-rerender-view" type="button" data-item-id="${item.id}" data-view-id="${v.id}" title="Re-render this view with Gemini Flash">↻ Re-render</button>
         </div>`;
       slot.querySelector('img').addEventListener('click', () => openLightbox(r.imageUrl));
       slot.querySelector('.btn-dl1').addEventListener('click', e => {
@@ -4193,7 +4193,7 @@ function createCompletedHistoryCard(item, viewResults = [], source = 'archive') 
         <div style="min-height:90px;display:flex;align-items:center;justify-content:center;"><span style="font-size:10px;color:var(--text-dim);">${r?.errorMessage ? escHtml(r.errorMessage) : 'No stored image URL'}</span></div>
         <div class="bslot-label">Img ${v.id} — ${v.label}${providerBadge}</div>
         <div class="bslot-actions">
-          <button class="btn-rerender-view" type="button" data-item-id="${item.id}" data-view-id="${v.id}" title="Re-render this view with Gemini Flash">↻ Gemini</button>
+          <button class="btn-rerender-view" type="button" data-item-id="${item.id}" data-view-id="${v.id}" title="Re-render this view with Gemini Flash">↻ Re-render</button>
         </div>`;
       slot.querySelector('.btn-rerender-view').addEventListener('click', e => {
         rerenderHistoryView(e.currentTarget, item.id, v.id, slot);
@@ -4288,11 +4288,11 @@ async function rerenderHistoryView(btn, itemId, viewId, slot) {
       }
     }
 
-    btn.textContent = '↻ Gemini';
+    btn.textContent = '↻ Re-render';
     btn.disabled = false;
     toast(`View ${viewId} re-rendered with Gemini Flash`, 'success');
   } catch (err) {
-    btn.textContent = '↻ Gemini';
+    btn.textContent = '↻ Re-render';
     btn.disabled = false;
     toast(`Re-render failed: ${formatError(err)}`, 'error');
   }
@@ -6886,6 +6886,13 @@ function createBatchCardFromUrls(item, viewResults) {
       <div class="batch-info">
         <h3>${escHtml(item.name)}</h3>
         <p>${escHtml(getBatchApiText(item))}</p>
+        <p style="font-size:11px;color:var(--text-secondary);">${(() => {
+          const rawTs = item.updatedAt || viewResults.map(r => r.completedAt).filter(Boolean).sort().pop() || null;
+          const ts = rawTs ? new Date(rawTs) : null;
+          const dateStr = ts && !isNaN(ts) ? ts.toLocaleDateString('en-SG', { year:'numeric', month:'short', day:'numeric' }) : '';
+          const timeStr = ts && !isNaN(ts) ? ts.toLocaleTimeString('en-SG', { hour:'2-digit', minute:'2-digit', hour12:false }) : '';
+          return dateStr ? `${dateStr} · ${timeStr}` : '';
+        })()}</p>
         <p>${doneCount} of 4 renders completed</p>
       </div>
       <div class="batch-actions">
@@ -6912,16 +6919,30 @@ function createBatchCardFromUrls(item, viewResults) {
     slot.className = 'bslot';
     if (r && r.status === 'done' && r.imageUrl) {
       slot.innerHTML = `
-        <img src="${r.imageUrl}" alt="${v.label}" onclick="openLightbox('${r.imageUrl}')"/>
+        <img src="${r.imageUrl}" alt="${v.label}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"/>
+        <div style="display:none;min-height:90px;align-items:center;justify-content:center;font-size:10px;color:var(--text-dim);">Image unavailable</div>
         <div class="bslot-label">Img ${v.id} — ${v.label}</div>
-        <button class="btn-dl1" data-url="${r.imageUrl}" data-name="${item.name}_img${v.id}">⬇ Download</button>`;
+        <div class="bslot-actions">
+          <button class="btn-dl1" type="button" data-url="${r.imageUrl}" data-name="${item.name}_img${v.id}">⬇ Download</button>
+          <button class="btn-rerender-view" type="button" data-item-id="${item.id}" data-view-id="${v.id}" title="Re-render this view with Gemini Flash">↻ Re-render</button>
+        </div>`;
+      slot.querySelector('img').addEventListener('click', () => openLightbox(r.imageUrl));
       slot.querySelector('.btn-dl1').addEventListener('click', function() {
         dlOneUrl(this.dataset.url, this.dataset.name);
+      });
+      slot.querySelector('.btn-rerender-view').addEventListener('click', e => {
+        rerenderHistoryView(e.currentTarget, item.id, v.id, slot);
       });
     } else {
       slot.innerHTML = `
         <div style="min-height:90px;display:flex;align-items:center;justify-content:center;"><span style="font-size:10px;color:var(--text-dim);">${r && r.errorMessage ? escHtml(r.errorMessage) : 'Not generated'}</span></div>
-        <div class="bslot-label">Img ${v.id} — ${v.label}</div>`;
+        <div class="bslot-label">Img ${v.id} — ${v.label}</div>
+        <div class="bslot-actions">
+          <button class="btn-rerender-view" type="button" data-item-id="${item.id}" data-view-id="${v.id}" title="Re-render this view with Gemini Flash">↻ Re-render</button>
+        </div>`;
+      slot.querySelector('.btn-rerender-view').addEventListener('click', e => {
+        rerenderHistoryView(e.currentTarget, item.id, v.id, slot);
+      });
     }
     grid.appendChild(slot);
   });
