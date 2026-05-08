@@ -19,6 +19,7 @@ import { VIEWS } from './lib/fal.js';
 import { generateGeminiView } from './lib/gemini.js';
 import { generateOpenAIView } from './lib/openai.js';
 import { generateStabilityView } from './lib/stability.js';
+import { generateWithFallback } from './lib/render-with-fallback.js';
 import { uploadRendersToDrive, getNextFolderCounter, getNextFolderCounterFallback, isSupabaseConnectionError } from './lib/drive.js';
 import {
   VPS_ASSET_ROOT,
@@ -436,11 +437,14 @@ async function processItem(itemId, provider = 'openai') {
     // retry flows so successful renders are not charged/regenerated again.
     const isStability = provider.startsWith('stability');
     const isGemini = provider === 'gemini';
+    const isMiniGemini = provider === 'openai-mini';
     const generateFn = isStability
       ? generateStabilityView
       : isGemini
         ? generateGeminiView
-        : generateOpenAIView;
+        : isMiniGemini
+          ? generateWithFallback
+          : generateOpenAIView;
     const brand = item.brand || '';
     // Pass the provider string as options.provider so the generate function can
     // resolve the model (e.g., 'openai-cheap' → dall-e-2, 'stability-cheap' → sdxl-turbo)
@@ -568,7 +572,9 @@ async function processItem(itemId, provider = 'openai') {
             provider,
             apiModel: provider === 'gemini'
               ? 'gemini-3.1-flash-image-preview / gemini-3-pro-image-preview'
-              : process.env.OPENAI_IMAGE_MODEL || 'gpt-image-1-mini',
+              : provider === 'openai-mini'
+                ? 'gpt-image-1-mini + Gemini Flash fallback'
+                : process.env.OPENAI_IMAGE_MODEL || 'gpt-image-1-mini',
             updatedAt: new Date().toISOString(),
             driveFolderId: item.drive_folder_id || '',
             driveFolderName: item.drive_folder_name || '',
