@@ -5,10 +5,8 @@
 //  2. Saving results to Supabase (render_results table + storage)
 //  3. Updating queue item status
 //
-//  PROVIDER SUPPORT: Supports 'fal' (default), 'gemini', and 'openai'.
-//  - fal: Uses fal.ai queue-based API with webhook support
-//  - gemini: Uses Google Gemini API directly (synchronous, no queue)
-//  - openai: Uses OpenAI GPT Image 2 API directly (synchronous, no queue)
+//  PROVIDER SUPPORT: Defaults to 'openai-mini' (GPT-image-1-mini + Gemini QA/fix).
+//  Legacy 'fal', 'gemini', and 'openai' modes remain for old/manual jobs.
 // ═══════════════════════════════════════════════════════════════════
 import { supabase, QUEUE_TABLE, RESULTS_TABLE, BUCKET_NAME } from '../lib/supabase.js';
 import { generateView, VIEWS } from '../lib/fal.js';
@@ -41,7 +39,7 @@ export default async function handler(req) {
     const url = new URL(req.url, `https://${req.headers.get('host') || 'localhost'}`);
     const idsParam = url.searchParams.get('ids');
     const resolution = url.searchParams.get('res') || '1K';
-    const provider = url.searchParams.get('provider') || 'fal';
+    const provider = url.searchParams.get('provider') || 'openai-mini';
 
     if (!idsParam) {
       return new Response(JSON.stringify({ error: 'ids parameter required' }), {
@@ -87,9 +85,9 @@ export default async function handler(req) {
  *
  * @param {number} itemId - Queue item ID
  * @param {string} resolution - Resolution setting (e.g., '1K')
- * @param {string} provider - AI provider to use: 'fal' (default) or 'gemini'
+ * @param {string} provider - AI provider to use; defaults to 'openai-mini'
  */
-async function processItem(itemId, resolution, provider = 'fal') {
+async function processItem(itemId, resolution, provider = 'openai-mini') {
   const now = new Date().toISOString();
 
   // Fetch the item
@@ -127,7 +125,8 @@ async function processItem(itemId, resolution, provider = 'fal') {
 
     // Step 2: Generate all 4 views in parallel
     // Provider selection:
-    //   - 'fal' (default): Uses fal.ai queue-based API with webhook support.
+    //   - 'openai-mini' (default): GPT-image-1-mini with Gemini QA/fix fallback.
+    //   - 'fal': Legacy fal.ai queue-based API with webhook support.
     //     Returns fal.ai CDN URLs directly — no redundant download/upload.
     //   - 'gemini': Uses Google Gemini API directly (synchronous).
     //     Returns Supabase storage URLs (Gemini returns inline base64 images).
@@ -165,14 +164,14 @@ async function processItem(itemId, resolution, provider = 'fal') {
           //   Supabase storage for redundancy, then store the Supabase URL.
           // gemini: generateGeminiView() already uploads to Supabase storage
           //   and returns the public URL directly. No mirroring needed.
-          // openai: generateOpenAIView() already uploads to Supabase storage
+          // openai/openai-mini: generate functions already upload to Supabase storage
           //   and returns the public URL directly. No mirroring needed.
           let publicUrl = cdnUrl;
 
           // Only mirror to Supabase for fal.ai results (Gemini and OpenAI
           // results are already stored in Supabase by their respective
           // generate functions)
-          if (provider !== 'gemini' && provider !== 'openai') {
+          if (provider === 'fal') {
             try {
               const imgRes = await fetch(cdnUrl);
               if (imgRes.ok) {

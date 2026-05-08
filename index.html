@@ -2998,7 +2998,7 @@ border-top: 1px solid var(--border-light);
 
       <div class="block">
         <div class="setting-head">
-          <span class="lbl">Resolution — Nano Banana 2</span>
+          <span class="lbl">Resolution - ChatGPT Mini</span>
           <button class="setting-edit-btn" id="resolutionEditBtn" type="button">Edit</button>
         </div>
         <div class="q-btns">
@@ -7919,8 +7919,8 @@ async function retryItemFromHistory(id) {
 }
 
 // ── CLIENT-SIDE FAL.AI API ─────────────────────────────────────────
-// Direct fal.ai API calls from the browser (fallback when server endpoints are unavailable).
-// Uses the same fal.ai queue-based API as the server-side worker.
+// Legacy direct browser render path. The live queue uses the server-side
+// ChatGPT Mini pipeline; this remains only for old local/manual flows.
 
 const FAL_BASE = 'https://queue.fal.run';
 
@@ -7932,20 +7932,6 @@ const CLIENT_VIEW_PROMPTS = [
 ];
 
 const CLIENT_ATTEMPTS = [
-  {
-    label: 'Nano Banana 2 Edit',
-    url: () => `${FAL_BASE}/fal-ai/nano-banana-2/edit`,
-    body: (view, prompt, imageDataUrl, resolution) => ({
-      prompt,
-      image_urls: [imageDataUrl],
-      resolution: resolution || '1K',
-      aspect_ratio: view.id === 4 ? '16:9' : '1:1',
-      output_format: 'jpeg',
-      num_images: 1,
-      safety_tolerance: '4',
-      limit_generations: true
-    })
-  },
   {
     label: 'GPT Image 2 Edit',
     url: () => `${FAL_BASE}/openai/gpt-image-2/edit`,

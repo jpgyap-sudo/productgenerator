@@ -118,6 +118,7 @@ export default async function handler(req, res) {
 }
 
 function getBatchApiModel(provider) {
+  if (provider === 'openai-mini') return 'gpt-image-1-mini + Gemini Flash fallback';
   if (provider === 'openai') return OPENAI_IMAGE_MODEL;
   if (provider === 'gemini') return 'gemini-3.1-flash-image-preview / gemini-3-pro-image-preview';
   return '';
@@ -125,7 +126,7 @@ function getBatchApiModel(provider) {
 
 function inferQueueProvider(item = {}) {
   const provider = String(item.provider || '').toLowerCase();
-  if (provider === 'openai' || provider === 'gemini' || provider === 'fal') return provider;
+  if (provider === 'openai-mini' || provider === 'openai' || provider === 'gemini' || provider === 'fal') return provider;
 
   const text = [
     item.sub_text,
@@ -134,6 +135,7 @@ function inferQueueProvider(item = {}) {
   ].filter(Boolean).join(' ').toLowerCase();
 
   if (text.includes('gemini')) return 'gemini';
+  if (text.includes('mini + flash') || text.includes('gpt-image-1-mini')) return 'openai-mini';
   if (text.includes('openai') || text.includes('gpt-image') || text.includes('gpt image')) return 'openai';
   if (text.includes('fal')) return 'fal';
   return '';

@@ -1,6 +1,6 @@
 d# Product Image Studio
 
-AI-powered product photography studio — generates 5 professional views (front, side, isometric, back, interior scene) from a single product image using [fal.ai](https://fal.ai) Nano Banana 2 model.
+AI-powered product photography studio — generates professional product views from a single product image using the GPT-image-1-mini + Gemini QA/fix pipeline.
 
 ## Features
 
@@ -59,7 +59,7 @@ If you don't set the environment variable, the API key input field will be avail
 ## Tech Stack
 
 - Vanilla JavaScript (no framework)
-- [fal.ai](https://fal.ai) Nano Banana 2 API for AI image generation
+- GPT-image-1-mini for primary image generation, with Gemini QA/fix fallback
 - [JSZip](https://stuk.github.io/jszip/) for ZIP downloads
 - Vercel for hosting
 - [Supabase](https://supabase.com) for cloud persistence (optional)
