@@ -248,6 +248,15 @@ body {
   display: grid;
   grid-template-columns: var(--sidebar-w) 1fr;
   height: calc(100vh - 52px);
+  transition: grid-template-columns 0.25s ease;
+}
+/* When a detail panel is open, hide sidebar for full-screen view */
+.layout.panel-open {
+  grid-template-columns: 0 1fr;
+}
+.layout.panel-open .sidebar {
+  overflow: hidden;
+  border-right: none;
 }
 @media (max-width: 1280px) {
   :root { --sidebar-w: 260px; }
@@ -5432,6 +5441,17 @@ let crPage = 1;
 let crPerPage = 10;
 let crFiltered = [];
 let crSelectedBatchId = null;
+let suppressRouteUpdate = false;
+
+function isCompleteBatchPath() {
+  return window.location.pathname.replace(/\/+$/, '').toLowerCase() === '/completebatch';
+}
+
+function setAppPath(path) {
+  if (suppressRouteUpdate || !window.history?.pushState) return;
+  if (window.location.pathname === path) return;
+  window.history.pushState({}, '', path);
+}
 
 function getCrElements() {
   return {
@@ -5786,7 +5806,58 @@ queueLogToggle.addEventListener('click', () => {
 
 queueLogClear.addEventListener('click', clearQueueLog);
 
+async function showCompletedPanel() {
+  completedPanelOpen = true;
+  completedToggle.classList.add('active');
+
+  // Hide all other panels first to prevent layout conflicts
+  hideWorkspacePanels();
+  featurePanel.style.display = 'none';
+  document.getElementById('aboutPanel').style.display = 'none';
+  queueLogPanel.style.display = 'none';
+  logPanel.style.display = 'none';
+  monitorPanel.style.display = 'none';
+  featureToggle.classList.remove('active');
+  if (aboutToggle) aboutToggle.classList.remove('active');
+  monitorToggle?.classList.remove('active');
+  featurePanelOpen = false;
+  aboutPanelOpen = false;
+  monitorPanelOpen = false;
+  if (monitorInterval) { clearInterval(monitorInterval); monitorInterval = null; }
+
+  completedPanel.style.display = 'block';
+  welcomeState.style.display = 'none';
+  setAppPath('/completebatch');
+
+  try {
+    await initCompletedRenders();
+  } catch (err) {
+    console.error('Failed to load completed renders:', err);
+    const el = getCrElements();
+    if (el && el.content) {
+      el.content.innerHTML = '<div class="cr-empty">Error loading completed batches. <button onclick="initCompletedRenders()" style="background:var(--accent);color:#fff;border:none;border-radius:4px;padding:4px 12px;cursor:pointer;margin-left:8px;">Retry</button></div>';
+    }
+  }
+}
+
+function hideCompletedPanel() {
+  completedPanelOpen = false;
+  completedToggle.classList.remove('active');
+  completedPanel.style.display = 'none';
+  if (!document.getElementById('active-section')) {
+    welcomeState.style.display = 'flex';
+  }
+  setAppPath('/');
+}
+
 completedToggle.addEventListener('click', async () => {
+  if (completedPanelOpen) {
+    hideCompletedPanel();
+    return;
+  }
+  await showCompletedPanel();
+  return;
+
   completedPanelOpen = !completedPanelOpen;
   completedToggle.classList.toggle('active', completedPanelOpen);
 
@@ -10056,7 +10127,23 @@ window.addEventListener('beforeunload', function(e) {
   restoreQueuedPreviewCard();
   initUploadAgent();
   initBatchProcessor();
+  if (isCompleteBatchPath()) {
+    await showCompletedPanel();
+  }
 })();
+
+window.addEventListener('popstate', async () => {
+  suppressRouteUpdate = true;
+  try {
+    if (isCompleteBatchPath()) {
+      await showCompletedPanel();
+    } else if (completedPanelOpen) {
+      hideCompletedPanel();
+    }
+  } finally {
+    suppressRouteUpdate = false;
+  }
+});
 
 // ══════════════════════════════════════════════════════════════════
 //  UPLOAD AGENT — PDF+ZIP auto-extraction with DeepSeek AI

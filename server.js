@@ -345,6 +345,9 @@ app.get('/favicon.ico', (req, res) => {
 app.use('/vps-assets', express.static(VPS_ASSET_ROOT, {
   maxAge: '5m'
 }));
+app.get('/completebatch', (req, res) => {
+  res.sendFile('index.html', { root: process.cwd() });
+});
 app.use(express.static('.'));
 
 // ═══════════════════════════════════════════════════════════════════
