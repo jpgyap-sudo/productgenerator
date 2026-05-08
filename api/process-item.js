@@ -145,6 +145,7 @@ async function processItem(itemId, resolution, provider = 'fal') {
     // Step 3: Save results
     let successCount = 0;
     let failCount = 0;
+    const viewProviders = {};
 
     for (let i = 0; i < VIEWS.length; i++) {
       const view = VIEWS[i];
@@ -154,6 +155,7 @@ async function processItem(itemId, resolution, provider = 'fal') {
         // Success only counts after the image URL is persisted.
         try {
           const cdnUrl = result.value.cdnUrl;
+          const providerUsed = result.value.providerUsed || null;
           if (!cdnUrl) {
             throw new Error('Generator returned no image URL');
           }
@@ -202,19 +204,34 @@ async function processItem(itemId, resolution, provider = 'fal') {
           publicUrl = stored.publicUrl;
 
           // Update render_results row
-          const { error: saveError } = await supabase
+          const updatePayload = {
+            status: 'done',
+            image_url: publicUrl,
+            error_message: '',
+            completed_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          };
+          if (providerUsed) updatePayload.provider_used = providerUsed;
+
+          let { error: saveError } = await supabase
             .from(RESULTS_TABLE)
-            .update({
-              status: 'done',
-              image_url: publicUrl,
-              error_message: '',
-              completed_at: new Date().toISOString(),
-              updated_at: new Date().toISOString()
-            })
+            .update(updatePayload)
             .eq('queue_item_id', itemId)
             .eq('view_id', view.id);
 
+          // Retry without provider_used if column doesn't exist yet
+          if (saveError && isMissingColumnError(saveError)) {
+            const { provider_used: _pu, ...safePayload } = updatePayload;
+            const { error: retryErr } = await supabase
+              .from(RESULTS_TABLE)
+              .update(safePayload)
+              .eq('queue_item_id', itemId)
+              .eq('view_id', view.id);
+            saveError = retryErr;
+          }
+
           if (saveError) throw saveError;
+          if (providerUsed) viewProviders[view.id] = providerUsed;
           successCount++;
         } catch (saveErr) {
           console.error(`Failed to save result for item ${itemId} view ${view.id}:`, saveErr);
@@ -295,7 +312,8 @@ async function processItem(itemId, resolution, provider = 'fal') {
               status: row.status,
               imageUrl: row.image_url,
               errorMessage: row.error_message || null,
-              completedAt: row.completed_at || null
+              completedAt: row.completed_at || null,
+              providerUsed: row.provider_used || viewProviders[row.view_id] || null
             }))
           });
         } catch (storeErr) {

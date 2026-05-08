@@ -100,28 +100,37 @@ export default async function handler(req, res) {
         .filter(img => !usedIndices.has(img.imageIndex));
 
       if (availableImages.length > 0) {
-        // Run visual search for each unmatched product sequentially (to avoid rate limits)
-        for (const um of unmatchedProducts) {
-          try {
-            const visualResult = await visualSearchMatch(um.product, availableImages);
-            if (visualResult && visualResult.matchedImage) {
-              // Update the match with the visual search result
-              um.matchedImage = visualResult.matchedImage;
-              um.score = visualResult.score;
-              um.matchType = 'visual-search';
-              um.verification = visualResult.verification;
+        // Process visual search in batches of 3 (concurrent within each batch)
+        // to speed things up while avoiding rate limits
+        const VS_BATCH_SIZE = 3;
+        for (let i = 0; i < unmatchedProducts.length; i += VS_BATCH_SIZE) {
+          const batch = unmatchedProducts.slice(i, i + VS_BATCH_SIZE);
+          const results = await Promise.allSettled(
+            batch.map(async (um) => {
+              try {
+                const visualResult = await visualSearchMatch(um.product, availableImages);
+                if (visualResult && visualResult.matchedImage) {
+                  // Update the match with the visual search result
+                  um.matchedImage = visualResult.matchedImage;
+                  um.score = visualResult.score;
+                  um.matchType = 'visual-search';
+                  um.verification = visualResult.verification;
 
-              // Remove the used image from available pool
-              const usedIdx = availableImages.findIndex(
-                img => img.imageIndex === visualResult.matchedImage.imageIndex
-              );
-              if (usedIdx !== -1) availableImages.splice(usedIdx, 1);
+                  // Remove the used image from available pool
+                  const usedIdx = availableImages.findIndex(
+                    img => img.imageIndex === visualResult.matchedImage.imageIndex
+                  );
+                  if (usedIdx !== -1) availableImages.splice(usedIdx, 1);
 
-              console.log(`[MATCH] Visual search found match for "${um.product.name}" (score: ${visualResult.score})`);
-            }
-          } catch (vsErr) {
-            console.error(`[MATCH] Visual search error for "${um.product.name}": ${vsErr.message}`);
-          }
+                  console.log(`[MATCH] Visual search found match for "${um.product.name}" (score: ${visualResult.score})`);
+                }
+              } catch (vsErr) {
+                console.error(`[MATCH] Visual search error for "${um.product.name}": ${vsErr.message}`);
+              }
+            })
+          );
+          const succeeded = results.filter(r => r.status === 'fulfilled').length;
+          console.log(`[MATCH] Visual search batch ${Math.floor(i/VS_BATCH_SIZE)+1}: ${succeeded}/${batch.length} processed`);
         }
       } else {
         console.log('[MATCH] No available images for visual search fallback');

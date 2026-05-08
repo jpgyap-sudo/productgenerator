@@ -40,6 +40,7 @@ import agentProcessHandler from './api/agent/process.js';
 import agentMatchHandler from './api/agent/match.js';
 import agentSubmitHandler from './api/agent/submit.js';
 import monitorHandler from './api/monitor.js';
+import rerenderViewHandler from './api/queue/rerender-view.js';
 
 const PORT = process.env.PORT || 3000;
 const POLL_INTERVAL_MS = 5000; // Check for new jobs every 5 seconds
@@ -180,6 +181,15 @@ app.post('/api/agent/submit', async (req, res) => {
     if (!res.headersSent) res.json(result);
   } catch (err) {
     console.error('[AGENT-SUBMIT] Error:', err);
+    if (!res.headersSent) res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/queue/rerender-view', async (req, res) => {
+  try {
+    await rerenderViewHandler(req, res);
+  } catch (err) {
+    console.error('[RERENDER-VIEW] Error:', err);
     if (!res.headersSent) res.status(500).json({ error: err.message });
   }
 });

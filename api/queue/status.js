@@ -311,7 +311,8 @@ function groupResults(rows) {
       imageUrl: row.image_url || null,
       errorMessage: row.error_message || null,
       startedAt: row.started_at,
-      completedAt: row.completed_at
+      completedAt: row.completed_at,
+      providerUsed: row.provider_used || null
     });
   }
   return grouped;

@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+t<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8"/>
@@ -975,7 +975,41 @@ textarea:focus { outline: none; border-color: var(--text-secondary); }
   font-size: 9px; color: var(--text-secondary);
   padding: 3px 6px; background: var(--surface-2);
   border-top: 1px solid var(--border-light); text-align: center;
+  display: flex; align-items: center; justify-content: center; gap: 4px; flex-wrap: wrap;
 }
+.bslot-provider {
+  display: inline-block; font-size: 8px; font-weight: 600; letter-spacing: 0.3px;
+  padding: 1px 4px; border-radius: 3px; line-height: 1.4;
+}
+.bslot-provider-mini { background: #e8f0ff; color: #2563eb; }
+.bslot-provider-gemini { background: #fef3e2; color: #b45309; }
+.bslot-info {
+  display: flex; flex-direction: column;
+  padding: 8px 10px; justify-content: flex-start;
+  min-height: 120px;
+}
+.bslot-info-title {
+  font-size: 9px; font-weight: 700; color: var(--text-secondary);
+  text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;
+}
+.bslot-info-rows { display: flex; flex-direction: column; gap: 4px; }
+.bslot-info-row {
+  display: flex; align-items: center; gap: 4px; font-size: 9px;
+}
+.bslot-info-img { color: var(--text-dim); min-width: 26px; flex-shrink: 0; }
+.bslot-info-view { color: var(--text-secondary); flex: 1; }
+.bslot-actions {
+  display: flex; gap: 3px; padding: 3px 4px;
+  background: var(--surface-2); border-top: 1px solid var(--border-light);
+}
+.bslot-actions .btn-dl1 { flex: 1; display: inline-block; border-top: none; }
+.btn-rerender-view {
+  flex: 1; font-size: 9px; padding: 3px 5px; border-radius: 4px; cursor: pointer;
+  background: #fef3e2; color: #b45309; border: 1px solid #f6c96b;
+  font-weight: 600; transition: opacity 0.15s;
+}
+.btn-rerender-view:hover { opacity: 0.8; }
+.btn-rerender-view:disabled { opacity: 0.45; cursor: not-allowed; }
 .btn-dl1 {
   display: block; font-size: 10px; padding: 4px 8px;
   background: var(--surface-2); border-top: 1px solid var(--border-light);
@@ -3438,7 +3472,8 @@ function archiveCompletedItem(item, viewResults = []) {
       status: r.status,
       imageUrl: r.imageUrl || null,
       errorMessage: r.errorMessage || null,
-      completedAt: r.completedAt || null
+      completedAt: r.completedAt || null,
+      providerUsed: r.providerUsed || null
     }))
   };
   archive.unshift(entry);
@@ -3709,32 +3744,148 @@ function createCompletedHistoryCard(item, viewResults = [], source = 'archive') 
   `;
 
   const grid = card.querySelector(`#hgrid-${item.id}`);
+  const modelRows = [];
   VIEWS.forEach(v => {
     const r = viewResults.find(row => Number(row.viewId) === Number(v.id));
     const slot = document.createElement('div');
     slot.className = 'bslot';
+
+    // Derive display label for which model generated this view
+    const resolvedProvider = r?.providerUsed
+      || (item.provider === 'openai-mini' && v.id === 4 ? 'gemini-flash' : null);
+    const modelLabel = resolvedProvider === 'gemini-flash' ? 'Gemini Flash'
+      : resolvedProvider === 'gpt-image-1-mini' ? 'GPT-mini'
+      : null;
+    modelRows.push({ viewId: v.id, label: v.label, modelLabel });
+
+    const providerBadge = modelLabel
+      ? `<span class="bslot-provider ${resolvedProvider === 'gemini-flash' ? 'bslot-provider-gemini' : 'bslot-provider-mini'}">${escHtml(modelLabel)}</span>`
+      : '';
+
     if (r?.status === 'done' && r.imageUrl) {
       slot.innerHTML = `
-        <img src="${r.imageUrl}" alt="${v.label}"/>
-        <div class="bslot-label">Img ${v.id} — ${v.label}</div>
-        <button class="btn-dl1" type="button" data-url="${r.imageUrl}" data-name="${item.name}_img${v.id}">⬇ Download</button>`;
+        <img src="${r.imageUrl}" alt="${v.label}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"/>
+        <div style="display:none;min-height:90px;align-items:center;justify-content:center;font-size:10px;color:var(--text-dim);">Image unavailable</div>
+        <div class="bslot-label">Img ${v.id} — ${v.label}${providerBadge}</div>
+        <div class="bslot-actions">
+          <button class="btn-dl1" type="button" data-url="${r.imageUrl}" data-name="${item.name}_img${v.id}">⬇ Download</button>
+          <button class="btn-rerender-view" type="button" data-item-id="${item.id}" data-view-id="${v.id}" title="Re-render this view with Gemini Flash">↻ Gemini</button>
+        </div>`;
       slot.querySelector('img').addEventListener('click', () => openLightbox(r.imageUrl));
       slot.querySelector('.btn-dl1').addEventListener('click', e => {
         dlOneUrl(e.currentTarget.dataset.url, e.currentTarget.dataset.name);
       });
+      slot.querySelector('.btn-rerender-view').addEventListener('click', e => {
+        rerenderHistoryView(e.currentTarget, item.id, v.id, slot);
+      });
     } else {
       slot.innerHTML = `
         <div style="min-height:90px;display:flex;align-items:center;justify-content:center;"><span style="font-size:10px;color:var(--text-dim);">${r?.errorMessage ? escHtml(r.errorMessage) : 'No stored image URL'}</span></div>
-        <div class="bslot-label">Img ${v.id} — ${v.label}</div>`;
+        <div class="bslot-label">Img ${v.id} — ${v.label}${providerBadge}</div>
+        <div class="bslot-actions">
+          <button class="btn-rerender-view" type="button" data-item-id="${item.id}" data-view-id="${v.id}" title="Re-render this view with Gemini Flash">↻ Gemini</button>
+        </div>`;
+      slot.querySelector('.btn-rerender-view').addEventListener('click', e => {
+        rerenderHistoryView(e.currentTarget, item.id, v.id, slot);
+      });
     }
     grid.appendChild(slot);
   });
+
+  // Summary slot: shows per-view model info if any model data is available
+  const hasModelData = modelRows.some(r => r.modelLabel);
+  if (hasModelData) {
+    const infoSlot = document.createElement('div');
+    infoSlot.className = 'bslot bslot-info';
+    infoSlot.innerHTML = `
+      <div class="bslot-info-title">Models used</div>
+      <div class="bslot-info-rows">
+        ${modelRows.map(r => `
+          <div class="bslot-info-row">
+            <span class="bslot-info-img">Img ${r.viewId}</span>
+            <span class="bslot-info-view">${escHtml(r.label)}</span>
+            ${r.modelLabel
+              ? `<span class="bslot-provider ${r.modelLabel === 'Gemini Flash' ? 'bslot-provider-gemini' : 'bslot-provider-mini'}">${escHtml(r.modelLabel)}</span>`
+              : '<span style="color:var(--text-dim);font-size:9px;">—</span>'}
+          </div>`).join('')}
+      </div>`;
+    grid.appendChild(infoSlot);
+  }
 
   card.querySelector(`#hzip-${item.id}`)?.addEventListener('click', e => downloadHistoryZip(item.id, item.name || `Item_${item.id}`, viewResults, e.currentTarget));
   card.querySelector(`#hregen-${item.id}`)?.addEventListener('click', () => retryItemFromHistory(item.id));
   card.querySelector(`#hdel-${item.id}`)?.addEventListener('click', () => deleteCompletedBatch(item.id));
   card.querySelector(`#hdrive-${item.id}`)?.addEventListener('click', () => uploadBatchToDrive(item.id));
   return card;
+}
+
+async function rerenderHistoryView(btn, itemId, viewId, slot) {
+  btn.disabled = true;
+  btn.textContent = 'Rendering...';
+
+  try {
+    const res = await fetchApi('/api/queue/rerender-view', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ itemId, viewId, provider: 'gemini' })
+    });
+
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+
+    const { imageUrl, providerUsed } = data;
+
+    // Update the image in the slot
+    const img = slot.querySelector('img');
+    const unavailableDiv = img?.nextElementSibling;
+    if (img) {
+      img.src = imageUrl;
+      img.style.display = '';
+      if (unavailableDiv) unavailableDiv.style.display = 'none';
+      img.onclick = () => openLightbox(imageUrl);
+    } else {
+      // Slot had no image before — replace placeholder with img
+      const placeholder = slot.querySelector('div[style*="min-height"]');
+      if (placeholder) {
+        const newImg = document.createElement('img');
+        newImg.src = imageUrl;
+        newImg.alt = `View ${viewId}`;
+        newImg.style.width = '100%';
+        newImg.addEventListener('click', () => openLightbox(imageUrl));
+        slot.insertBefore(newImg, placeholder);
+        placeholder.remove();
+      }
+    }
+
+    // Update download button URL
+    const dlBtn = slot.querySelector('.btn-dl1');
+    if (dlBtn) dlBtn.dataset.url = imageUrl;
+
+    // Update the provider badge in the label
+    const label = slot.querySelector('.bslot-label');
+    if (label) {
+      const badgeClass = providerUsed === 'gemini-flash' ? 'bslot-provider-gemini' : 'bslot-provider-mini';
+      const badgeText = providerUsed === 'gemini-flash' ? 'Gemini Flash' : 'GPT-mini';
+      const existing = label.querySelector('.bslot-provider');
+      if (existing) {
+        existing.className = `bslot-provider ${badgeClass}`;
+        existing.textContent = badgeText;
+      } else {
+        const badge = document.createElement('span');
+        badge.className = `bslot-provider ${badgeClass}`;
+        badge.textContent = badgeText;
+        label.appendChild(badge);
+      }
+    }
+
+    btn.textContent = '↻ Gemini';
+    btn.disabled = false;
+    toast(`View ${viewId} re-rendered with Gemini Flash`, 'success');
+  } catch (err) {
+    btn.textContent = '↻ Gemini';
+    btn.disabled = false;
+    toast(`Re-render failed: ${formatError(err)}`, 'error');
+  }
 }
 
 async function downloadRenderZipFromServer(itemId, name, viewResults, btn = null) {
