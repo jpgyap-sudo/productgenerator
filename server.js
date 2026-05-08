@@ -36,6 +36,7 @@ import uploadDriveHandler from './api/queue/upload-drive.js';
 import saveStateHandler from './api/queue/save-state.js';
 import webhookHandler from './api/fal-webhook.js';
 import agentProcessHandler from './api/agent/process.js';
+import agentMatchHandler from './api/agent/match.js';
 import agentSubmitHandler from './api/agent/submit.js';
 import monitorHandler from './api/monitor.js';
 
@@ -158,6 +159,16 @@ app.post('/api/agent/process', async (req, res) => {
     if (!res.headersSent) res.json(result);
   } catch (err) {
     console.error('[AGENT-PROCESS] Error:', err);
+    if (!res.headersSent) res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/agent/match', async (req, res) => {
+  try {
+    const result = await agentMatchHandler(req, res);
+    if (!res.headersSent) res.json(result);
+  } catch (err) {
+    console.error('[AGENT-MATCH] Error:', err);
     if (!res.headersSent) res.status(500).json({ error: err.message });
   }
 });

@@ -2,11 +2,14 @@
 //  api/agent/process.js — POST /api/agent/process
 //  Uploading Agent: Accepts PDF + ZIP, extracts product info + images
 //  using DeepSeek AI for text analysis and adm-zip for image extraction.
+//
+//  Phase 1 (Extract & Inspect): Returns ALL images with data URLs so
+//  the user can preview every image before matching.
 // ═══════════════════════════════════════════════════════════════════
 
 import multer from 'multer';
 import { extractTextFromPDF } from '../../lib/pdf-extractor.js';
-import { extractImagesFromZip } from '../../lib/zip-extractor.js';
+import { extractAllImagesFromZip } from '../../lib/zip-extractor.js';
 import { extractProductInfo } from '../../lib/deepseek.js';
 
 // Multer config — store files in memory
@@ -57,8 +60,7 @@ function multerMiddleware(req, res) {
  *   {
  *     success: true,
  *     products: [{ name, brand, productCode, generatedCode, description, category }],
- *     selectedImage: { name, width, height, dataUrl },
- *     allImages: [{ name, width, height, score, selected, dataUrl }],
+ *     allImages: [{ name, width, height, size, dataUrl }],  ← ALL images with data URLs
  *     rawText: "...",
  *     totalImages: 57
  *   }
@@ -96,10 +98,9 @@ export default async function handler(req, res) {
     console.log(`[AGENT] Processing PDF: "${pdfFile.originalname}" (${(pdfFile.buffer.length / 1024 / 1024).toFixed(2)} MB)`);
     console.log(`[AGENT] Processing ZIP: "${zipFile.originalname}" (${(zipFile.buffer.length / 1024 / 1024).toFixed(2)} MB)`);
 
-    // Step 1: Extract images from ZIP first. Even if PDF extraction fails,
-    // the user can still submit manually with the selected product image.
+    // Step 1: Extract ALL images from ZIP with data URLs for preview
     console.log('[AGENT] Step 1: Extracting ZIP images...');
-    const zipResult = await extractImagesFromZip(zipFile.buffer);
+    const zipResult = await extractAllImagesFromZip(zipFile.buffer);
 
     if (zipResult.totalImages === 0) {
       return res.status(400).json({
@@ -108,7 +109,7 @@ export default async function handler(req, res) {
       });
     }
 
-    console.log(`[AGENT] ZIP images extracted: ${zipResult.totalImages} images found`);
+    console.log(`[AGENT] ZIP images extracted: ${zipResult.totalImages} images found, returning ${zipResult.images.length} for preview`);
 
     // Step 2: Extract text from PDF
     console.log('[AGENT] Step 2: Extracting PDF text...');
@@ -122,7 +123,6 @@ export default async function handler(req, res) {
       return res.json({
         success: true,
         products: [],
-        selectedImage: zipResult.selectedImage,
         allImages: zipResult.images,
         rawText: '',
         totalImages: zipResult.totalImages,
@@ -135,7 +135,6 @@ export default async function handler(req, res) {
       return res.json({
         success: true,
         products: [],
-        selectedImage: zipResult.selectedImage,
         allImages: zipResult.images,
         rawText: rawText || '',
         totalImages: zipResult.totalImages,
@@ -163,11 +162,9 @@ export default async function handler(req, res) {
       }));
     } catch (aiErr) {
       console.error('[AGENT] DeepSeek extraction failed:', aiErr.message);
-      // Fallback: return raw text so user can manually enter info
       return res.json({
         success: true,
         products: [],
-        selectedImage: zipResult.selectedImage,
         allImages: zipResult.images,
         rawText,
         totalImages: zipResult.totalImages,
@@ -180,7 +177,6 @@ export default async function handler(req, res) {
       return res.json({
         success: true,
         products: [],
-        selectedImage: zipResult.selectedImage,
         allImages: zipResult.images,
         rawText,
         totalImages: zipResult.totalImages,
@@ -188,12 +184,11 @@ export default async function handler(req, res) {
       });
     }
 
-    // Step 4: Return results
+    // Step 4: Return results with ALL images for Phase 2 matching
     console.log('[AGENT] Analysis complete. Returning results.');
     return res.json({
       success: true,
       products,
-      selectedImage: zipResult.selectedImage,
       allImages: zipResult.images,
       rawText,
       totalImages: zipResult.totalImages
@@ -202,7 +197,6 @@ export default async function handler(req, res) {
   } catch (err) {
     console.error('[AGENT] Process error:', err);
 
-    // Handle multer errors
     if (err.code === 'LIMIT_FILE_SIZE') {
       return res.status(413).json({ error: 'File too large. Maximum size is 50MB per file.' });
     }

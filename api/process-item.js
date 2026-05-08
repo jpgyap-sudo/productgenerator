@@ -14,6 +14,7 @@ import { supabase, QUEUE_TABLE, RESULTS_TABLE, BUCKET_NAME } from '../lib/supaba
 import { generateView, VIEWS } from '../lib/fal.js';
 import { generateGeminiView } from '../lib/gemini.js';
 import { generateOpenAIView } from '../lib/openai.js';
+import { generateWithFallback } from '../lib/render-with-fallback.js';
 import { uploadRendersToDrive, getNextFolderCounter, getNextFolderCounterFallback, isSupabaseConnectionError } from '../lib/drive.js';
 import { createRenderZipOnVps, saveRenderImageToVps } from '../lib/vps-storage.js';
 import { saveCompletedBatch } from '../lib/completed-batches.js';
@@ -119,6 +120,7 @@ async function processItem(itemId, resolution, provider = 'fal') {
     // non-fal.ai providers even if the provider column is missing
     const providerLabel = provider === 'gemini' ? 'Gemini'
       : provider === 'openai' ? 'OpenAI'
+      : provider === 'openai-mini' ? 'Mini + Flash'
       : 'fal.ai';
     await updateItemStatus(itemId, 'active', `Generating 4 views with ${providerLabel}...`);
     await updateAllViewStatuses(itemId, 'generating', null);
@@ -133,6 +135,7 @@ async function processItem(itemId, resolution, provider = 'fal') {
     //     Returns Supabase storage URLs (OpenAI returns b64_json).
     const generateFn = provider === 'gemini' ? generateGeminiView
       : provider === 'openai' ? generateOpenAIView
+      : provider === 'openai-mini' ? generateWithFallback
       : generateView;
     const brand = item.brand || '';
     const results = await Promise.allSettled(
@@ -281,8 +284,10 @@ async function processItem(itemId, resolution, provider = 'fal') {
             apiModel: provider === 'gemini'
               ? 'gemini-3.1-flash-image-preview / gemini-3-pro-image-preview'
               : provider === 'openai'
-                ? process.env.OPENAI_IMAGE_MODEL || 'gpt-image-1.5'
-                : 'fal.ai',
+                ? process.env.OPENAI_IMAGE_MODEL || 'gpt-image-1-mini'
+                : provider === 'openai-mini'
+                  ? 'gpt-image-1-mini + Gemini Flash fallback'
+                  : 'fal.ai',
             updatedAt: new Date().toISOString(),
             zipUrl,
             viewResults: zipRows.map(row => ({

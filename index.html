@@ -1316,6 +1316,596 @@ textarea:focus { outline: none; border-color: var(--text-secondary); }
 #bulkRenderPendingMount .q-name { font-size: 13px; white-space: normal; }
 #bulkRenderPendingMount .q-desc-text,
 #bulkRenderPendingMount .q-desc-edit { font-size: 12px; }
+/* ── AGENT MATCH UI ──────────────────────────────────────────── */
+.agent-match-section {
+  margin-top: 12px;
+  border-top: 1px solid var(--border-light);
+  padding-top: 12px;
+}
+.agent-match-section .lbl {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 8px;
+}
+.agent-match-btn {
+  width: 100%;
+  padding: 10px;
+  font-size: 12px;
+  font-weight: 600;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  background: var(--accent);
+  color: #fff;
+  transition: opacity var(--transition);
+}
+.agent-match-btn:hover { opacity: 0.85; }
+.agent-match-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.agent-match-btn.secondary {
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+.agent-match-btn.secondary:hover { background: var(--surface-2); }
+
+/* Image gallery in Phase 1 */
+.agent-image-gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(70px, 1fr));
+  gap: 6px;
+  max-height: 360px;
+  overflow-y: auto;
+  padding: 4px;
+}
+.agent-image-gallery-item {
+  position: relative;
+  border: 2px solid var(--border-light);
+  border-radius: 4px;
+  overflow: hidden;
+  cursor: pointer;
+  aspect-ratio: 1;
+  background: var(--surface-2);
+  transition: border-color var(--transition);
+}
+.agent-image-gallery-item:hover { border-color: var(--accent); }
+.agent-image-gallery-item.selected { border-color: var(--accent); }
+.agent-image-gallery-item img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.agent-image-gallery-item .gallery-label {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  font-size: 8px;
+  background: rgba(0,0,0,0.6);
+  color: #fff;
+  padding: 1px 3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Match result cards in Phase 2 */
+.agent-match-card {
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  padding: 10px;
+  margin-bottom: 10px;
+  background: var(--surface);
+}
+.agent-match-card-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.agent-match-card-header .match-thumb {
+  width: 56px;
+  height: 56px;
+  border-radius: 4px;
+  object-fit: cover;
+  border: 1px solid var(--border-light);
+  flex-shrink: 0;
+}
+.agent-match-card-header .match-info {
+  flex: 1;
+  min-width: 0;
+}
+.agent-match-card-header .match-info .match-name {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.agent-match-card-header .match-info .match-code {
+  font-size: 10px;
+  color: var(--text-muted);
+  font-family: monospace;
+}
+.agent-match-card-header .match-badge {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 10px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.match-badge.exact { background: #d4edda; color: #155724; }
+.match-badge.high { background: #cce5ff; color: #004085; }
+.match-badge.medium { background: #fff3cd; color: #856404; }
+.match-badge.low { background: #f8d7da; color: #721c24; }
+.match-badge.verified { background: #d4edda; color: #155724; }
+.match-badge.unverified { background: #fff3cd; color: #856404; }
+.match-badge.rejected { background: #f8d7da; color: #721c24; }
+.match-badge.skipped { background: #e2e3e5; color: #383d41; }
+
+.agent-match-card-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+.agent-match-card-actions button {
+  font-size: 10px;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  cursor: pointer;
+  background: var(--surface);
+  color: var(--text);
+  transition: all var(--transition);
+}
+.agent-match-card-actions button:hover { background: var(--surface-2); }
+.agent-match-card-actions button.accept { border-color: var(--success); color: var(--success); }
+.agent-match-card-actions button.accept.active { background: var(--success); color: #fff; }
+.agent-match-card-actions button.reject { border-color: var(--error); color: var(--error); }
+.agent-match-card-actions button.reject.active { background: var(--error); color: #fff; }
+.agent-match-card-actions button.pick { border-color: var(--accent); color: var(--accent); }
+
+/* Image picker overlay for match cards */
+.agent-image-picker {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(50px, 1fr));
+  gap: 4px;
+  max-height: 160px;
+  overflow-y: auto;
+  margin-top: 6px;
+  padding: 6px;
+  border: 1px solid var(--border-light);
+  border-radius: 4px;
+  background: var(--surface-2);
+}
+.agent-image-picker img {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: 3px;
+  cursor: pointer;
+  border: 2px solid transparent;
+  transition: border-color var(--transition);
+}
+.agent-image-picker img:hover { border-color: var(--accent); }
+.agent-image-picker img.selected { border-color: var(--accent); }
+
+/* Phase 1 split view */
+.agent-inspect-layout {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 8px;
+}
+.agent-inspect-col {
+  min-width: 0;
+}
+.agent-inspect-col .inspect-head {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.agent-inspect-col .inspect-count {
+  font-size: 10px;
+  color: var(--text-secondary);
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+}
+.agent-inspect-products {
+  max-height: 300px;
+  overflow-y: auto;
+}
+.agent-inspect-product-item {
+  font-size: 11px;
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--border-light);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.agent-inspect-product-item .pip-code {
+  font-family: monospace;
+  font-size: 10px;
+  background: var(--accent-bg);
+  color: var(--accent);
+  padding: 1px 5px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+.agent-inspect-product-item .pip-name {
+color: var(--text);
+white-space: nowrap;
+overflow: hidden;
+text-overflow: ellipsis;
+}
+
+/* ── BATCH PROCESSOR PANEL ──────────────────────────────────────── */
+.batch-panel {
+background: var(--surface);
+border-radius: 10px;
+border: 1px solid var(--border);
+overflow: hidden;
+transition: background var(--transition), border-color var(--transition);
+}
+.batch-shell {
+padding: 24px;
+max-width: 1100px;
+margin: 0 auto;
+}
+.batch-hero {
+display: flex;
+align-items: flex-start;
+justify-content: space-between;
+margin-bottom: 24px;
+gap: 16px;
+}
+.batch-hero .batch-kicker {
+font-size: 11px;
+font-weight: 700;
+color: var(--accent);
+text-transform: uppercase;
+letter-spacing: 0.08em;
+display: block;
+margin-bottom: 4px;
+}
+.batch-hero h2 {
+margin: 0;
+font-size: 22px;
+font-weight: 700;
+color: var(--text);
+}
+.batch-section {
+margin-bottom: 24px;
+}
+.batch-step-head {
+display: flex;
+align-items: center;
+gap: 10px;
+margin-bottom: 14px;
+}
+.batch-step-num {
+display: inline-flex;
+align-items: center;
+justify-content: center;
+width: 28px;
+height: 28px;
+border-radius: 50%;
+background: var(--accent);
+color: #fff;
+font-size: 13px;
+font-weight: 700;
+flex-shrink: 0;
+}
+.batch-step-title {
+font-size: 15px;
+font-weight: 700;
+color: var(--text);
+}
+.batch-step-hint {
+font-size: 11px;
+color: var(--text-muted);
+margin-left: auto;
+}
+.batch-upload-row {
+display: grid;
+grid-template-columns: 1fr 1fr;
+gap: 16px;
+margin-bottom: 16px;
+}
+.batch-upload-box {
+display: flex;
+flex-direction: column;
+align-items: center;
+justify-content: center;
+gap: 8px;
+padding: 32px 20px;
+border: 2px dashed var(--border);
+border-radius: 10px;
+cursor: pointer;
+background: var(--surface-2);
+transition: border-color var(--transition), background var(--transition);
+min-height: 140px;
+text-align: center;
+}
+.batch-upload-box:hover {
+border-color: var(--accent);
+background: var(--accent-bg);
+}
+.batch-upload-icon {
+font-size: 32px;
+line-height: 1;
+}
+.batch-upload-text {
+font-size: 13px;
+font-weight: 600;
+color: var(--text);
+}
+.batch-upload-sub {
+font-size: 11px;
+color: var(--text-muted);
+}
+.batch-analyze-row {
+display: flex;
+justify-content: center;
+margin-top: 12px;
+}
+.batch-btn {
+padding: 10px 28px;
+font-size: 13px;
+font-weight: 600;
+border: none;
+border-radius: 8px;
+cursor: pointer;
+background: var(--accent);
+color: #fff;
+transition: opacity var(--transition);
+}
+.batch-btn:hover { opacity: 0.85; }
+.batch-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.batch-btn.secondary {
+background: var(--surface);
+color: var(--text);
+border: 1px solid var(--border);
+}
+.batch-btn.secondary:hover { background: var(--surface-2); }
+.batch-progress {
+display: flex;
+align-items: center;
+justify-content: center;
+gap: 10px;
+padding: 16px;
+font-size: 13px;
+color: var(--text-muted);
+}
+.batch-spinner {
+display: inline-block;
+width: 18px;
+height: 18px;
+border: 2px solid var(--border);
+border-top-color: var(--accent);
+border-radius: 50%;
+animation: batch-spin 0.7s linear infinite;
+}
+@keyframes batch-spin {
+to { transform: rotate(360deg); }
+}
+.batch-product-grid {
+display: grid;
+grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+gap: 12px;
+max-height: 480px;
+overflow-y: auto;
+padding: 4px;
+}
+.batch-product-card {
+border: 1px solid var(--border-light);
+border-radius: 8px;
+padding: 12px;
+background: var(--surface);
+transition: border-color var(--transition);
+}
+.batch-product-card:hover { border-color: var(--accent); }
+.batch-product-card .bpc-head {
+display: flex;
+align-items: center;
+gap: 8px;
+margin-bottom: 8px;
+}
+.batch-product-card .bpc-head input[type="checkbox"] {
+flex-shrink: 0;
+}
+.batch-product-card .bpc-head .bpc-code {
+font-family: monospace;
+font-size: 10px;
+background: var(--accent-bg);
+color: var(--accent);
+padding: 1px 6px;
+border-radius: 3px;
+margin-left: auto;
+}
+.batch-product-card .bpc-field {
+width: 100%;
+padding: 6px;
+font-size: 11px;
+border: 1px solid var(--border-light);
+border-radius: 4px;
+background: var(--bg);
+color: var(--text);
+box-sizing: border-box;
+margin-bottom: 6px;
+}
+.batch-product-card .bpc-field:focus {
+outline: none;
+border-color: var(--accent);
+}
+.batch-product-card textarea.bpc-field {
+min-height: 60px;
+resize: vertical;
+}
+.batch-image-gallery {
+display: grid;
+grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
+gap: 8px;
+max-height: 400px;
+overflow-y: auto;
+padding: 4px;
+}
+.batch-image-gallery-item {
+position: relative;
+border: 2px solid var(--border-light);
+border-radius: 6px;
+overflow: hidden;
+cursor: pointer;
+aspect-ratio: 1;
+background: var(--surface-2);
+transition: border-color var(--transition);
+}
+.batch-image-gallery-item:hover { border-color: var(--accent); }
+.batch-image-gallery-item img {
+width: 100%;
+height: 100%;
+object-fit: cover;
+display: block;
+}
+.batch-image-gallery-item .big-label {
+position: absolute;
+bottom: 0;
+left: 0;
+right: 0;
+font-size: 9px;
+background: rgba(0,0,0,0.6);
+color: #fff;
+padding: 2px 4px;
+white-space: nowrap;
+overflow: hidden;
+text-overflow: ellipsis;
+}
+.batch-match-grid {
+display: grid;
+grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+gap: 12px;
+max-height: 520px;
+overflow-y: auto;
+padding: 4px;
+}
+.batch-match-card {
+border: 1px solid var(--border-light);
+border-radius: 8px;
+padding: 12px;
+background: var(--surface);
+transition: border-color var(--transition);
+}
+.batch-match-card:hover { border-color: var(--accent); }
+.batch-match-card .bmc-header {
+display: flex;
+align-items: center;
+gap: 10px;
+margin-bottom: 8px;
+}
+.batch-match-card .bmc-thumb {
+width: 64px;
+height: 64px;
+border-radius: 6px;
+object-fit: cover;
+border: 1px solid var(--border-light);
+flex-shrink: 0;
+}
+.batch-match-card .bmc-info {
+flex: 1;
+min-width: 0;
+}
+.batch-match-card .bmc-info .bmc-name {
+font-size: 13px;
+font-weight: 700;
+color: var(--text);
+white-space: nowrap;
+overflow: hidden;
+text-overflow: ellipsis;
+}
+.batch-match-card .bmc-info .bmc-code {
+font-size: 10px;
+color: var(--text-muted);
+font-family: monospace;
+}
+.batch-match-card .bmc-info .bmc-image-name {
+font-size: 10px;
+color: var(--text-muted);
+margin-top: 2px;
+}
+.batch-match-card .bmc-badge {
+font-size: 10px;
+font-weight: 700;
+padding: 2px 8px;
+border-radius: 10px;
+white-space: nowrap;
+flex-shrink: 0;
+}
+.batch-match-card .bmc-actions {
+display: flex;
+gap: 6px;
+margin-top: 6px;
+}
+.batch-match-card .bmc-actions button {
+font-size: 11px;
+padding: 5px 12px;
+border: 1px solid var(--border);
+border-radius: 4px;
+cursor: pointer;
+background: var(--surface);
+color: var(--text);
+transition: all var(--transition);
+}
+.batch-match-card .bmc-actions button:hover { background: var(--surface-2); }
+.batch-match-card .bmc-actions button.accept { border-color: var(--success); color: var(--success); }
+.batch-match-card .bmc-actions button.accept.active { background: var(--success); color: #fff; }
+.batch-match-card .bmc-actions button.reject { border-color: var(--error); color: var(--error); }
+.batch-match-card .bmc-actions button.reject.active { background: var(--error); color: #fff; }
+.batch-match-card .bmc-actions button.pick { border-color: var(--accent); color: var(--accent); }
+.batch-match-card .bmc-picker {
+display: grid;
+grid-template-columns: repeat(auto-fill, minmax(56px, 1fr));
+gap: 4px;
+max-height: 160px;
+overflow-y: auto;
+margin-top: 6px;
+padding: 6px;
+border: 1px solid var(--border-light);
+border-radius: 4px;
+background: var(--surface-2);
+}
+.batch-match-card .bmc-picker img {
+width: 100%;
+aspect-ratio: 1;
+object-fit: cover;
+border-radius: 3px;
+cursor: pointer;
+border: 2px solid transparent;
+transition: border-color var(--transition);
+}
+.batch-match-card .bmc-picker img:hover { border-color: var(--accent); }
+.batch-match-card .bmc-picker img.selected { border-color: var(--accent); }
+.batch-actions-row {
+display: flex;
+justify-content: flex-end;
+gap: 12px;
+margin-top: 16px;
+padding-top: 16px;
+border-top: 1px solid var(--border-light);
+}
+
 @media (max-width: 980px) {
   .bulk-layout { grid-template-columns: 1fr; }
   .bulk-stage { border-right: none; border-bottom: 1px solid var(--border-light); }
@@ -1539,6 +2129,7 @@ textarea:focus { outline: none; border-color: var(--text-secondary); }
     <button class="api-save-btn" id="apiKeySave" type="button" hidden disabled>Save</button>
     <button class="tb-btn" id="bulkUploadToggle" title="Bulk upload PDF + ZIP workflow" aria-label="Bulk Upload">Bulk Upload</button>
     <button class="tb-btn" id="bulkRenderToggle" title="Review bulk items before rendering" aria-label="Bulk Render">Bulk Render</button>
+    <button class="tb-btn" id="batchProcessorToggle" title="Batch process PDF catalog + ZIP images" aria-label="Batch Processor">📦 Batch</button>
     <button class="tb-btn" id="completedToggle" title="Completed render history" aria-label="Completed Batches">✓ Completed</button>
     <button class="tb-btn" id="monitorToggle" title="API health monitoring" aria-label="API Monitor">📡 Monitor</button>
     <button class="tb-btn" id="featureToggle" title="View & edit product feature prompts" aria-label="Product Features">📋 Features</button>
@@ -1612,18 +2203,33 @@ textarea:focus { outline: none; border-color: var(--text-secondary); }
           </div>
         </div>
         <div id="agentResult" style="display:none;">
-          <div class="block" style="border-top:1px solid var(--border-light);padding-top:0.6rem;">
-            <span class="lbl">Extracted Product Info</span>
-            <div id="agentProductInfo" style="font-size:11px;color:var(--text-secondary);margin-top:4px;"></div>
-          </div>
-          <div class="block" style="padding-top:0;">
-            <span class="lbl">Selected Image</span>
-            <div id="agentImagePreview" style="margin-top:4px;text-align:center;">
-              <img id="agentSelectedImg" src="" alt="Selected product image" style="max-width:100%;max-height:120px;border-radius:4px;display:none;"/>
+          <!-- Phase 1: Extract & Inspect -->
+          <div id="agentPhase1" style="display:block;">
+            <div class="block" style="border-top:1px solid var(--border-light);padding-top:0.6rem;">
+              <span class="lbl">Phase 1: Extracted Products & Images</span>
+              <div id="agentProductInfo" style="font-size:11px;color:var(--text-secondary);margin-top:4px;"></div>
+            </div>
+            <div class="block" style="padding-top:0;">
+              <span class="lbl">All Images in ZIP <span id="agentImageCount" style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-secondary);"></span></span>
+              <div id="agentImageGallery" class="agent-image-gallery" style="margin-top:4px;"></div>
+            </div>
+            <div class="block" style="padding-top:0;padding-bottom:0.6rem;">
+              <button class="agent-match-btn" id="agentMatchBtn" disabled style="width:100%;">🔗 Match Products to Images</button>
             </div>
           </div>
-          <div class="block" style="padding-top:0;padding-bottom:0.6rem;">
-            <button class="btn-start" id="agentSubmitBtn" disabled style="width:100%;font-size:12px;padding:8px;">+ Add to Bulk Queue</button>
+
+          <!-- Phase 2: Match & Preview -->
+          <div id="agentPhase2" style="display:none;">
+            <div class="block" style="border-top:1px solid var(--border-light);padding-top:0.6rem;">
+              <span class="lbl">Phase 2: Match Results</span>
+              <div id="agentMatchResults" style="margin-top:4px;"></div>
+            </div>
+            <div class="block" style="padding-top:0;padding-bottom:0.6rem;">
+              <div style="display:flex;gap:8px;">
+                <button class="agent-match-btn secondary" id="agentBackToInspectBtn" style="flex:1;">← Back to Inspect</button>
+                <button class="agent-match-btn" id="agentSubmitBtn" disabled style="flex:2;">+ Add All Matched to Queue</button>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -1651,6 +2257,7 @@ textarea:focus { outline: none; border-color: var(--text-secondary); }
         <div class="q-btns" id="providerBtns">
           <button class="q-btn active" data-provider="gemini">Gemini 3<br><span class="price">Flash / Pro</span></button>
           <button class="q-btn" data-provider="openai">OpenAI<br><span class="price">GPT Image</span></button>
+          <button class="q-btn" data-provider="openai-mini">Mini + Gemini<br><span class="price">Flash QC · Flash v4</span></button>
           <button class="q-btn" data-provider="stability">Stability AI<br><span class="price">SDXL</span></button>
         </div>
         <div class="res-note" id="providerNote">Gemini 3 — gemini-3.1-flash-image-preview for all 4 views. GEMINI_API_KEY set on server.</div>
@@ -1786,6 +2393,83 @@ textarea:focus { outline: none; border-color: var(--text-secondary); }
             <button class="btn-start" id="bulkStartBtn" type="button" disabled>Add Selected to Queue</button>
           </div>
           <div id="bulkRenderPendingMount"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── BATCH PROCESSOR PANEL ──────────────────────────────── -->
+    <div class="batch-panel" id="batchProcessorPanel" style="display:none;">
+      <div class="batch-shell">
+        <div class="batch-hero">
+          <div>
+            <span class="batch-kicker">📦 Batch Processor</span>
+            <h2>Catalog → Queue</h2>
+          </div>
+          <button class="btn-clear" id="batchClose" type="button">Close</button>
+        </div>
+
+        <!-- Step 1: Upload -->
+        <div class="batch-section" id="batchStep1">
+          <div class="batch-step-head">
+            <span class="batch-step-num">1</span>
+            <span class="batch-step-title">Upload PDF Catalog + Images ZIP</span>
+          </div>
+          <div class="batch-upload-row">
+            <label for="batchPdfInput" class="batch-upload-box" id="batchPdfDropZone">
+              <span class="batch-upload-icon" id="batchPdfIcon">📄</span>
+              <span class="batch-upload-text" id="batchPdfText">Drop PDF catalog here or click to browse</span>
+              <span class="batch-upload-sub" id="batchPdfSub">PDF files only · max 50MB</span>
+            </label>
+            <input type="file" id="batchPdfInput" accept=".pdf,application/pdf" style="position:absolute;left:-9999px;top:-9999px;"/>
+            <label for="batchZipInput" class="batch-upload-box" id="batchZipDropZone">
+              <span class="batch-upload-icon" id="batchZipIcon">🗜️</span>
+              <span class="batch-upload-text" id="batchZipText">Drop ZIP of product images here</span>
+              <span class="batch-upload-sub" id="batchZipSub">ZIP files only · max 50MB</span>
+            </label>
+            <input type="file" id="batchZipInput" accept=".zip,application/zip,application/x-zip-compressed" style="position:absolute;left:-9999px;top:-9999px;"/>
+          </div>
+          <div class="batch-analyze-row">
+            <button class="batch-btn" id="batchAnalyzeBtn" disabled>🔍 Analyze & Extract</button>
+          </div>
+          <div id="batchProgress" class="batch-progress" style="display:none;">
+            <span class="batch-spinner"></span>
+            <span id="batchProgressText">Analyzing...</span>
+          </div>
+        </div>
+
+        <!-- Step 2: Extract & Inspect -->
+        <div class="batch-section" id="batchStep2" style="display:none;">
+          <div class="batch-step-head">
+            <span class="batch-step-num">2</span>
+            <span class="batch-step-title">Extracted Products</span>
+            <span class="batch-step-hint">Review and edit product details below</span>
+          </div>
+          <div class="batch-product-grid" id="batchProductGrid"></div>
+
+          <div class="batch-step-head" style="margin-top:16px;">
+            <span class="batch-step-num" style="background:var(--accent);">📷</span>
+            <span class="batch-step-title">Images in ZIP <span id="batchImageCount"></span></span>
+            <span class="batch-step-hint">All images extracted from the ZIP archive</span>
+          </div>
+          <div class="batch-image-gallery" id="batchImageGallery"></div>
+
+          <div class="batch-analyze-row">
+            <button class="batch-btn" id="batchMatchBtn" disabled>🔗 Match Products to Images</button>
+          </div>
+        </div>
+
+        <!-- Step 3: Match & Preview -->
+        <div class="batch-section" id="batchStep3" style="display:none;">
+          <div class="batch-step-head">
+            <span class="batch-step-num">3</span>
+            <span class="batch-step-title">Match Results</span>
+            <span class="batch-step-hint">Accept, reject, or pick different images for each product</span>
+          </div>
+          <div class="batch-match-grid" id="batchMatchGrid"></div>
+          <div class="batch-actions-row">
+            <button class="batch-btn secondary" id="batchBackBtn">← Back to Inspect</button>
+            <button class="batch-btn" id="batchSubmitBtn" disabled>+ Add All Matched to Queue</button>
+          </div>
         </div>
       </div>
     </div>
@@ -2770,6 +3454,7 @@ function getRenderProvider(item = {}) {
 
 function normalizeRenderProvider(value = '') {
   const text = String(value || '').toLowerCase();
+  if (text === 'openai-mini' || text.includes('mini + flash') || text.includes('mini+flash')) return 'openai-mini';
   if (text.includes('gemini')) return 'gemini';
   if (text.includes('openai') || text.includes('gpt-image') || text.includes('gpt image')) return 'openai';
   if (text.includes('stability') || text.includes('sdxl')) return 'stability';
@@ -2796,12 +3481,13 @@ function inferRenderProvider(item = {}, viewResults = [], previous = {}) {
   const metadataProvider = normalizeRenderProvider(metadata);
   if (metadataProvider) return metadataProvider;
 
-  if (['openai', 'gemini', 'stability'].includes(provider)) return provider;
+  if (['openai', 'openai-mini', 'gemini', 'stability'].includes(provider)) return provider;
   return '';
 }
 
 function inferRenderApiModel(providerName = '') {
   if (providerName === 'openai') return 'OpenAI GPT Image';
+  if (providerName === 'openai-mini') return 'gpt-image-1-mini + Gemini Flash fallback';
   if (providerName === 'gemini') return 'gemini-3.1-flash-image-preview / gemini-3-pro-image-preview';
   if (providerName === 'stability') return 'Stability AI SDXL';
   return '';
@@ -2810,6 +3496,7 @@ function inferRenderApiModel(providerName = '') {
 function getBatchApiText(item = {}) {
   const itemProvider = getRenderProvider(item);
   if (itemProvider === 'gemini') return 'Rendered with Gemini 3: Flash for product views, Pro for interior scene';
+  if (itemProvider === 'openai-mini') return 'Rendered with GPT-image-1-mini + Gemini Flash fallback';
   if (itemProvider === 'openai') return `Rendered with OpenAI GPT Image${item.apiModel ? ` (${item.apiModel})` : ''}`;
   if (itemProvider === 'stability') return `Rendered with Stability AI SDXL${item.apiModel ? ` (${item.apiModel})` : ''}`;
   return 'Rendered API not recorded';
@@ -2818,6 +3505,7 @@ function getBatchApiText(item = {}) {
 function getViewApiText(item = {}, viewId) {
   const itemProvider = getRenderProvider(item);
   if (itemProvider === 'gemini') return Number(viewId) === 4 ? 'Gemini 3 Pro' : 'Gemini 3 Flash';
+  if (itemProvider === 'openai-mini') return 'Mini or Gemini Flash';
   if (itemProvider === 'openai') return item.apiModel || 'OpenAI GPT Image';
   if (itemProvider === 'stability') return item.apiModel || 'Stability AI SDXL';
   return '';
@@ -2848,6 +3536,17 @@ function getEstimatedCost(item, doneCount = 4) {
     else if (model.includes('dall-e-2')) costPerImage = COST_PER_IMAGE['dall-e-2'];
     else                               costPerImage = COST_PER_IMAGE['gpt-image-1'];
     return `~$${(costPerImage * doneCount).toFixed(2)}`;
+  }
+
+  if (provider === 'openai-mini') {
+    // Views 1–3: mini + possible Gemini Flash retry (~20% fallback assumed)
+    // View 4: always Gemini Flash (interior scene — skips mini entirely)
+    const productViews = Math.min(doneCount, 3);
+    const interiorViews = doneCount >= 4 ? 1 : 0;
+    const miniCost = COST_PER_IMAGE['gpt-image-1-mini'] * productViews;
+    const flashRetryCost = COST_PER_IMAGE['gemini-flash'] * Math.round(productViews * 0.2);
+    const flashInteriorCost = COST_PER_IMAGE['gemini-flash'] * interiorViews;
+    return `~$${(miniCost + flashRetryCost + flashInteriorCost).toFixed(2)}`;
   }
 
   if (provider === 'gemini') {
@@ -2964,7 +3663,16 @@ function createCompletedHistoryCard(item, viewResults = [], source = 'archive') 
       <div class="batch-info">
         <h3>${escHtml(item.name || `Item ${item.id}`)}</h3>
         <p>${escHtml(getBatchApiText(item))}</p>
-        ${(() => { const cost = getEstimatedCost(item, doneCount); return cost ? `<p style="color:var(--text-dim);font-size:11px;" title="Estimated cost based on provider pricing. Actual charges may vary.">Est. cost: ${escHtml(cost)}</p>` : ''; })()}
+        <p style="font-size:11px;color:var(--text-secondary);">${(() => {
+          const ts = item.updatedAt ? new Date(item.updatedAt) : null;
+          const dateStr = ts ? ts.toLocaleDateString('en-SG', { year:'numeric', month:'short', day:'numeric' }) : '';
+          const timeStr = ts ? ts.toLocaleTimeString('en-SG', { hour:'2-digit', minute:'2-digit', hour12:false }) : '';
+          const cost = getEstimatedCost(item, doneCount);
+          const parts = [];
+          if (dateStr) parts.push(`${dateStr} · ${timeStr}`);
+          if (cost) parts.push(`<span title="Estimated cost based on provider pricing. Actual charges may vary.">${escHtml(cost)}</span>`);
+          return parts.join(' &nbsp;·&nbsp; ');
+        })()}</p>
         <p>${doneCount} of ${VIEWS.length} renders stored · ${source === 'supabase' ? 'Supabase batch' : 'Archive-only batch'}</p>
         ${isArchiveOnly ? '<p style="color:var(--text-dim);font-size:10px;">Drive upload uses archived image URLs (ZIP/download available)</p>' : ''}
       </div>
@@ -3676,6 +4384,8 @@ async function loadState() {
           note.textContent = 'Gemini 3 — gemini-3.1-flash-image-preview for all 4 views. GEMINI_API_KEY set on server.';
         } else if (provider === 'openai') {
           note.textContent = 'OpenAI — GPT Image edit. OPENAI_API_KEY set on server.';
+        } else if (provider === 'openai-mini') {
+          note.textContent = 'Mini + Gemini — GPT-image-1-mini for views 1–3 with Gemini Flash QC fallback; Gemini Flash for view 4 (interior). Needs OPENAI_API_KEY + GEMINI_API_KEY.';
         } else if (provider === 'stability') {
           note.textContent = 'Stability AI — SDXL image-to-image. STABILITY_API_KEY set on server.';
         }
@@ -3768,11 +4478,41 @@ const featurePanel = document.getElementById('featurePanel');
 const featureGrid = document.getElementById('featureGrid');
 const featureResetBtn = document.getElementById('featureResetBtn');
 
+// ── BATCH PROCESSOR ELEMENTS ──────────────────────────────────────
+const batchProcessorToggle = document.getElementById('batchProcessorToggle');
+const batchProcessorPanel = document.getElementById('batchProcessorPanel');
+const batchClose = document.getElementById('batchClose');
+const batchPdfInput = document.getElementById('batchPdfInput');
+const batchZipInput = document.getElementById('batchZipInput');
+const batchPdfDropZone = document.getElementById('batchPdfDropZone');
+const batchZipDropZone = document.getElementById('batchZipDropZone');
+const batchPdfText = document.getElementById('batchPdfText');
+const batchZipText = document.getElementById('batchZipText');
+const batchPdfSub = document.getElementById('batchPdfSub');
+const batchZipSub = document.getElementById('batchZipSub');
+const batchPdfIcon = document.getElementById('batchPdfIcon');
+const batchZipIcon = document.getElementById('batchZipIcon');
+const batchAnalyzeBtn = document.getElementById('batchAnalyzeBtn');
+const batchProgress = document.getElementById('batchProgress');
+const batchProgressText = document.getElementById('batchProgressText');
+const batchStep1 = document.getElementById('batchStep1');
+const batchStep2 = document.getElementById('batchStep2');
+const batchStep3 = document.getElementById('batchStep3');
+const batchProductGrid = document.getElementById('batchProductGrid');
+const batchImageGallery = document.getElementById('batchImageGallery');
+const batchImageCount = document.getElementById('batchImageCount');
+const batchMatchBtn = document.getElementById('batchMatchBtn');
+const batchMatchGrid = document.getElementById('batchMatchGrid');
+const batchBackBtn = document.getElementById('batchBackBtn');
+const batchSubmitBtn = document.getElementById('batchSubmitBtn');
+
 function hideWorkspacePanels() {
   if (bulkUploadPanel) bulkUploadPanel.style.display = 'none';
   if (bulkRenderPanel) bulkRenderPanel.style.display = 'none';
+  if (batchProcessorPanel) batchProcessorPanel.style.display = 'none';
   bulkUploadToggle?.classList.remove('active');
   bulkRenderToggle?.classList.remove('active');
+  batchProcessorToggle?.classList.remove('active');
 }
 
 function showBulkUploadPanel() {
@@ -3839,6 +4579,46 @@ function hideBulkRenderPanel() {
     welcomeState.style.display = 'flex';
   }
 }
+
+// ── BATCH PROCESSOR PANEL SHOW/HIDE ──────────────────────────────
+function showBatchProcessorPanel() {
+  if (!batchProcessorPanel) return;
+  hideWorkspacePanels();
+  batchProcessorPanel.style.display = 'block';
+  batchProcessorToggle?.classList.add('active');
+  completedPanel.style.display = 'none';
+  featurePanel.style.display = 'none';
+  document.getElementById('aboutPanel').style.display = 'none';
+  queueLogPanel.style.display = 'none';
+  logPanel.style.display = 'none';
+  completedToggle.classList.remove('active');
+  featureToggle.classList.remove('active');
+  if (aboutToggle) aboutToggle.classList.remove('active');
+  completedPanelOpen = false;
+  featurePanelOpen = false;
+  aboutPanelOpen = false;
+  welcomeState.style.display = 'none';
+  monitorPanel.style.display = 'none';
+  monitorToggle?.classList.remove('active');
+  monitorPanelOpen = false;
+  if (monitorInterval) { clearInterval(monitorInterval); monitorInterval = null; }
+}
+
+function hideBatchProcessorPanel() {
+  if (!batchProcessorPanel) return;
+  batchProcessorPanel.style.display = 'none';
+  batchProcessorToggle?.classList.remove('active');
+  if (!document.getElementById('active-section')) {
+    welcomeState.style.display = 'flex';
+  }
+}
+
+batchProcessorToggle?.addEventListener('click', () => {
+  const isOpen = batchProcessorPanel?.style.display !== 'none';
+  if (isOpen) hideBatchProcessorPanel();
+  else showBatchProcessorPanel();
+});
+batchClose?.addEventListener('click', hideBatchProcessorPanel);
 
 bulkUploadToggle?.addEventListener('click', () => {
   const isOpen = bulkUploadPanel?.style.display !== 'none';
@@ -4162,6 +4942,8 @@ document.querySelectorAll('.q-btn[data-provider]').forEach(btn => {
       note.textContent = 'Gemini 3 — gemini-3.1-flash-image-preview for all 4 views. GEMINI_API_KEY set on server.';
     } else if (provider === 'openai') {
       note.textContent = 'OpenAI — GPT Image edit. OPENAI_API_KEY set on server.';
+    } else if (provider === 'openai-mini') {
+      note.textContent = 'Mini + Gemini — GPT-image-1-mini for views 1–3 with Gemini Flash QC fallback; Gemini Flash for view 4 (interior). Needs OPENAI_API_KEY + GEMINI_API_KEY.';
     } else if (provider === 'stability') {
       note.textContent = 'Stability AI — SDXL image-to-image. STABILITY_API_KEY set on server.';
     }
@@ -6474,6 +7256,7 @@ window.addEventListener('beforeunload', function(e) {
   await reconcileServerProcessingOnLoad();
   restoreQueuedPreviewCard();
   initUploadAgent();
+  initBatchProcessor();
 })();
 
 // ══════════════════════════════════════════════════════════════════
@@ -6510,18 +7293,27 @@ function initUploadAgent() {
   const agentProgressText = document.getElementById('agentProgressText');
   const agentResult = document.getElementById('agentResult');
   const agentProductInfo = document.getElementById('agentProductInfo');
-  const agentSelectedImg = document.getElementById('agentSelectedImg');
   const agentSubmitBtn = document.getElementById('agentSubmitBtn');
+
+  // New Phase 1 & Phase 2 elements
+  const agentPhase1 = document.getElementById('agentPhase1');
+  const agentPhase2 = document.getElementById('agentPhase2');
+  const agentImageGallery = document.getElementById('agentImageGallery');
+  const agentImageCount = document.getElementById('agentImageCount');
+  const agentMatchBtn = document.getElementById('agentMatchBtn');
+  const agentMatchResults = document.getElementById('agentMatchResults');
+  const agentBackToInspectBtn = document.getElementById('agentBackToInspectBtn');
 
   let selectedPdfFile = null;
   let selectedZipFile = null;
   let agentResultData = null;
+  let agentMatchData = null;
+  let agentAcceptedMatches = {};
 
   // ── Toggle agent section ──
   agentToggle?.addEventListener('click', () => {
     showBulkUploadPanel();
     if (agentArrow) agentArrow.style.transform = 'rotate(90deg)';
-    // Also ensure the agent section is visible inside the bulk upload panel
     if (existingAgentSection) existingAgentSection.style.display = 'block';
   });
 
@@ -6587,6 +7379,7 @@ function initUploadAgent() {
     agentAnalyzeBtn.disabled = !selectedPdfFile || !selectedZipFile;
   }
 
+  // ── Render product review cards (Phase 1) ──
   function renderAgentProductReview(products) {
     const rows = products.map((product, idx) => {
       const generatedCode = product.generatedCode || '';
@@ -6608,56 +7401,201 @@ function initUploadAgent() {
 
     return `
       <div style="font-size:10px;color:var(--text-muted);margin-bottom:8px;">
-        Review extracted products, uncheck anything you do not want, then add them to Bulk Queue.
+        Review extracted products below. Check the ones you want, then click "Match Products to Images".
       </div>
       ${rows}`;
   }
 
-  function getAgentSelectedImage() {
-    if (agentResultData?.selectedImage?.dataUrl) {
-      return {
-        dataUrl: agentResultData.selectedImage.dataUrl,
-        name: agentResultData.selectedImage.name || 'agent-selected-image'
-      };
+  // ── Render image gallery (Phase 1) ──
+  function renderImageGallery(images) {
+    if (!images || !images.length) {
+      agentImageGallery.innerHTML = '<div style="font-size:11px;color:var(--text-muted);padding:8px;">No images found in ZIP.</div>';
+      agentImageCount.textContent = '(0)';
+      return;
     }
-    const firstWithData = agentResultData?.allImages?.find(i => i.dataUrl);
-    return firstWithData
-      ? { dataUrl: firstWithData.dataUrl, name: firstWithData.name || 'agent-selected-image' }
-      : { dataUrl: '', name: '' };
+    agentImageCount.textContent = `(${images.length})`;
+    const items = images.map((img, idx) => {
+      const label = img.name || `img-${idx}`;
+      return `<div class="agent-image-gallery-item" data-img-idx="${idx}" title="${escapeHtml(label)}">
+        <img src="${img.dataUrl}" alt="${escapeHtml(label)}" loading="lazy"/>
+        <span class="gallery-label">${escapeHtml(label)}</span>
+      </div>`;
+    }).join('');
+    agentImageGallery.innerHTML = items;
+  }
+
+  // ── Render match results (Phase 2) ──
+  function renderMatchResults(matches, images) {
+    if (!matches || !matches.length) {
+      agentMatchResults.innerHTML = '<div style="font-size:11px;color:var(--text-muted);padding:12px;text-align:center;">No matches found. Try adjusting product codes or image filenames.</div>';
+      agentSubmitBtn.disabled = true;
+      return;
+    }
+
+    const imageMap = {};
+    if (images) images.forEach(img => { imageMap[img.name] = img.dataUrl; });
+
+    const cards = matches.map((match, idx) => {
+      const product = match.product || {};
+      const matchedImage = match.matchedImage || {};
+      const score = match.score || 0;
+      const verified = match.verification;
+      const imageDataUrl = matchedImage.dataUrl || imageMap[matchedImage.name] || '';
+      const productCode = product.generatedCode || '';
+
+      let badgeClass = 'low';
+      let badgeLabel = `${score}%`;
+      if (score >= 100) { badgeClass = 'exact'; badgeLabel = 'Exact'; }
+      else if (score >= 80) { badgeClass = 'high'; badgeLabel = `${score}%`; }
+      else if (score >= 40) { badgeClass = 'medium'; badgeLabel = `${score}%`; }
+
+      let verifyBadge = '';
+      if (verified) {
+        if (verified.isMatch === false) verifyBadge = '<span class="match-badge rejected">❌ Rejected</span>';
+        else if (verified.confidence === 'skipped') verifyBadge = '<span class="match-badge skipped">⏭ Skipped</span>';
+        else verifyBadge = `<span class="match-badge verified">✓ ${verified.confidence}</span>`;
+      }
+
+      const accepted = agentAcceptedMatches[idx]?.accepted !== false;
+
+      return `<div class="agent-match-card" data-match-idx="${idx}">
+        <div class="agent-match-card-header">
+          <img class="match-thumb" src="${escapeHtml(imageDataUrl)}" alt="${escapeHtml(matchedImage.name || '')}" onerror="this.style.display='none'"/>
+          <div class="match-info">
+            <div class="match-name">${escapeHtml(product.name || `Product ${idx + 1}`)}</div>
+            ${productCode ? `<div class="match-code">Code: ${escapeHtml(productCode)}</div>` : ''}
+            <div style="font-size:10px;color:var(--text-muted);margin-top:2px;">Image: ${escapeHtml(matchedImage.name || '')}</div>
+          </div>
+          <span class="match-badge ${badgeClass}">${badgeLabel}</span>
+          ${verifyBadge}
+        </div>
+        <div class="agent-match-card-actions">
+          <button class="accept ${accepted ? 'active' : ''}" data-match-idx="${idx}" data-action="accept">✓ Accept</button>
+          <button class="reject ${!accepted ? 'active' : ''}" data-match-idx="${idx}" data-action="reject">✗ Reject</button>
+          <button class="pick" data-match-idx="${idx}" data-action="pick">🔄 Pick Different</button>
+        </div>
+        <div class="agent-image-picker" id="agentPicker-${idx}" style="display:none;"></div>
+      </div>`;
+    }).join('');
+
+    agentMatchResults.innerHTML = cards;
+
+    agentMatchResults.querySelectorAll('.agent-match-card-actions button').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const idx = parseInt(btn.dataset.matchIdx, 10);
+        handleMatchAction(idx, btn.dataset.action, matches, images);
+      });
+    });
+    updateSubmitButton();
+  }
+
+  // ── Handle match card actions ──
+  function handleMatchAction(idx, action, matches, images) {
+    const match = matches[idx];
+    if (!match) return;
+
+    if (action === 'accept') {
+      agentAcceptedMatches[idx] = { accepted: true, imageName: match.matchedImage?.name, dataUrl: match.matchedImage?.dataUrl };
+      const card = agentMatchResults.querySelector(`.agent-match-card[data-match-idx="${idx}"]`);
+      if (card) {
+        card.querySelector('.accept').classList.add('active');
+        card.querySelector('.reject').classList.remove('active');
+      }
+    } else if (action === 'reject') {
+      agentAcceptedMatches[idx] = { accepted: false, imageName: match.matchedImage?.name, dataUrl: match.matchedImage?.dataUrl };
+      const card = agentMatchResults.querySelector(`.agent-match-card[data-match-idx="${idx}"]`);
+      if (card) {
+        card.querySelector('.reject').classList.add('active');
+        card.querySelector('.accept').classList.remove('active');
+      }
+    } else if (action === 'pick') {
+      const picker = document.getElementById(`agentPicker-${idx}`);
+      if (picker.style.display === 'none' || !picker.style.display) {
+        const currentImage = agentAcceptedMatches[idx]?.imageName || match.matchedImage?.name || '';
+        const pickerItems = (images || []).map(img => {
+          const selected = img.name === currentImage ? 'selected' : '';
+          return `<img src="${img.dataUrl}" alt="${escapeHtml(img.name)}" class="${selected}" data-img-name="${escapeHtml(img.name)}" data-img-url="${img.dataUrl}"/>`;
+        }).join('');
+        picker.innerHTML = pickerItems;
+        picker.style.display = 'grid';
+
+        picker.querySelectorAll('img').forEach(pickImg => {
+          pickImg.addEventListener('click', () => {
+            picker.querySelectorAll('img').forEach(p => p.classList.remove('selected'));
+            pickImg.classList.add('selected');
+            agentAcceptedMatches[idx] = { accepted: true, imageName: pickImg.dataset.imgName, dataUrl: pickImg.dataset.imgUrl };
+            const card = agentMatchResults.querySelector(`.agent-match-card[data-match-idx="${idx}"]`);
+            if (card) {
+              const thumb = card.querySelector('.match-thumb');
+              if (thumb) { thumb.src = pickImg.dataset.imgUrl; thumb.style.display = 'block'; }
+              const infoDiv = card.querySelector('.match-info');
+              const lastChild = infoDiv?.querySelector('div:last-child');
+              if (lastChild) lastChild.textContent = `Image: ${pickImg.dataset.imgName}`;
+              card.querySelector('.accept').classList.add('active');
+              card.querySelector('.reject').classList.remove('active');
+            }
+            picker.style.display = 'none';
+            updateSubmitButton();
+          });
+        });
+      } else {
+        picker.style.display = 'none';
+      }
+    }
+    updateSubmitButton();
+  }
+
+  function updateSubmitButton() {
+    const hasAccepted = Object.values(agentAcceptedMatches).some(m => m.accepted === true);
+    agentSubmitBtn.disabled = !hasAccepted;
   }
 
   function collectAgentProductsForQueue() {
-    if (agentResultData?.products?.length) {
-      return [...agentProductInfo.querySelectorAll('.agent-product-select')]
-        .filter(input => input.checked)
-        .map(input => {
-          const idx = input.dataset.agentIdx;
-          const name = agentProductInfo.querySelector(`.agent-product-name[data-agent-idx="${idx}"]`)?.value.trim() || '';
-          const brand = agentProductInfo.querySelector(`.agent-product-brand[data-agent-idx="${idx}"]`)?.value.trim() || '';
-          const description = agentProductInfo.querySelector(`.agent-product-desc[data-agent-idx="${idx}"]`)?.value.trim() || '';
-          const driveFolderName = agentProductInfo.querySelector(`.agent-product-code[data-agent-idx="${idx}"]`)?.value.trim() || '';
-          return { name, brand, description, driveFolderName };
-        });
+    const products = [];
+    const checkedInputs = agentProductInfo ? [...agentProductInfo.querySelectorAll('.agent-product-select')].filter(i => i.checked) : [];
+    if (checkedInputs.length > 0) {
+      checkedInputs.forEach(input => {
+        const idx = input.dataset.agentIdx;
+        const name = agentProductInfo.querySelector(`.agent-product-name[data-agent-idx="${idx}"]`)?.value.trim() || '';
+        const brand = agentProductInfo.querySelector(`.agent-product-brand[data-agent-idx="${idx}"]`)?.value.trim() || '';
+        const description = agentProductInfo.querySelector(`.agent-product-desc[data-agent-idx="${idx}"]`)?.value.trim() || '';
+        const driveFolderName = agentProductInfo.querySelector(`.agent-product-code[data-agent-idx="${idx}"]`)?.value.trim() || '';
+        // Get matched image for this product
+        const matchIdx = parseInt(idx, 10);
+        const matchInfo = agentAcceptedMatches[matchIdx];
+        const dataUrl = matchInfo?.dataUrl || '';
+        const matchedImageName = matchInfo?.imageName || '';
+        products.push({ name, brand, description, driveFolderName, dataUrl, matchedImageName });
+      });
+    } else {
+      const nameInput = document.getElementById('agentNameManual');
+      const brandInput = document.getElementById('agentBrandManual');
+      const descEdit = document.getElementById('agentDescEdit');
+      const firstMatch = Object.values(agentAcceptedMatches).find(m => m.accepted);
+      products.push({
+        name: nameInput ? nameInput.value.trim() : (selectedPdfFile?.name || 'Agent product').replace(/\.[^.]+$/, ''),
+        brand: brandInput ? brandInput.value.trim() : '',
+        description: descEdit ? descEdit.value.trim() : '',
+        driveFolderName: '',
+        dataUrl: firstMatch?.dataUrl || '',
+        matchedImageName: firstMatch?.imageName || ''
+      });
     }
-
-    const nameInput = document.getElementById('agentNameManual');
-    const brandInput = document.getElementById('agentBrandManual');
-    const descEdit = document.getElementById('agentDescEdit');
-    return [{
-      name: nameInput ? nameInput.value.trim() : (selectedPdfFile?.name || 'Agent product').replace(/\.[^.]+$/, ''),
-      brand: brandInput ? brandInput.value.trim() : '',
-      description: descEdit ? descEdit.value.trim() : '',
-      driveFolderName: ''
-    }];
+    return products;
   }
 
-  // ── Analyze button ──
+  // ── Analyze button: Phase 1 — Extract & Inspect ──
   agentAnalyzeBtn.addEventListener('click', async () => {
     if (!selectedPdfFile || !selectedZipFile) return;
 
     // Reset previous results
     agentResult.style.display = 'none';
     agentResultData = null;
+    agentMatchData = null;
+    agentAcceptedMatches = {};
+    agentPhase1.style.display = 'block';
+    agentPhase2.style.display = 'none';
+    agentMatchBtn.disabled = true;
     agentSubmitBtn.disabled = true;
 
     // Show progress
@@ -6692,6 +7630,7 @@ function initUploadAgent() {
       // Display results
       agentProgress.style.display = 'none';
 
+      // ── Phase 1: Show extracted products ──
       if (data.products && data.products.length > 0) {
         agentProductInfo.innerHTML = renderAgentProductReview(data.products);
       } else if (data.warning) {
@@ -6712,39 +7651,115 @@ function initUploadAgent() {
           <textarea id="agentDescEdit" style="width:100%;min-height:80px;font-size:11px;padding:4px;border:1px solid var(--border-light);border-radius:4px;background:var(--bg);color:var(--text);resize:vertical;box-sizing:border-box;margin-top:2px;" placeholder="Describe the product in detail..."></textarea>`;
       }
 
-      // Show selected image
-      if (data.selectedImage && data.selectedImage.dataUrl) {
-        agentSelectedImg.src = data.selectedImage.dataUrl;
-        agentSelectedImg.style.display = 'block';
-        agentSelectedImg.title = `${data.selectedImage.name} (${data.selectedImage.width}x${data.selectedImage.height})`;
-      } else if (data.allImages && data.allImages.length > 0) {
-        const firstWithData = data.allImages.find(i => i.dataUrl);
-        if (firstWithData) {
-          agentSelectedImg.src = firstWithData.dataUrl;
-          agentSelectedImg.style.display = 'block';
-          agentSelectedImg.title = `${firstWithData.name} (${firstWithData.width}x${firstWithData.height})`;
-        }
+      // ── Phase 1: Show all images in gallery ──
+      if (data.allImages && data.allImages.length > 0) {
+        renderImageGallery(data.allImages);
+        agentImageCount.textContent = `(${data.allImages.length})`;
+      } else {
+        agentImageGallery.innerHTML = '<div style="font-size:11px;color:var(--text-muted);padding:8px;">No images found in ZIP.</div>';
+        agentImageCount.textContent = '(0)';
       }
 
+      // Show Phase 1, enable match button
       agentResult.style.display = 'block';
-      agentSubmitBtn.disabled = false;
+      agentPhase1.style.display = 'block';
+      agentPhase2.style.display = 'none';
+      agentMatchBtn.disabled = false;
+      agentSubmitBtn.disabled = true;
 
-      // Show image count
-      if (data.totalImages) {
-        toast(`Found ${data.totalImages} images in ZIP. Best image selected.`, 'info');
-      }
+      toast(`Extracted ${data.products?.length || 0} product(s) and ${data.allImages?.length || 0} image(s). Click "Match Products to Images" to correlate.`, 'info');
 
     } catch (err) {
       agentProgress.style.display = 'none';
       agentProductInfo.innerHTML = `<div style="color:var(--danger);font-size:11px;">❌ Error: ${escapeHtml(err.message)}</div>`;
       agentResult.style.display = 'block';
+      agentPhase1.style.display = 'block';
+      agentPhase2.style.display = 'none';
       toast(`Agent analysis failed: ${err.message}`, 'error');
     } finally {
       agentAnalyzeBtn.disabled = false;
     }
   });
 
-  // ── Submit button: add checked products to pendingItems for Bulk Queue review ──
+  // ── Match button: Phase 2 — Match & Preview ──
+  agentMatchBtn.addEventListener('click', async () => {
+    if (!agentResultData) return;
+
+    // Collect checked products
+    const products = collectAgentProductsForQueue();
+    if (!products.length) {
+      toast('Select at least one product first.', 'error');
+      return;
+    }
+
+    const invalid = products.find(p => !p.name || !p.description);
+    if (invalid) {
+      toast('Each selected product needs a name and description.', 'error');
+      return;
+    }
+
+    agentMatchBtn.disabled = true;
+    agentMatchBtn.textContent = 'Matching...';
+
+    try {
+      const res = await fetchApi('/api/agent/match', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          products: products.map(p => ({
+            name: p.name,
+            brand: p.brand,
+            description: p.description,
+            generatedCode: p.driveFolderName
+          })),
+          images: agentResultData.allImages || []
+        })
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || `Match server error: ${res.status}`);
+      }
+
+      const data = await res.json();
+      agentMatchData = data;
+
+      if (!data.success) {
+        throw new Error(data.error || 'Matching failed');
+      }
+
+      // Reset accepted matches
+      agentAcceptedMatches = {};
+      if (data.matches) {
+        data.matches.forEach((m, idx) => {
+          agentAcceptedMatches[idx] = { accepted: true, imageName: m.matchedImage?.name, dataUrl: m.matchedImage?.dataUrl };
+        });
+      }
+
+      // Render match results and switch to Phase 2
+      renderMatchResults(data.matches || [], agentResultData.allImages || []);
+      agentPhase1.style.display = 'none';
+      agentPhase2.style.display = 'block';
+
+      const matchCount = data.matches?.length || 0;
+      const verifiedCount = data.matches?.filter(m => m.verification?.isMatch !== false && m.verification?.confidence !== 'skipped').length || 0;
+      toast(`Matched ${matchCount} product(s) to images. ${verifiedCount} verified by AI. Review and click "+ Add All Matched to Queue".`, 'info');
+
+    } catch (err) {
+      toast(`Matching failed: ${err.message}`, 'error');
+    } finally {
+      agentMatchBtn.disabled = false;
+      agentMatchBtn.textContent = '🔗 Match Products to Images';
+    }
+  });
+
+  // ── Back to Inspect button: return to Phase 1 ──
+  agentBackToInspectBtn.addEventListener('click', () => {
+    agentPhase1.style.display = 'block';
+    agentPhase2.style.display = 'none';
+  });
+
+  // ── Submit button: add matched products to pendingItems for Bulk Queue review ──
   agentSubmitBtn.addEventListener('click', async () => {
     if (!agentResultData) return;
 
@@ -6756,7 +7771,7 @@ function initUploadAgent() {
       if (!products.length) {
         toast('Select at least one product first.', 'error');
         agentSubmitBtn.disabled = false;
-        agentSubmitBtn.textContent = '+ Add to Bulk Queue';
+        agentSubmitBtn.textContent = '+ Add All Matched to Queue';
         return;
       }
 
@@ -6764,15 +7779,7 @@ function initUploadAgent() {
       if (invalid) {
         toast('Each selected product needs a name and description.', 'error');
         agentSubmitBtn.disabled = false;
-        agentSubmitBtn.textContent = '+ Add to Bulk Queue';
-        return;
-      }
-
-      const selectedImage = getAgentSelectedImage();
-      if (!selectedImage.dataUrl) {
-        toast('No image data available. Please try uploading the ZIP again.', 'error');
-        agentSubmitBtn.disabled = false;
-        agentSubmitBtn.textContent = '+ Add to Bulk Queue';
+        agentSubmitBtn.textContent = '+ Add All Matched to Queue';
         return;
       }
 
@@ -6780,7 +7787,7 @@ function initUploadAgent() {
         pendingItems.push({
           id: nextId++,
           name: product.driveFolderName || product.name,
-          dataUrl: selectedImage.dataUrl,
+          dataUrl: product.dataUrl,
           desc: product.description,
           brand: product.brand,
           status: STATUS.WAIT,
@@ -6800,6 +7807,8 @@ function initUploadAgent() {
 
       agentResult.style.display = 'none';
       agentResultData = null;
+      agentMatchData = null;
+      agentAcceptedMatches = {};
       selectedPdfFile = null;
       selectedZipFile = null;
       agentPdfInput.value = '';
@@ -6810,15 +7819,495 @@ function initUploadAgent() {
       agentZipText.textContent = 'Drop ZIP file here or click to browse';
       agentZipSub.textContent = 'ZIP files only · max 50MB';
       agentZipIcon.textContent = 'ZIP';
-      agentSelectedImg.style.display = 'none';
-      agentSelectedImg.src = '';
       agentAnalyzeBtn.disabled = true;
-      agentSubmitBtn.textContent = '+ Add to Bulk Queue';
+      agentMatchBtn.disabled = true;
+      agentMatchBtn.textContent = '🔗 Match Products to Images';
+      agentSubmitBtn.textContent = '+ Add All Matched to Queue';
       renderQueue();
     } catch (err) {
       toast(`Add to Bulk Queue failed: ${err.message}`, 'error');
       agentSubmitBtn.disabled = false;
-      agentSubmitBtn.textContent = '+ Add to Bulk Queue';
+      agentSubmitBtn.textContent = '+ Add All Matched to Queue';
+    }
+  });
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  BATCH PROCESSOR — Standalone full-screen batch processing UI
+//  Step 1: Upload PDF + ZIP → Step 2: Extract & Inspect → Step 3: Match & Preview
+// ══════════════════════════════════════════════════════════════════
+
+function initBatchProcessor() {
+  let batchPdfFile = null;
+  let batchZipFile = null;
+  let batchResultData = null;
+  let batchMatchData = null;
+  let batchAcceptedMatches = {};
+
+  // ── PDF file selection ──
+  batchPdfDropZone?.addEventListener('click', () => batchPdfInput?.click());
+  batchPdfInput?.addEventListener('change', (e) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      batchPdfFile = file;
+      batchPdfText.textContent = file.name;
+      batchPdfSub.textContent = `${(file.size / 1024 / 1024).toFixed(2)} MB`;
+      batchPdfIcon.textContent = '✅';
+      updateBatchAnalyzeBtn();
+    }
+  });
+
+  // ── ZIP file selection ──
+  batchZipDropZone?.addEventListener('click', () => batchZipInput?.click());
+  batchZipInput?.addEventListener('change', (e) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      batchZipFile = file;
+      batchZipText.textContent = file.name;
+      batchZipSub.textContent = `${(file.size / 1024 / 1024).toFixed(2)} MB`;
+      batchZipIcon.textContent = '✅';
+      updateBatchAnalyzeBtn();
+    }
+  });
+
+  // ── Drag & drop for PDF ──
+  batchPdfDropZone?.addEventListener('dragover', (e) => { e.preventDefault(); batchPdfDropZone.style.borderColor = 'var(--accent)'; });
+  batchPdfDropZone?.addEventListener('dragleave', () => { batchPdfDropZone.style.borderColor = ''; });
+  batchPdfDropZone?.addEventListener('drop', (e) => {
+    e.preventDefault();
+    batchPdfDropZone.style.borderColor = '';
+    const file = e.dataTransfer.files?.[0];
+    if (file && file.type === 'application/pdf') {
+      batchPdfFile = file;
+      batchPdfText.textContent = file.name;
+      batchPdfSub.textContent = `${(file.size / 1024 / 1024).toFixed(2)} MB`;
+      batchPdfIcon.textContent = '✅';
+      updateBatchAnalyzeBtn();
+    }
+  });
+
+  // ── Drag & drop for ZIP ──
+  batchZipDropZone?.addEventListener('dragover', (e) => { e.preventDefault(); batchZipDropZone.style.borderColor = 'var(--accent)'; });
+  batchZipDropZone?.addEventListener('dragleave', () => { batchZipDropZone.style.borderColor = ''; });
+  batchZipDropZone?.addEventListener('drop', (e) => {
+    e.preventDefault();
+    batchZipDropZone.style.borderColor = '';
+    const file = e.dataTransfer.files?.[0];
+    if (file && (file.type === 'application/zip' || file.name.endsWith('.zip'))) {
+      batchZipFile = file;
+      batchZipText.textContent = file.name;
+      batchZipSub.textContent = `${(file.size / 1024 / 1024).toFixed(2)} MB`;
+      batchZipIcon.textContent = '✅';
+      updateBatchAnalyzeBtn();
+    }
+  });
+
+  function updateBatchAnalyzeBtn() {
+    batchAnalyzeBtn.disabled = !batchPdfFile || !batchZipFile;
+  }
+
+  // ── Render product cards (Step 2) ──
+  function renderBatchProductGrid(products) {
+    if (!products || !products.length) {
+      batchProductGrid.innerHTML = '<div style="font-size:13px;color:var(--text-muted);padding:24px;text-align:center;">No products extracted.</div>';
+      return;
+    }
+    const cards = products.map((product, idx) => {
+      const code = product.generatedCode || '';
+      return `<div class="batch-product-card" data-batch-idx="${idx}">
+        <div class="bpc-head">
+          <input type="checkbox" class="bpc-select" data-batch-idx="${idx}" checked/>
+          <span style="font-size:13px;font-weight:700;color:var(--text);">Product ${idx + 1}</span>
+          ${code ? `<span class="bpc-code">${escapeHtml(code)}</span>` : ''}
+        </div>
+        <input class="bpc-field bpc-name" data-batch-idx="${idx}" type="text" value="${escapeHtml(product.name || `Product ${idx + 1}`)}" placeholder="Product name"/>
+        <input class="bpc-field bpc-brand" data-batch-idx="${idx}" type="text" value="${escapeHtml(product.brand || '')}" placeholder="Brand"/>
+        <input class="bpc-field bpc-code-input" data-batch-idx="${idx}" type="text" value="${escapeHtml(code)}" placeholder="Drive folder code"/>
+        <textarea class="bpc-field bpc-desc" data-batch-idx="${idx}" placeholder="Product description">${escapeHtml(product.description || '')}</textarea>
+      </div>`;
+    }).join('');
+    batchProductGrid.innerHTML = cards;
+  }
+
+  // ── Render image gallery (Step 2) ──
+  function renderBatchImageGallery(images) {
+    if (!images || !images.length) {
+      batchImageGallery.innerHTML = '<div style="font-size:13px;color:var(--text-muted);padding:24px;text-align:center;">No images found in ZIP.</div>';
+      batchImageCount.textContent = '(0)';
+      return;
+    }
+    batchImageCount.textContent = `(${images.length})`;
+    const items = images.map((img, idx) => {
+      const label = img.name || `img-${idx}`;
+      return `<div class="batch-image-gallery-item" title="${escapeHtml(label)}">
+        <img src="${img.dataUrl}" alt="${escapeHtml(label)}" loading="lazy"/>
+        <span class="big-label">${escapeHtml(label)}</span>
+      </div>`;
+    }).join('');
+    batchImageGallery.innerHTML = items;
+  }
+
+  // ── Render match results (Step 3) ──
+  function renderBatchMatchGrid(matches, images) {
+    if (!matches || !matches.length) {
+      batchMatchGrid.innerHTML = '<div style="font-size:13px;color:var(--text-muted);padding:24px;text-align:center;">No matches found. Try adjusting product codes or image filenames.</div>';
+      batchSubmitBtn.disabled = true;
+      return;
+    }
+
+    const imageMap = {};
+    if (images) images.forEach(img => { imageMap[img.name] = img.dataUrl; });
+
+    const cards = matches.map((match, idx) => {
+      const product = match.product || {};
+      const matchedImage = match.matchedImage || {};
+      const score = match.score || 0;
+      const imageDataUrl = matchedImage.dataUrl || imageMap[matchedImage.name] || '';
+      const productCode = product.generatedCode || '';
+
+      let badgeClass = 'low';
+      let badgeLabel = `${score}%`;
+      if (score >= 100) { badgeClass = 'exact'; badgeLabel = 'Exact'; }
+      else if (score >= 80) { badgeClass = 'high'; badgeLabel = `${score}%`; }
+      else if (score >= 40) { badgeClass = 'medium'; badgeLabel = `${score}%`; }
+
+      const accepted = batchAcceptedMatches[idx]?.accepted !== false;
+
+      return `<div class="batch-match-card" data-batch-idx="${idx}">
+        <div class="bmc-header">
+          <img class="bmc-thumb" src="${escapeHtml(imageDataUrl)}" alt="${escapeHtml(matchedImage.name || '')}" onerror="this.style.display='none'"/>
+          <div class="bmc-info">
+            <div class="bmc-name">${escapeHtml(product.name || `Product ${idx + 1}`)}</div>
+            ${productCode ? `<div class="bmc-code">Code: ${escapeHtml(productCode)}</div>` : ''}
+            <div class="bmc-image-name">Image: ${escapeHtml(matchedImage.name || '')}</div>
+          </div>
+          <span class="bmc-badge ${badgeClass}">${badgeLabel}</span>
+        </div>
+        <div class="bmc-actions">
+          <button class="accept ${accepted ? 'active' : ''}" data-batch-idx="${idx}" data-action="accept">✓ Accept</button>
+          <button class="reject ${!accepted ? 'active' : ''}" data-batch-idx="${idx}" data-action="reject">✗ Reject</button>
+          <button class="pick" data-batch-idx="${idx}" data-action="pick">🔄 Pick Different</button>
+        </div>
+        <div class="bmc-picker" id="batchPicker-${idx}" style="display:none;"></div>
+      </div>`;
+    }).join('');
+
+    batchMatchGrid.innerHTML = cards;
+
+    batchMatchGrid.querySelectorAll('.bmc-actions button').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const idx = parseInt(btn.dataset.batchIdx, 10);
+        handleBatchMatchAction(idx, btn.dataset.action, matches, images);
+      });
+    });
+    updateBatchSubmitBtn();
+  }
+
+  // ── Handle match card actions ──
+  function handleBatchMatchAction(idx, action, matches, images) {
+    const match = matches[idx];
+    if (!match) return;
+
+    if (action === 'accept') {
+      batchAcceptedMatches[idx] = { accepted: true, imageName: match.matchedImage?.name, dataUrl: match.matchedImage?.dataUrl };
+      const card = batchMatchGrid.querySelector(`.batch-match-card[data-batch-idx="${idx}"]`);
+      if (card) {
+        card.querySelector('.accept').classList.add('active');
+        card.querySelector('.reject').classList.remove('active');
+      }
+    } else if (action === 'reject') {
+      batchAcceptedMatches[idx] = { accepted: false, imageName: match.matchedImage?.name, dataUrl: match.matchedImage?.dataUrl };
+      const card = batchMatchGrid.querySelector(`.batch-match-card[data-batch-idx="${idx}"]`);
+      if (card) {
+        card.querySelector('.reject').classList.add('active');
+        card.querySelector('.accept').classList.remove('active');
+      }
+    } else if (action === 'pick') {
+      const picker = document.getElementById(`batchPicker-${idx}`);
+      if (picker.style.display === 'none' || !picker.style.display) {
+        const currentImage = batchAcceptedMatches[idx]?.imageName || match.matchedImage?.name || '';
+        const pickerItems = (images || []).map(img => {
+          const selected = img.name === currentImage ? 'selected' : '';
+          return `<img src="${img.dataUrl}" alt="${escapeHtml(img.name)}" class="${selected}" data-img-name="${escapeHtml(img.name)}" data-img-url="${img.dataUrl}"/>`;
+        }).join('');
+        picker.innerHTML = pickerItems;
+        picker.style.display = 'grid';
+
+        picker.querySelectorAll('img').forEach(pickImg => {
+          pickImg.addEventListener('click', () => {
+            picker.querySelectorAll('img').forEach(p => p.classList.remove('selected'));
+            pickImg.classList.add('selected');
+            batchAcceptedMatches[idx] = { accepted: true, imageName: pickImg.dataset.imgName, dataUrl: pickImg.dataset.imgUrl };
+            const card = batchMatchGrid.querySelector(`.batch-match-card[data-batch-idx="${idx}"]`);
+            if (card) {
+              const thumb = card.querySelector('.bmc-thumb');
+              if (thumb) { thumb.src = pickImg.dataset.imgUrl; thumb.style.display = 'block'; }
+              const infoDiv = card.querySelector('.bmc-info');
+              const lastChild = infoDiv?.querySelector('.bmc-image-name');
+              if (lastChild) lastChild.textContent = `Image: ${pickImg.dataset.imgName}`;
+              card.querySelector('.accept').classList.add('active');
+              card.querySelector('.reject').classList.remove('active');
+            }
+            picker.style.display = 'none';
+            updateBatchSubmitBtn();
+          });
+        });
+      } else {
+        picker.style.display = 'none';
+      }
+    }
+    updateBatchSubmitBtn();
+  }
+
+  function updateBatchSubmitBtn() {
+    const hasAccepted = Object.values(batchAcceptedMatches).some(m => m.accepted === true);
+    batchSubmitBtn.disabled = !hasAccepted;
+  }
+
+  function collectBatchProductsForQueue() {
+    const products = [];
+    const checkedInputs = [...(batchProductGrid?.querySelectorAll('.bpc-select') || [])].filter(i => i.checked);
+    checkedInputs.forEach(input => {
+      const idx = input.dataset.batchIdx;
+      const name = batchProductGrid?.querySelector(`.bpc-name[data-batch-idx="${idx}"]`)?.value.trim() || '';
+      const brand = batchProductGrid?.querySelector(`.bpc-brand[data-batch-idx="${idx}"]`)?.value.trim() || '';
+      const description = batchProductGrid?.querySelector(`.bpc-desc[data-batch-idx="${idx}"]`)?.value.trim() || '';
+      const driveFolderName = batchProductGrid?.querySelector(`.bpc-code-input[data-batch-idx="${idx}"]`)?.value.trim() || '';
+      // Each product gets its OWN matched image from batchAcceptedMatches
+      const matchIdx = parseInt(idx, 10);
+      const matchInfo = batchAcceptedMatches[matchIdx];
+      const dataUrl = matchInfo?.dataUrl || '';
+      const matchedImageName = matchInfo?.imageName || '';
+      products.push({ name, brand, description, driveFolderName, dataUrl, matchedImageName });
+    });
+    return products;
+  }
+
+  // ── Analyze button: Step 1 → Step 2 ──
+  batchAnalyzeBtn?.addEventListener('click', async () => {
+    if (!batchPdfFile || !batchZipFile) return;
+
+    // Reset
+    batchResultData = null;
+    batchMatchData = null;
+    batchAcceptedMatches = {};
+    batchStep2.style.display = 'none';
+    batchStep3.style.display = 'none';
+    batchMatchBtn.disabled = true;
+    batchSubmitBtn.disabled = true;
+
+    batchProgress.style.display = 'flex';
+    batchProgressText.textContent = 'Uploading files to server...';
+    batchAnalyzeBtn.disabled = true;
+
+    try {
+      const formData = new FormData();
+      formData.append('pdf', batchPdfFile);
+      formData.append('zip', batchZipFile);
+
+      batchProgressText.textContent = 'Analyzing PDF with DeepSeek AI...';
+
+      const res = await fetchApi('/api/agent/process', {
+        method: 'POST',
+        body: formData
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || `Server error: ${res.status}`);
+      }
+
+      const data = await res.json();
+      batchResultData = data;
+
+      if (!data.success) {
+        throw new Error(data.error || 'Analysis failed');
+      }
+
+      batchProgress.style.display = 'none';
+
+      // Step 2: Show extracted products
+      if (data.products && data.products.length > 0) {
+        renderBatchProductGrid(data.products);
+      } else {
+        batchProductGrid.innerHTML = `<div style="font-size:13px;color:var(--warning);padding:24px;text-align:center;">
+          No products could be extracted from the PDF. Try a different catalog file.
+        </div>`;
+      }
+
+      // Step 2: Show all images
+      if (data.allImages && data.allImages.length > 0) {
+        renderBatchImageGallery(data.allImages);
+      } else {
+        batchImageGallery.innerHTML = '<div style="font-size:13px;color:var(--text-muted);padding:24px;text-align:center;">No images found in ZIP.</div>';
+        batchImageCount.textContent = '(0)';
+      }
+
+      batchStep2.style.display = 'block';
+      batchMatchBtn.disabled = false;
+
+      toast(`Extracted ${data.products?.length || 0} product(s) and ${data.allImages?.length || 0} image(s). Review and click "Match Products to Images".`, 'info');
+
+    } catch (err) {
+      batchProgress.style.display = 'none';
+      batchProductGrid.innerHTML = `<div style="color:var(--danger);font-size:13px;padding:24px;text-align:center;">❌ Error: ${escapeHtml(err.message)}</div>`;
+      batchStep2.style.display = 'block';
+      toast(`Batch analysis failed: ${err.message}`, 'error');
+    } finally {
+      batchAnalyzeBtn.disabled = false;
+    }
+  });
+
+  // ── Match button: Step 2 → Step 3 ──
+  batchMatchBtn?.addEventListener('click', async () => {
+    if (!batchResultData) return;
+
+    // Collect checked products with their current field values
+    const products = collectBatchProductsForQueue();
+    if (!products.length) {
+      toast('Select at least one product first.', 'error');
+      return;
+    }
+
+    const invalid = products.find(p => !p.name || !p.description);
+    if (invalid) {
+      toast('Each selected product needs a name and description.', 'error');
+      return;
+    }
+
+    batchMatchBtn.disabled = true;
+    batchMatchBtn.textContent = 'Matching...';
+
+    try {
+      const res = await fetchApi('/api/agent/match', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          products: products.map(p => ({
+            name: p.name,
+            brand: p.brand,
+            description: p.description,
+            generatedCode: p.driveFolderName
+          })),
+          images: batchResultData.allImages || []
+        })
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || `Match server error: ${res.status}`);
+      }
+
+      const data = await res.json();
+      batchMatchData = data;
+
+      if (!data.success) {
+        throw new Error(data.error || 'Matching failed');
+      }
+
+      // Reset accepted matches — each product gets its OWN image
+      batchAcceptedMatches = {};
+      if (data.matches) {
+        data.matches.forEach((m, idx) => {
+          batchAcceptedMatches[idx] = { accepted: true, imageName: m.matchedImage?.name, dataUrl: m.matchedImage?.dataUrl };
+        });
+      }
+
+      // Render match results and switch to Step 3
+      renderBatchMatchGrid(data.matches || [], batchResultData.allImages || []);
+      batchStep2.style.display = 'none';
+      batchStep3.style.display = 'block';
+
+      const matchCount = data.matches?.length || 0;
+      toast(`Matched ${matchCount} product(s) to images. Review each match, then click "+ Add All Matched to Queue".`, 'info');
+
+    } catch (err) {
+      toast(`Matching failed: ${err.message}`, 'error');
+    } finally {
+      batchMatchBtn.disabled = false;
+      batchMatchBtn.textContent = '🔗 Match Products to Images';
+    }
+  });
+
+  // ── Back to Step 2 ──
+  batchBackBtn?.addEventListener('click', () => {
+    batchStep2.style.display = 'block';
+    batchStep3.style.display = 'none';
+  });
+
+  // ── Submit button: add ALL matched products (each with its own image) to pendingItems ──
+  batchSubmitBtn?.addEventListener('click', async () => {
+    if (!batchResultData) return;
+
+    batchSubmitBtn.disabled = true;
+    batchSubmitBtn.textContent = 'Adding...';
+
+    try {
+      const products = collectBatchProductsForQueue();
+      if (!products.length) {
+        toast('Select at least one product first.', 'error');
+        batchSubmitBtn.disabled = false;
+        batchSubmitBtn.textContent = '+ Add All Matched to Queue';
+        return;
+      }
+
+      const invalid = products.find(p => !p.name || !p.description);
+      if (invalid) {
+        toast('Each selected product needs a name and description.', 'error');
+        batchSubmitBtn.disabled = false;
+        batchSubmitBtn.textContent = '+ Add All Matched to Queue';
+        return;
+      }
+
+      // Add EACH product with its OWN matched image to pendingItems
+      for (const product of products) {
+        pendingItems.push({
+          id: nextId++,
+          name: product.driveFolderName || product.name,
+          dataUrl: product.dataUrl, // Each product has its own image
+          desc: product.description,
+          brand: product.brand,
+          status: STATUS.WAIT,
+          supabaseUrl: '',
+          driveFolderName: product.driveFolderName || '',
+          provider: provider || 'openai',
+          resolution: nb2Res || '1K'
+        });
+      }
+
+      renderPendingList();
+      updateCost();
+      checkReady();
+      await saveState();
+      toast(`Added ${products.length} product(s) to Bulk Queue review — each with its own matched image`, 'success');
+      showBulkRenderPanel();
+
+      // Reset batch processor state
+      batchStep2.style.display = 'none';
+      batchStep3.style.display = 'none';
+      batchStep1.style.display = 'block';
+      batchResultData = null;
+      batchMatchData = null;
+      batchAcceptedMatches = {};
+      batchPdfFile = null;
+      batchZipFile = null;
+      batchPdfInput.value = '';
+      batchZipInput.value = '';
+      batchPdfText.textContent = 'Drop PDF catalog here or click to browse';
+      batchPdfSub.textContent = 'PDF files only · max 50MB';
+      batchPdfIcon.textContent = '📄';
+      batchZipText.textContent = 'Drop ZIP of product images here';
+      batchZipSub.textContent = 'ZIP files only · max 50MB';
+      batchZipIcon.textContent = '🗜️';
+      batchAnalyzeBtn.disabled = true;
+      batchMatchBtn.disabled = true;
+      batchMatchBtn.textContent = '🔗 Match Products to Images';
+      batchSubmitBtn.textContent = '+ Add All Matched to Queue';
+      renderQueue();
+    } catch (err) {
+      toast(`Add to Bulk Queue failed: ${err.message}`, 'error');
+      batchSubmitBtn.disabled = false;
+      batchSubmitBtn.textContent = '+ Add All Matched to Queue';
     }
   });
 }
