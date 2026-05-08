@@ -5989,9 +5989,13 @@ function hideWorkspacePanels() {
   if (bulkUploadPanel) bulkUploadPanel.style.display = 'none';
   if (bulkRenderPanel) bulkRenderPanel.style.display = 'none';
   if (batchProcessorPanel) batchProcessorPanel.style.display = 'none';
+  const renderQueuePanel = document.getElementById('renderQueuePanel');
+  if (renderQueuePanel) renderQueuePanel.style.display = 'none';
   bulkUploadToggle?.classList.remove('active');
   bulkRenderToggle?.classList.remove('active');
   batchProcessorToggle?.classList.remove('active');
+  document.getElementById('renderQueueToggle')?.classList.remove('active');
+  if (typeof stopRqPolling === 'function') stopRqPolling();
 }
 
 function showBulkUploadPanel() {
@@ -10776,23 +10780,36 @@ function initRenderQueue() {
   const panel = document.getElementById('renderQueuePanel');
   if (!toggle || !panel) return;
 
-  let isOpen = false;
   function hideAllPanels() {
-    document.querySelectorAll('.main > div[id$="Panel"]').forEach(el => {
-      if (el.id !== 'renderQueuePanel') el.style.display = 'none';
+    document.querySelectorAll('.main > div[id$="Panel"], .dcm-panel').forEach(el => {
+      if (el.id !== 'renderQueuePanel') {
+        el.style.display = 'none';
+        el.classList.remove('active');
+      }
     });
+    document.querySelectorAll('.topbar .tb-btn.active').forEach(btn => {
+      if (btn.id !== 'renderQueueToggle') btn.classList.remove('active');
+    });
+    const activeSec = document.getElementById('active-section');
+    if (activeSec) activeSec.style.display = 'none';
+    if (welcomeState) welcomeState.style.display = 'none';
   }
 
   toggle.addEventListener('click', () => {
-    isOpen = !isOpen;
-    toggle.classList.toggle('active', isOpen);
-    if (isOpen) {
+    const shouldOpen = panel.style.display === 'none' || !panel.style.display;
+    toggle.classList.toggle('active', shouldOpen);
+    if (shouldOpen) {
       hideAllPanels();
+      toggle.classList.add('active');
       panel.style.display = 'block';
       fetchQueueBatches();
       startRqPolling();
     } else {
       panel.style.display = 'none';
+      toggle.classList.remove('active');
+      if (!document.getElementById('active-section')) {
+        welcomeState.style.display = 'flex';
+      }
       stopRqPolling();
     }
   });
