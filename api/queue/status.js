@@ -120,7 +120,7 @@ export default async function handler(req, res) {
 function getBatchApiModel(provider) {
   if (provider === 'openai-mini') return 'gpt-image-1-mini + Gemini Flash fallback';
   if (provider === 'openai') return OPENAI_IMAGE_MODEL;
-  if (provider === 'gemini') return 'gemini-3.1-flash-image-preview / gemini-3-pro-image-preview';
+  if (provider === 'gemini') return 'gemini-3.1-flash-image-preview (+ fallbacks)';
   return '';
 }
 

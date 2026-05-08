@@ -1250,100 +1250,198 @@ textarea:focus { outline: none; border-color: var(--text-secondary); }
 .monitor-summary.all-ok { color: var(--success); }
 .monitor-summary.has-err { color: var(--error); }
 
-/* ── MATCHED IMAGES PANEL ────────────────────────────────────── */
-.matched-panel {
-  max-width: 1100px;
+/* ── MATCHED IMAGES SUBPAGE ──────────────────────────────────── */
+.mi-panel {
+  max-width: 1200px;
   margin: 0 auto;
 }
-.matched-grid {
+.mi-shell {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 14px;
-  margin-top: 12px;
+  grid-template-columns: 200px 1fr;
+  gap: 0;
+  min-height: 400px;
+  background: var(--surface);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  overflow: hidden;
 }
-.matched-card {
+.mi-sidebar {
+  background: var(--surface-2);
+  border-right: 1px solid var(--border);
+  padding: 16px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.mi-sidebar-head {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--text-muted);
+  padding: 0 10px 8px;
+  border-bottom: 1px solid var(--border-light);
+  margin-bottom: 8px;
+}
+.mi-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+  text-align: left;
+  transition: all var(--transition);
+}
+.mi-nav-item:hover {
+  background: var(--surface);
+  color: var(--text);
+}
+.mi-nav-item.active {
+  background: var(--accent);
+  color: #fff;
+}
+.mi-main {
+  padding: 20px;
+  overflow-y: auto;
+  max-height: 70vh;
+}
+.mi-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+.mi-header h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text);
+}
+.mi-header p {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.mi-header-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.mi-header-actions button {
+  font-size: 11px;
+  padding: 6px 14px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+  transition: all var(--transition);
+  white-space: nowrap;
+}
+.mi-header-actions button:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.mi-header-actions button.primary {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+.mi-header-actions button.primary:hover {
+  opacity: 0.85;
+}
+.mi-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.mi-stat-card {
+  background: var(--surface-2);
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.mi-stat-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+}
+.mi-stat-value {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1.2;
+}
+.mi-stat-sub {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+.mi-filters {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+  padding: 10px 12px;
+  background: var(--surface-2);
+  border-radius: 8px;
+  border: 1px solid var(--border-light);
+}
+.mi-filters input,
+.mi-filters select {
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--card-bg);
+  color: var(--text);
+  font-size: 12px;
+}
+.mi-filters input { flex: 1; min-width: 160px; }
+.mi-filters select { min-width: 100px; }
+.mi-filters .mi-per-page { width: 70px; }
+.mi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+}
+.mi-card {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   overflow: hidden;
   transition: background var(--transition), border-color var(--transition);
-}
-.matched-card-img {
-  width: 100%;
-  height: 200px;
-  object-fit: cover;
-  display: block;
-  background: var(--surface-2);
-}
-.matched-card-body {
-  padding: 10px 12px;
-}
-.matched-card-name {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text);
-  margin-bottom: 2px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.matched-card-code {
-  font-size: 10px;
-  color: var(--accent);
-  font-family: monospace;
-  margin-bottom: 4px;
-}
-.matched-card-desc {
-  font-size: 11px;
-  color: var(--text-secondary);
-  line-height: 1.4;
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  margin-bottom: 6px;
-}
-.matched-card-meta {
-  font-size: 10px;
-  color: var(--text-muted);
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-.matched-card-meta span {
-  background: var(--surface-2);
-  padding: 2px 6px;
-  border-radius: 4px;
-}
-.matched-card-footer {
-  display: flex;
-  gap: 6px;
-  padding: 8px 12px;
-  border-top: 1px solid var(--border-light);
-}
-.matched-card-footer button {
-  font-size: 10px;
-  padding: 4px 10px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--surface);
-  color: var(--text);
   cursor: pointer;
-  transition: all var(--transition);
 }
-.matched-card-footer button:hover {
+.mi-card:hover {
   border-color: var(--accent);
-  color: var(--accent);
+  background: var(--surface-2);
 }
-.matched-card-img-wrap {
+.mi-card-img-wrap {
   position: relative;
   overflow: hidden;
+  background: var(--surface-2);
 }
-.matched-card-img-wrap.has-render {
+.mi-card-img {
+  width: 100%;
+  height: 180px;
+  object-fit: cover;
+  display: block;
+}
+.mi-card-img-wrap.has-render {
   outline: 2px solid #22c55e;
   outline-offset: -2px;
 }
-.matched-render-badge {
+.mi-render-badge {
   position: absolute;
   top: 6px;
   right: 6px;
@@ -1356,10 +1454,70 @@ textarea:focus { outline: none; border-color: var(--text-secondary); }
   pointer-events: none;
   backdrop-filter: blur(4px);
 }
-.matched-render-badge.processing {
+.mi-render-badge.processing {
   background: rgba(234, 179, 8, 0.9);
 }
-.matched-add-btn {
+.mi-card-body {
+  padding: 10px 12px;
+}
+.mi-card-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mi-card-code {
+  font-size: 10px;
+  color: var(--accent);
+  font-family: monospace;
+  margin-bottom: 4px;
+}
+.mi-card-desc {
+  font-size: 11px;
+  color: var(--text-secondary);
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  margin-bottom: 6px;
+}
+.mi-card-meta {
+  font-size: 10px;
+  color: var(--text-muted);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.mi-card-meta span {
+  background: var(--surface-2);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+.mi-card-footer {
+  display: flex;
+  gap: 6px;
+  padding: 8px 12px;
+  border-top: 1px solid var(--border-light);
+}
+.mi-card-footer button {
+  font-size: 10px;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+  transition: all var(--transition);
+}
+.mi-card-footer button:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.mi-add-btn {
   font-size: 10px;
   padding: 4px 10px;
   border: 1px solid var(--accent);
@@ -1370,27 +1528,73 @@ textarea:focus { outline: none; border-color: var(--text-secondary); }
   transition: all var(--transition);
   font-weight: 600;
 }
-.matched-add-btn:hover {
+.mi-add-btn:hover {
   opacity: 0.85;
-  border-color: var(--accent);
 }
-.matched-view-render-btn {
+.mi-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
   font-size: 10px;
-  padding: 4px 10px;
-  border: 1px solid #22c55e;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: #22c55e;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 99px;
+}
+.mi-badge.rendered { background: rgba(34,197,94,0.15); color: #16a34a; }
+.mi-badge.processing { background: rgba(234,179,8,0.15); color: #b45309; }
+.mi-badge.pending { background: rgba(100,116,139,0.15); color: var(--text-muted); }
+.mi-card-brand { font-size: 11px; color: var(--text-secondary); margin-bottom: 3px; }
+.mi-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 0;
+  margin-top: 12px;
+  border-top: 1px solid var(--border-light);
+}
+.mi-pagination button {
+  font-size: 11px;
+  padding: 5px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
   cursor: pointer;
   transition: all var(--transition);
 }
-.matched-view-render-btn:hover {
-  background: rgba(34, 197, 94, 0.1);
-  border-color: #22c55e;
+.mi-pagination button:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.mi-pagination button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.mi-pagination .mi-page-info {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.mi-empty {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+.mi-empty-icon {
+  font-size: 40px;
+  margin-bottom: 12px;
+  opacity: 0.5;
+}
+.mi-loading {
+  text-align: center;
+  padding: 40px;
+  color: var(--text-muted);
+  font-size: 13px;
 }
 
-/* ── Matched Images Detail Subpage ──────────────────────────── */
-.matched-detail-back {
+/* ── MI Detail View ──────────────────────────────────────────── */
+.mi-detail-back {
   font-size: 12px;
   padding: 6px 14px;
   border: 1px solid var(--border);
@@ -1401,14 +1605,14 @@ textarea:focus { outline: none; border-color: var(--text-secondary); }
   transition: all var(--transition);
   font-weight: 500;
 }
-.matched-detail-back:hover {
+.mi-detail-back:hover {
   border-color: var(--accent);
   color: var(--accent);
 }
-.matched-detail-content {
+.mi-detail-content {
   margin-top: 16px;
 }
-.matched-detail-layout {
+.mi-detail-layout {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 24px;
@@ -1418,11 +1622,11 @@ textarea:focus { outline: none; border-color: var(--text-secondary); }
   overflow: hidden;
 }
 @media (max-width: 768px) {
-  .matched-detail-layout {
+  .mi-detail-layout {
     grid-template-columns: 1fr;
   }
 }
-.matched-detail-image-section {
+.mi-detail-image-section {
   padding: 16px;
   display: flex;
   flex-direction: column;
@@ -1431,42 +1635,42 @@ textarea:focus { outline: none; border-color: var(--text-secondary); }
   min-height: 300px;
   justify-content: center;
 }
-.matched-detail-image-section img {
+.mi-detail-image-section img {
   max-width: 100%;
   max-height: 400px;
   object-fit: contain;
   border-radius: var(--radius-sm);
   box-shadow: 0 2px 8px rgba(0,0,0,0.15);
 }
-.matched-detail-image-section .matched-detail-img-label {
+.mi-detail-image-section .mi-detail-img-label {
   font-size: 11px;
   color: var(--text-muted);
   margin-top: 8px;
   text-align: center;
   word-break: break-all;
 }
-.matched-detail-info-section {
+.mi-detail-info-section {
   padding: 20px;
   display: flex;
   flex-direction: column;
   gap: 12px;
 }
-.matched-detail-info-section .matched-detail-name {
+.mi-detail-info-section .mi-detail-name {
   font-size: 20px;
   font-weight: 700;
   color: var(--text);
   line-height: 1.3;
 }
-.matched-detail-info-section .matched-detail-code {
+.mi-detail-info-section .mi-detail-code {
   font-size: 13px;
   color: var(--accent);
   font-family: monospace;
 }
-.matched-detail-info-section .matched-detail-brand {
+.mi-detail-info-section .mi-detail-brand {
   font-size: 13px;
   color: var(--text-secondary);
 }
-.matched-detail-info-section .matched-detail-desc-label {
+.mi-detail-info-section .mi-detail-desc-label {
   font-size: 11px;
   font-weight: 600;
   color: var(--text-muted);
@@ -1474,7 +1678,7 @@ textarea:focus { outline: none; border-color: var(--text-secondary); }
   letter-spacing: 0.5px;
   margin-top: 4px;
 }
-.matched-detail-info-section .matched-detail-desc {
+.mi-detail-info-section .mi-detail-desc {
   font-size: 13px;
   color: var(--text-secondary);
   line-height: 1.6;
@@ -1484,32 +1688,32 @@ textarea:focus { outline: none; border-color: var(--text-secondary); }
   max-height: 200px;
   overflow-y: auto;
 }
-.matched-detail-info-section .matched-detail-meta-grid {
+.mi-detail-info-section .mi-detail-meta-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 8px;
   margin-top: 4px;
 }
-.matched-detail-info-section .matched-detail-meta-item {
+.mi-detail-info-section .mi-detail-meta-item {
   font-size: 11px;
   color: var(--text-muted);
   background: var(--surface-2);
   padding: 6px 10px;
   border-radius: var(--radius-sm);
 }
-.matched-detail-info-section .matched-detail-meta-item strong {
+.mi-detail-info-section .mi-detail-meta-item strong {
   color: var(--text-secondary);
   display: block;
   font-size: 10px;
   margin-bottom: 2px;
 }
-.matched-detail-info-section .matched-detail-actions {
+.mi-detail-info-section .mi-detail-actions {
   display: flex;
   gap: 10px;
   margin-top: 8px;
   flex-wrap: wrap;
 }
-.matched-detail-info-section .matched-detail-actions button {
+.mi-detail-info-section .mi-detail-actions button {
   font-size: 12px;
   padding: 8px 18px;
   border-radius: var(--radius-sm);
@@ -1517,36 +1721,36 @@ textarea:focus { outline: none; border-color: var(--text-secondary); }
   transition: all var(--transition);
   font-weight: 600;
 }
-.matched-detail-add-btn {
+.mi-detail-add-btn {
   background: var(--accent);
   color: #fff;
   border: 1px solid var(--accent);
 }
-.matched-detail-add-btn:hover {
+.mi-detail-add-btn:hover {
   opacity: 0.85;
 }
-.matched-detail-add-btn:disabled {
+.mi-detail-add-btn:disabled {
   opacity: 0.4;
   cursor: not-allowed;
 }
-.matched-detail-view-btn {
+.mi-detail-view-btn {
   background: transparent;
   color: var(--text);
   border: 1px solid var(--border);
 }
-.matched-detail-view-btn:hover {
+.mi-detail-view-btn:hover {
   border-color: var(--accent);
   color: var(--accent);
 }
-.matched-detail-render-btn {
+.mi-detail-render-btn {
   background: transparent;
   color: #22c55e;
   border: 1px solid #22c55e;
 }
-.matched-detail-render-btn:hover {
+.mi-detail-render-btn:hover {
   background: rgba(34, 197, 94, 0.1);
 }
-.matched-detail-status-badge {
+.mi-detail-status-badge {
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -1555,60 +1759,17 @@ textarea:focus { outline: none; border-color: var(--text-secondary); }
   border-radius: 12px;
   font-weight: 600;
 }
-.matched-detail-status-badge.rendered {
+.mi-detail-status-badge.rendered {
   background: rgba(34, 197, 94, 0.15);
   color: #22c55e;
 }
-.matched-detail-status-badge.processing {
+.mi-detail-status-badge.processing {
   background: rgba(234, 179, 8, 0.15);
   color: #b45309;
 }
-.matched-detail-status-badge.pending {
+.mi-detail-status-badge.pending {
   background: rgba(100, 116, 139, 0.15);
   color: var(--text-muted);
-}
-.matched-search {
-  width: 100%;
-  padding: 8px 12px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--surface);
-  color: var(--text);
-  font-size: 12px;
-  box-sizing: border-box;
-  margin-bottom: 8px;
-}
-.matched-search:focus {
-  outline: none;
-  border-color: var(--accent);
-}
-.matched-empty {
-  text-align: center;
-  padding: 40px 20px;
-  color: var(--text-muted);
-  font-size: 13px;
-}
-.matched-empty-icon {
-  font-size: 40px;
-  margin-bottom: 12px;
-  opacity: 0.5;
-}
-.matched-loading {
-  text-align: center;
-  padding: 40px;
-  color: var(--text-muted);
-  font-size: 13px;
-}
-.matched-toolbar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 4px;
-}
-.matched-toolbar .matched-count {
-  font-size: 11px;
-  color: var(--text-muted);
-  white-space: nowrap;
 }
 .matched-refresh-btn {
   font-size: 11px;
@@ -2871,6 +3032,356 @@ border-top: 1px solid var(--border-light);
 .rq-pagination button:disabled { opacity:0.4; cursor:not-allowed; }
 .rq-pagination button:hover:not(:disabled) { background:var(--border-light); }
 .rq-refresh-note { font-size:11px; color:var(--text-secondary); margin-left:auto; }
+
+/* ── COMPLETED RENDERS SUBPAGE (.cr-*) ──────────────────────────── */
+.cr-shell {
+  display: grid;
+  grid-template-columns: 200px 1fr 300px;
+  gap: 0;
+  min-height: 400px;
+  background: var(--surface);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+.cr-sidebar {
+  background: var(--surface-2);
+  border-right: 1px solid var(--border);
+  padding: 16px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.cr-sidebar-head {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 8px 10px 4px;
+}
+.cr-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border: none;
+  background: transparent;
+  text-align: left;
+  transition: all 0.15s;
+}
+.cr-nav-item:hover { background: var(--border-light); color: var(--text); }
+.cr-nav-item.active { background: var(--accent-bg); color: var(--accent); font-weight: 700; }
+.cr-main {
+  padding: 20px;
+  overflow-y: auto;
+  max-height: 70vh;
+}
+.cr-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 16px;
+}
+.cr-header h2 { margin: 0; font-size: 20px; font-weight: 700; }
+.cr-header p { margin: 4px 0 0; font-size: 12px; color: var(--text-secondary); }
+.cr-header-actions { display: flex; gap: 8px; }
+.cr-header-actions button {
+  padding: 6px 12px; font-size: 11px; font-weight: 600;
+  border-radius: 6px; border: 1px solid var(--border);
+  background: var(--card-bg); color: var(--text); cursor: pointer;
+  font-family: inherit; transition: all 0.15s;
+}
+.cr-header-actions button:hover { background: var(--border-light); }
+.cr-header-actions button.primary { background: var(--accent); color: #000; border-color: var(--accent); }
+.cr-header-actions button.primary:hover { opacity: 0.85; }
+
+/* Stats cards */
+.cr-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.cr-stat-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.cr-stat-label { font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.3px; }
+.cr-stat-value { font-size: 22px; font-weight: 800; line-height: 1.1; }
+.cr-stat-sub { font-size: 10px; color: var(--text-secondary); }
+
+/* Filters */
+.cr-filters {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+  padding: 10px 12px;
+  background: var(--surface-2);
+  border-radius: 8px;
+  border: 1px solid var(--border-light);
+}
+.cr-filters input, .cr-filters select {
+  padding: 6px 10px;
+  font-size: 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--card-bg);
+  color: var(--text);
+  font-family: inherit;
+}
+.cr-filters input { flex: 1; min-width: 140px; }
+.cr-filters select { min-width: 100px; }
+.cr-filters .cr-per-page { min-width: 60px; }
+
+/* Batch header */
+.cr-batch-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin-bottom: 12px;
+}
+.cr-batch-header .cr-batch-info { flex: 1; }
+.cr-batch-header .cr-batch-info h3 { margin: 0; font-size: 14px; font-weight: 700; }
+.cr-batch-header .cr-batch-info p { margin: 2px 0 0; font-size: 11px; color: var(--text-secondary); }
+.cr-batch-header .cr-batch-actions { display: flex; gap: 6px; flex-shrink: 0; }
+
+/* Render groups */
+.cr-groups { display: flex; flex-direction: column; gap: 10px; }
+.cr-render-group {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.cr-group-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border-light);
+}
+.cr-group-head .cr-group-info { flex: 1; }
+.cr-group-head .cr-group-info strong { font-size: 13px; }
+.cr-group-head .cr-group-info span { font-size: 11px; color: var(--text-secondary); }
+.cr-group-actions { display: flex; gap: 4px; flex-shrink: 0; }
+.cr-group-actions button {
+  padding: 4px 8px; font-size: 10px; font-weight: 600;
+  border-radius: 4px; border: 1px solid var(--border);
+  background: var(--surface); color: var(--text-secondary); cursor: pointer;
+  font-family: inherit; transition: all 0.15s;
+}
+.cr-group-actions button:hover { background: var(--border-light); color: var(--text); }
+.cr-group-actions button.cr-btn-drive { background: #eef5ff; color: #2463a6; border-color: #b8d3f2; }
+.cr-group-actions button.cr-btn-drive:hover { opacity: 0.85; }
+
+/* Image strip — 4 images per product */
+.cr-image-strip {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+  padding: 8px;
+}
+.cr-mini-render {
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid var(--border-light);
+  background: var(--surface-2);
+  position: relative;
+}
+.cr-mini-render img {
+  width: 100%;
+  display: block;
+  cursor: pointer;
+  aspect-ratio: 1;
+  object-fit: cover;
+}
+.cr-mini-render .cr-render-label {
+  font-size: 8px;
+  color: var(--text-muted);
+  padding: 2px 4px;
+  text-align: center;
+  background: var(--surface-2);
+  border-top: 1px solid var(--border-light);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  flex-wrap: wrap;
+}
+.cr-mini-render .cr-render-actions {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  background: var(--surface-2);
+  border-top: 1px solid var(--border-light);
+}
+.cr-mini-render .cr-render-actions button {
+  flex: 1;
+  font-size: 8px;
+  padding: 3px 4px;
+  border-radius: 3px;
+  border: none;
+  cursor: pointer;
+  font-weight: 600;
+  font-family: inherit;
+  transition: opacity 0.15s;
+}
+.cr-mini-render .cr-render-actions button:hover { opacity: 0.8; }
+.cr-mini-render .cr-render-actions .cr-btn-dl { background: var(--surface); color: var(--text-secondary); border: 1px solid var(--border-light); }
+.cr-mini-render .cr-render-actions .cr-btn-retry { background: #fef3e2; color: #b45309; border: 1px solid #f6c96b; }
+.cr-mini-render .cr-render-actions .cr-btn-fix { background: #e8f0ff; color: #2563eb; border: 1px solid #b8d3f2; }
+.cr-mini-render .cr-mini-label { font-size: 8px; color: var(--text-muted); padding: 2px 4px; text-align: center; background: var(--surface-2); border-top: 1px solid var(--border-light); display: flex; align-items: center; justify-content: center; gap: 3px; flex-wrap: wrap; }
+.cr-mini-render .cr-mini-actions { display: flex; gap: 2px; padding: 2px; background: var(--surface-2); border-top: 1px solid var(--border-light); }
+.cr-mini-render .cr-mini-actions button { flex: 1; font-size: 8px; padding: 3px 4px; border-radius: 3px; border: 1px solid var(--border-light); cursor: pointer; font-weight: 600; font-family: inherit; background: var(--surface); color: var(--text-secondary); transition: opacity 0.15s; }
+.cr-mini-render .cr-mini-actions button:hover { opacity: 0.8; }
+.cr-batch-meta { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; font-size: 11px; color: var(--text-secondary); margin-top: 2px; }
+
+/* Detail sidebar */
+.cr-detail {
+  background: var(--surface-2);
+  border-left: 1px solid var(--border);
+  padding: 16px;
+  overflow-y: auto;
+  max-height: 70vh;
+}
+.cr-detail h3 { font-size: 14px; font-weight: 700; margin: 0 0 12px; }
+.cr-detail .cr-detail-section { margin-bottom: 14px; }
+.cr-detail .cr-detail-section h4 { font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.3px; margin: 0 0 6px; }
+.cr-detail .cr-detail-row { display: flex; justify-content: space-between; padding: 4px 0; font-size: 12px; border-bottom: 1px solid var(--border-light); }
+.cr-detail .cr-detail-row .cr-detail-label { color: var(--text-secondary); }
+.cr-detail .cr-detail-row .cr-detail-value { font-weight: 600; text-align: right; }
+
+/* Pagination */
+.cr-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 0;
+  margin-top: 12px;
+  border-top: 1px solid var(--border-light);
+}
+.cr-pagination button {
+  padding: 6px 12px; font-size: 11px; font-weight: 600;
+  border-radius: 6px; border: 1px solid var(--border);
+  background: var(--card-bg); color: var(--text); cursor: pointer;
+  font-family: inherit; transition: all 0.15s;
+}
+.cr-pagination button:hover:not(:disabled) { background: var(--border-light); }
+.cr-pagination button:disabled { opacity: 0.4; cursor: not-allowed; }
+.cr-pagination span { font-size: 12px; color: var(--text-secondary); }
+
+/* Badges */
+.cr-badge {
+  display: inline-block;
+  font-size: 9px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 99px;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+}
+.cr-badge.done { background: var(--success-bg); color: var(--success); }
+.cr-badge.failed { background: var(--error-bg); color: var(--error); }
+.cr-badge.processing { background: #e8f0ff; color: #2563eb; }
+.cr-badge.queued { background: #f5f0ff; color: #7c3aed; }
+
+/* Provider badge */
+.cr-provider {
+  display: inline-block;
+  font-size: 7px;
+  font-weight: 700;
+  padding: 1px 4px;
+  border-radius: 3px;
+  letter-spacing: 0.2px;
+}
+.cr-provider.mini { background: #e8f0ff; color: #2563eb; }
+.cr-provider.gemini { background: #fef3e2; color: #b45309; }
+
+/* Drive state */
+.cr-drive-state {
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--surface-2);
+  border: 1px solid var(--border-light);
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+.cr-drive-state.done { color: var(--success); background: var(--success-bg); border-color: var(--success-border); }
+.cr-drive-state.error { color: var(--error); background: var(--error-bg); border-color: var(--error-border); }
+
+/* Empty state */
+.cr-empty {
+  padding: 48px 20px;
+  text-align: center;
+  color: var(--text-muted);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  font-size: 13px;
+}
+
+/* Loading */
+.cr-loading {
+  text-align: center;
+  padding: 32px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+/* Scrollable table wrapper for batch list */
+.cr-table-wrap {
+  overflow-x: auto;
+  margin-bottom: 12px;
+}
+.cr-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.cr-table th {
+  text-align: left;
+  padding: 8px 10px;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-2);
+}
+.cr-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border-light);
+  vertical-align: middle;
+}
+.cr-table tr:hover td { background: var(--surface-2); }
+.cr-table .cr-thumb-cell { width: 40px; }
+.cr-table .cr-thumb-cell img {
+  width: 32px; height: 32px;
+  border-radius: 4px;
+  object-fit: cover;
+  border: 1px solid var(--border-light);
+  cursor: pointer;
+}
 </style>
 </head>
 <body>
@@ -3100,16 +3611,97 @@ border-top: 1px solid var(--border-light);
       <p>Add product images on the left. Each generates 4 separate views — front, side, isometric, and luxury interior scene. Finished batches appear here to download.</p>
     </div>
 
-    <!-- ── PRODUCT FEATURE PANEL ──────────────────────────────── -->
-    <div class="completed-panel" id="completedPanel" style="display:none;">
+    <!-- ── COMPLETED RENDERS SUBPAGE ──────────────────────────── -->
+    <div class="about-panel" id="completedPanel" style="display:none;">
       <div class="sec-title">
-        <span class="pulse done"></span>
-        <span class="sec-title-text">Completed Batches</span>
-        <span style="font-size:11px;font-weight:400;color:var(--text-secondary);margin-left:auto;">Saved render URLs from Supabase and this browser</span>
+        <span>✓ Completed Renders</span>
+        <span style="font-size:11px;font-weight:400;color:var(--text-secondary);margin-left:auto;">Batch-friendly completed render history</span>
         <button class="btn-clear" id="completedClearArchiveBtn" type="button">Clear archive</button>
         <button class="btn-dl-all" id="completedRefreshBtn" type="button">Refresh</button>
       </div>
-      <div class="completed-list" id="completedList"></div>
+      <div class="about-section">
+        <div class="about-card" style="padding:0;">
+          <div class="cr-shell">
+            <!-- Sidebar Navigation -->
+            <div class="cr-sidebar" id="crSidebar">
+              <div class="cr-sidebar-head">Navigation</div>
+              <button class="cr-nav-item active" data-cr-view="batches">
+                <span>📦</span> Batches
+              </button>
+              <button class="cr-nav-item" data-cr-view="stats">
+                <span>📊</span> Statistics
+              </button>
+              <button class="cr-nav-item" data-cr-view="archive">
+                <span>🗄️</span> Archive
+              </button>
+            </div>
+
+            <!-- Main Content -->
+            <div class="cr-main" id="crMain">
+              <!-- Header -->
+              <div class="cr-header">
+                <div>
+                  <h2>Completed Batches</h2>
+                  <p id="crHeaderSub">View and manage completed render batches</p>
+                </div>
+                <div class="cr-header-actions">
+                  <button id="crRefreshBtn">🔄 Refresh</button>
+                  <button class="primary" id="crDownloadAllBtn">⬇ Download All ZIP</button>
+                </div>
+              </div>
+
+              <!-- Stats Cards -->
+              <div class="cr-stats" id="crStats">
+                <div class="cr-stat-card"><span class="cr-stat-label">Total Cost</span><span class="cr-stat-value" id="crStatCost">—</span><span class="cr-stat-sub">estimated</span></div>
+                <div class="cr-stat-card"><span class="cr-stat-label">Completed</span><span class="cr-stat-value" id="crStatCompleted">—</span><span class="cr-stat-sub">batches</span></div>
+                <div class="cr-stat-card"><span class="cr-stat-label">Failed</span><span class="cr-stat-value" id="crStatFailed">—</span><span class="cr-stat-sub">batches</span></div>
+                <div class="cr-stat-card"><span class="cr-stat-label">Success Rate</span><span class="cr-stat-value" id="crStatRate">—</span><span class="cr-stat-sub">overall</span></div>
+                <div class="cr-stat-card"><span class="cr-stat-label">Avg Render Time</span><span class="cr-stat-value" id="crStatAvgTime">—</span><span class="cr-stat-sub">per batch</span></div>
+                <div class="cr-stat-card"><span class="cr-stat-label">Google Drive</span><span class="cr-stat-value" id="crStatDrive">—</span><span class="cr-stat-sub">uploads</span></div>
+              </div>
+
+              <!-- Filters -->
+              <div class="cr-filters">
+                <input type="text" id="crSearch" placeholder="Search by name, brand, model..." />
+                <select id="crDateFilter"><option value="">All Dates</option></select>
+                <select id="crBrandFilter"><option value="">All Brands</option></select>
+                <select id="crStatusFilter">
+                  <option value="">All Statuses</option>
+                  <option value="done">Completed</option>
+                  <option value="failed">Failed</option>
+                  <option value="partial">Partial</option>
+                </select>
+                <select class="cr-per-page" id="crPerPage">
+                  <option value="5">5</option>
+                  <option value="10" selected>10</option>
+                  <option value="20">20</option>
+                  <option value="50">50</option>
+                </select>
+              </div>
+
+              <!-- Content area -->
+              <div id="crContent">
+                <div class="cr-loading">Loading completed batches...</div>
+              </div>
+
+              <!-- Pagination -->
+              <div class="cr-pagination" id="crPagination" style="display:none;">
+                <button id="crPrevPage" disabled>← Prev</button>
+                <span id="crPageInfo">Page 1</span>
+                <button id="crNextPage" disabled>Next →</button>
+              </div>
+            </div>
+
+            <!-- Detail Sidebar -->
+            <div class="cr-detail" id="crDetail">
+              <h3>Batch Details</h3>
+              <div id="crDetailContent">
+                <p style="color:var(--text-muted);font-size:12px;">Select a batch to view details</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <div class="bulk-upload-panel" id="bulkUploadPanel" style="display:none;">
@@ -3275,35 +3867,95 @@ border-top: 1px solid var(--border-light);
       </div>
     </div>
 
-    <!-- ── MATCHED IMAGES PANEL (Canvas / Gallery) ─────────────── -->
-    <div class="matched-panel" id="matchedImagesPanel" style="display:none;">
-      <!-- Canvas view: gallery grid -->
-      <div id="matchedCanvasView">
-        <div class="sec-title">
-          <span>🖼️ Matched Images</span>
-          <span style="font-size:11px;font-weight:400;color:var(--text-secondary);margin-left:auto;">Saved original product images with matched descriptions from PDF+ZIP uploads</span>
-          <button class="btn-dl-all" id="matchedImagesRefreshBtn" type="button" style="margin-left:8px;">Refresh</button>
-        </div>
-        <div class="matched-toolbar">
-          <input type="text" class="matched-search" id="matchedImagesSearch" placeholder="Search by product name, code, or brand..." />
-          <span class="matched-count" id="matchedImagesCount"></span>
-        </div>
-        <div class="matched-grid" id="matchedImagesGrid">
-          <!-- populated by JS -->
-        </div>
-        <div class="monitor-foot">
-          <span class="monitor-timestamp" id="matchedImagesTimestamp"></span>
-        </div>
+    <!-- ── MATCHED IMAGES SUBPAGE ───────────────────────────────── -->
+    <div class="mi-panel" id="matchedImagesPanel" style="display:none;">
+      <div class="sec-title">
+        <span>🖼️ Matched Images</span>
+        <span style="font-size:11px;font-weight:400;color:var(--text-secondary);margin-left:auto;">Saved original product images with matched descriptions from PDF+ZIP uploads</span>
+        <button class="btn-dl-all" id="matchedImagesRefreshBtn" type="button" style="margin-left:8px;">Refresh</button>
       </div>
+      <div class="about-section">
+        <div class="about-card" style="padding:0;">
+          <div class="mi-shell">
+            <!-- Sidebar Navigation -->
+            <div class="mi-sidebar" id="miSidebar">
+              <div class="mi-sidebar-head">Navigation</div>
+              <button class="mi-nav-item active" data-mi-view="gallery"><span>🖼️</span> Gallery</button>
+              <button class="mi-nav-item" data-mi-view="stats"><span>📊</span> Statistics</button>
+              <button class="mi-nav-item" data-mi-view="detail"><span>🔍</span> Detail View</button>
+            </div>
 
-      <!-- Detail subpage: shown when a card is clicked -->
-      <div id="matchedDetailView" style="display:none;">
-        <div class="sec-title">
-          <button class="matched-detail-back" id="matchedDetailBackBtn" type="button">&larr; Back to Gallery</button>
-          <span style="font-size:11px;font-weight:400;color:var(--text-secondary);margin-left:auto;">Product detail & actions</span>
-        </div>
-        <div class="matched-detail-content" id="matchedDetailContent">
-          <!-- populated by JS -->
+            <!-- Main Content Area -->
+            <div class="mi-main" id="miMain">
+              <!-- Canvas view: gallery grid -->
+              <div id="matchedCanvasView">
+                <div class="mi-header">
+                  <div>
+                    <h2>Matched Images Gallery</h2>
+                    <p id="miHeaderSub">Browse and manage matched product images</p>
+                  </div>
+                  <div class="mi-header-actions">
+                    <button id="miRefreshBtn">🔄 Refresh</button>
+                    <button class="primary" id="miAddAllBtn">➕ Add All to Queue</button>
+                  </div>
+                </div>
+
+                <!-- Stats Cards -->
+                <div class="mi-stats" id="miStats">
+                  <div class="mi-stat-card"><span class="mi-stat-label">Total Images</span><span class="mi-stat-value" id="miStatTotal">—</span><span class="mi-stat-sub">matched records</span></div>
+                  <div class="mi-stat-card"><span class="mi-stat-label">Rendered</span><span class="mi-stat-value" id="miStatRendered">—</span><span class="mi-stat-sub">completed renders</span></div>
+                  <div class="mi-stat-card"><span class="mi-stat-label">Processing</span><span class="mi-stat-value" id="miStatProcessing">—</span><span class="mi-stat-sub">in queue</span></div>
+                  <div class="mi-stat-card"><span class="mi-stat-label">Pending</span><span class="mi-stat-value" id="miStatPending">—</span><span class="mi-stat-sub">not yet rendered</span></div>
+                  <div class="mi-stat-card"><span class="mi-stat-label">Brands</span><span class="mi-stat-value" id="miStatBrands">—</span><span class="mi-stat-sub">unique brands</span></div>
+                  <div class="mi-stat-card"><span class="mi-stat-label">Sources</span><span class="mi-stat-value" id="miStatSources">—</span><span class="mi-stat-sub">PDF+ZIP batches</span></div>
+                </div>
+
+                <!-- Filters -->
+                <div class="mi-filters">
+                  <input type="text" id="miSearch" placeholder="Search by product name, code, or brand..." />
+                  <select id="miBrandFilter"><option value="">All Brands</option></select>
+                  <select id="miStatusFilter">
+                    <option value="">All Statuses</option>
+                    <option value="rendered">✅ Rendered</option>
+                    <option value="processing">⏳ Processing</option>
+                    <option value="pending">⏸ Pending</option>
+                  </select>
+                  <select class="mi-per-page" id="miPerPage">
+                    <option value="12">12</option>
+                    <option value="24">24</option>
+                    <option value="48">48</option>
+                    <option value="96">96</option>
+                  </select>
+                </div>
+
+                <!-- Content Area -->
+                <div id="miContent"><div class="mi-loading">Loading matched images...</div></div>
+
+                <!-- Pagination -->
+                <div class="mi-pagination" id="miPagination" style="display:none;">
+                  <button id="miPrevPage" disabled>← Prev</button>
+                  <span class="mi-page-info" id="miPageInfo">Page 1</span>
+                  <button id="miNextPage" disabled>Next →</button>
+                </div>
+              </div>
+
+              <!-- Detail subpage: shown when a card is clicked -->
+              <div id="matchedDetailView" style="display:none;">
+                <div class="mi-header">
+                  <div>
+                    <h2>Product Detail</h2>
+                    <p id="miDetailSub">View and manage matched product</p>
+                  </div>
+                  <div class="mi-header-actions">
+                    <button class="mi-detail-back" id="matchedDetailBackBtn" type="button">← Back to Gallery</button>
+                  </div>
+                </div>
+                <div class="mi-detail-content" id="matchedDetailContent">
+                  <!-- populated by JS -->
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -4720,144 +5372,214 @@ function getMergedCompletedRecords() {
     .sort((a, b) => Number(b.item.id) - Number(a.item.id));
 }
 
-async function renderCompletedPanel() {
-  if (!completedList) return;
-  completedList.innerHTML = '<div class="completed-empty">Loading completed batches...</div>';
+// ── COMPLETED RENDERS SUBPAGE ─────────────────────────────────────
+let completedPanelOpen = false;
+let crData = [];
+let crPage = 1;
+let crPerPage = 10;
+let crFiltered = [];
+let crSelectedBatchId = null;
 
+function getCrElements() {
+  return {
+    content: document.getElementById('crContent'),
+    search: document.getElementById('crSearch'),
+    dateFilter: document.getElementById('crDateFilter'),
+    brandFilter: document.getElementById('crBrandFilter'),
+    statusFilter: document.getElementById('crStatusFilter'),
+    perPage: document.getElementById('crPerPage'),
+    pagination: document.getElementById('crPagination'),
+    prevBtn: document.getElementById('crPrevPage'),
+    nextBtn: document.getElementById('crNextPage'),
+    pageInfo: document.getElementById('crPageInfo'),
+    detail: document.getElementById('crDetailContent'),
+    refreshBtn: document.getElementById('crRefreshBtn'),
+    downloadAllBtn: document.getElementById('crDownloadAllBtn'),
+    statCost: document.getElementById('crStatCost'),
+    statCompleted: document.getElementById('crStatCompleted'),
+    statFailed: document.getElementById('crStatFailed'),
+    statRate: document.getElementById('crStatRate'),
+    statAvgTime: document.getElementById('crStatAvgTime'),
+    statDrive: document.getElementById('crStatDrive'),
+    headerSub: document.getElementById('crHeaderSub')
+  };
+}
+
+async function loadCrData() {
   if (supaConnected) await pollStatus();
   await loadCompletedArchiveFromVps();
-
   const records = getMergedCompletedRecords();
-  if (!records.length) {
-    completedList.innerHTML = '<div class="completed-empty">No completed batches yet. Finished renders will appear here and stay downloadable when their saved image URLs exist.</div>';
+  crData = records.map(r => ({
+    item: r.item,
+    views: r.viewResults || [],
+    source: r.source || 'archive'
+  }));
+  return crData;
+}
+
+function computeCrStats(data) {
+  const total = data.length;
+  const done = data.filter(d => d.views.some(v => v.status === 'done' && v.imageUrl)).length;
+  const failed = data.filter(d => d.views.every(v => v.status !== 'done')).length;
+  const partial = total - done - failed;
+  const rate = total ? ((done + partial * 0.5) / total * 100).toFixed(0) : '—';
+  const driveCount = data.filter(d => d.item.driveUploadStatus === 'done' || d.item.driveFolderName).length;
+  let totalCost = 0;
+  let totalDuration = 0;
+  let durationCount = 0;
+  data.forEach(d => {
+    d.views.forEach(v => {
+      if (v.status === 'done' && v.imageUrl) {
+        const cost = getEstimatedCost(d.item, 1);
+        if (cost) {
+          const num = parseFloat(cost.replace(/[^0-9.]/g, ''));
+          if (!isNaN(num)) totalCost += num;
+        }
+        if (v.completedAt && v.startedAt) {
+          totalDuration += (new Date(v.completedAt) - new Date(v.startedAt));
+          durationCount++;
+        }
+      }
+    });
+  });
+  const avgTime = durationCount ? Math.round(totalDuration / durationCount / 1000) + 's' : '—';
+  return { total, done, failed, partial, rate, driveCount, totalCost, avgTime };
+}
+
+function renderCrStats(data) {
+  const el = getCrElements();
+  const stats = computeCrStats(data);
+  if (el.statCost) el.statCost.textContent = stats.totalCost ? '$' + stats.totalCost.toFixed(2) : '—';
+  if (el.statCompleted) el.statCompleted.textContent = stats.done;
+  if (el.statFailed) el.statFailed.textContent = stats.failed;
+  if (el.statRate) el.statRate.textContent = stats.rate !== '—' ? stats.rate + '%' : '—';
+  if (el.statAvgTime) el.statAvgTime.textContent = stats.avgTime;
+  if (el.statDrive) el.statDrive.textContent = stats.driveCount;
+}
+
+function filterCrData(data) {
+  const el = getCrElements();
+  const q = (el.search?.value || '').toLowerCase();
+  const dateVal = el.dateFilter?.value || '';
+  const brandVal = el.brandFilter?.value || '';
+  const statusVal = el.statusFilter?.value || '';
+
+  return data.filter(d => {
+    const item = d.item;
+    if (q && !(item.name || '').toLowerCase().includes(q) && !(item.brand || '').toLowerCase().includes(q)) return false;
+    if (brandVal && (item.brand || '') !== brandVal) return false;
+    if (statusVal === 'done' && !d.views.some(v => v.status === 'done' && v.imageUrl)) return false;
+    if (statusVal === 'failed' && !d.views.every(v => v.status !== 'done')) return false;
+    if (statusVal === 'partial') {
+      const hasDone = d.views.some(v => v.status === 'done' && v.imageUrl);
+      const hasFail = d.views.some(v => !v.imageUrl);
+      if (!(hasDone && hasFail)) return false;
+    }
+    if (dateVal) {
+      const ts = item.updatedAt || (d.views.map(r => r.completedAt).filter(Boolean).sort().pop());
+      if (ts) {
+        const d2 = new Date(ts);
+        const today = new Date();
+        if (dateVal === '7d' && (today - d2) > 7*86400000) return false;
+        if (dateVal === '30d' && (today - d2) > 30*86400000) return false;
+        if (dateVal === '90d' && (today - d2) > 90*86400000) return false;
+      }
+    }
+    return true;
+  });
+}
+
+function populateCrFilters(data) {
+  const el = getCrElements();
+  if (!el.dateFilter || !el.brandFilter) return;
+  // Brand options
+  const brands = new Set();
+  data.forEach(d => { if (d.item.brand) brands.add(d.item.brand); });
+  const currentBrands = Array.from(el.brandFilter.options).map(o => o.value);
+  brands.forEach(b => {
+    if (!currentBrands.includes(b)) {
+      const opt = document.createElement('option');
+      opt.value = b;
+      opt.textContent = b;
+      el.brandFilter.appendChild(opt);
+    }
+  });
+}
+
+function renderCrPagination() {
+  const el = getCrElements();
+  const totalPages = Math.ceil(crFiltered.length / crPerPage) || 1;
+  if (el.pagination) el.pagination.style.display = totalPages > 1 ? 'flex' : 'none';
+  if (el.prevBtn) el.prevBtn.disabled = crPage <= 1;
+  if (el.nextBtn) el.nextBtn.disabled = crPage >= totalPages;
+  if (el.pageInfo) el.pageInfo.textContent = 'Page ' + crPage + ' of ' + totalPages;
+}
+
+async function renderCompletedPanel() {
+  const el = getCrElements();
+  if (!el.content) return;
+  el.content.innerHTML = '<div class="cr-loading">Loading completed batches...</div>';
+  const data = await loadCrData();
+  populateCrFilters(data);
+  renderCrStats(data);
+  crPerPage = Number(el.perPage?.value || crPerPage || 10);
+  crFiltered = filterCrData(data);
+  const totalPages = Math.ceil(crFiltered.length / crPerPage) || 1;
+  if (crPage > totalPages) crPage = totalPages;
+  const start = (crPage - 1) * crPerPage;
+  const pageRows = crFiltered.slice(start, start + crPerPage);
+
+  if (el.headerSub) {
+    el.headerSub.textContent = `${crFiltered.length} completed batch${crFiltered.length === 1 ? '' : 'es'} shown`;
+  }
+
+  if (!pageRows.length) {
+    el.content.innerHTML = '<div class="cr-empty">No completed batches yet. Finished renders will appear here.</div>';
+    renderCrPagination();
     return;
   }
 
-  completedList.innerHTML = '';
-  for (const record of records) {
-    completedList.appendChild(createCompletedHistoryCard(record.item, record.viewResults, record.source));
-  }
-}
+  el.content.innerHTML = `
+    <div class="cr-groups">
+      ${pageRows.map(({ item, views, source }) => {
+        const done = views.filter(v => v.status === 'done' && v.imageUrl).length;
+        const latest = item.updatedAt || views.map(v => v.completedAt).filter(Boolean).sort().pop() || '';
+        const dateText = latest ? new Date(latest).toLocaleString('en-SG') : '';
+        const driveText = getDriveStateText(item);
+        return `
+          <div class="cr-render-group" data-item-id="${item.id}">
+            <div class="cr-group-head">
+              <div class="cr-group-info">
+                <strong>${escHtml(item.name || `Item ${item.id}`)}</strong><br>
+                <span>${escHtml(getBatchApiText(item))}${dateText ? ` - ${escHtml(dateText)}` : ''} - ${done}/${VIEWS.length} renders - ${escHtml(source)}</span>
+              </div>
+              <span class="cr-drive-state">${escHtml(driveText)}</span>
+            </div>
+            <div class="cr-image-strip">
+              ${VIEWS.map(view => {
+                const result = views.find(v => Number(v.viewId) === Number(view.id));
+                if (result?.status === 'done' && result.imageUrl) {
+                  return `
+                    <div class="cr-mini-render">
+                      <img src="${escHtml(result.imageUrl)}" alt="${escHtml(view.label)}" loading="lazy">
+                      <div class="cr-render-label">Img ${view.id} - ${escHtml(view.label)}</div>
+                    </div>`;
+                }
+                return `
+                  <div class="cr-mini-render">
+                    <div style="aspect-ratio:1;display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:10px;padding:8px;text-align:center;">${escHtml(result?.errorMessage || 'No stored image')}</div>
+                    <div class="cr-render-label">Img ${view.id} - ${escHtml(view.label)}</div>
+                  </div>`;
+              }).join('')}
+            </div>
+          </div>`;
+      }).join('')}
+    </div>`;
 
-function createCompletedHistoryCard(item, viewResults = [], source = 'archive') {
-  const doneCount = viewResults.filter(r => r.status === 'done' && r.imageUrl).length;
-  const hasThumb = item.imageUrl || item.dataUrl || item.supabaseUrl;
-  const driveStatus = item.driveUploadStatus || (item.driveFolderName ? 'done' : '');
-  const isArchiveOnly = source !== 'supabase';
-  const card = document.createElement('div');
-  card.className = 'batch-card';
-  card.id = `hc-${item.id}`;
-  card.innerHTML = `
-    <div class="batch-head">
-      ${hasThumb
-        ? `<img class="batch-thumb" src="${hasThumb}" alt="${escHtml(item.name)}"/>`
-        : `<div class="batch-thumb" style="display:flex;align-items:center;justify-content:center;background:var(--border-light);font-size:18px;color:var(--text-dim);">📷</div>`
-      }
-      <div class="batch-info">
-        <h3>${escHtml(item.name || `Item ${item.id}`)}</h3>
-        <p>${escHtml(getBatchApiText(item))}</p>
-        <p style="font-size:11px;color:var(--text-secondary);">${(() => {
-          // Fall back to latest view completedAt if batch-level updatedAt is missing (old archives)
-          const rawTs = item.updatedAt
-            || viewResults.map(r => r.completedAt).filter(Boolean).sort().pop()
-            || null;
-          const ts = rawTs ? new Date(rawTs) : null;
-          const dateStr = ts ? ts.toLocaleDateString('en-SG', { year:'numeric', month:'short', day:'numeric' }) : '';
-          const timeStr = ts ? ts.toLocaleTimeString('en-SG', { hour:'2-digit', minute:'2-digit', hour12:false }) : '';
-          const cost = getEstimatedCost(item, doneCount);
-          const parts = [];
-          if (dateStr) parts.push(`${dateStr} · ${timeStr}`);
-          if (cost) parts.push(`<span title="Estimated cost based on provider pricing. Actual charges may vary.">${escHtml(cost)}</span>`);
-          return parts.join(' &nbsp;·&nbsp; ');
-        })()}</p>
-        <p>${doneCount} of ${VIEWS.length} renders stored · ${source === 'supabase' ? 'Supabase batch' : 'Archive-only batch'}</p>
-        ${isArchiveOnly ? '<p style="color:var(--text-dim);font-size:10px;">Drive upload uses archived image URLs (ZIP/download available)</p>' : ''}
-      </div>
-      <span class="drive-state ${driveStatus === 'done' ? 'done' : driveStatus === 'error' ? 'error' : ''}">${escHtml(getDriveStateText(item))}</span>
-      <div class="batch-actions">
-        ${driveUploadButtonHtml(item, viewResults).replace(`id="bdrive-${item.id}"`, `id="hdrive-${item.id}"`)}
-        <button class="btn-zip" id="hzip-${item.id}" type="button" ${doneCount ? '' : 'disabled'}>⬇ ZIP</button>
-        <button class="btn-retry-batch" id="hregen-${item.id}" type="button">↻ Re-generate</button>
-        <button class="btn-clear" id="hdel-${item.id}" type="button">Remove</button>
-      </div>
-    </div>
-    <div class="batch-grid" id="hgrid-${item.id}"></div>
-  `;
-
-  const grid = card.querySelector(`#hgrid-${item.id}`);
-  const modelRows = [];
-  VIEWS.forEach(v => {
-    const r = viewResults.find(row => Number(row.viewId) === Number(v.id));
-    const slot = document.createElement('div');
-    slot.className = 'bslot';
-
-    // Derive display label for which model generated this view
-    const resolvedProvider = r?.providerUsed
-      || (item.provider === 'openai-mini' && v.id === 4 ? 'gemini-flash' : null);
-    const modelLabel = resolvedProvider === 'gemini-flash' ? 'Gemini Flash'
-      : resolvedProvider === 'gpt-image-1-mini' ? 'GPT-mini'
-      : null;
-    modelRows.push({ viewId: v.id, label: v.label, modelLabel });
-
-    const providerBadge = modelLabel
-      ? `<span class="bslot-provider ${resolvedProvider === 'gemini-flash' ? 'bslot-provider-gemini' : 'bslot-provider-mini'}">${escHtml(modelLabel)}</span>`
-      : '';
-
-    if (r?.status === 'done' && r.imageUrl) {
-      slot.innerHTML = `
-        <img src="${r.imageUrl}" alt="${v.label}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"/>
-        <div style="display:none;min-height:90px;align-items:center;justify-content:center;font-size:10px;color:var(--text-dim);">Image unavailable</div>
-        <div class="bslot-label">Img ${v.id} — ${v.label}${providerBadge}</div>
-        <div class="bslot-actions">
-          <button class="btn-dl1" type="button" data-url="${r.imageUrl}" data-name="${item.name}_img${v.id}">⬇ Download</button>
-          <button class="btn-rerender-view" type="button" data-item-id="${item.id}" data-view-id="${v.id}" title="Re-render this view with Gemini Flash">↻ Re-render</button>
-        </div>`;
-      slot.querySelector('img').addEventListener('click', () => openLightbox(r.imageUrl));
-      slot.querySelector('.btn-dl1').addEventListener('click', e => {
-        dlOneUrl(e.currentTarget.dataset.url, e.currentTarget.dataset.name);
-      });
-      slot.querySelector('.btn-rerender-view').addEventListener('click', e => {
-        rerenderHistoryView(e.currentTarget, item.id, v.id, slot);
-      });
-    } else {
-      slot.innerHTML = `
-        <div style="min-height:90px;display:flex;align-items:center;justify-content:center;"><span style="font-size:10px;color:var(--text-dim);">${r?.errorMessage ? escHtml(r.errorMessage) : 'No stored image URL'}</span></div>
-        <div class="bslot-label">Img ${v.id} — ${v.label}${providerBadge}</div>
-        <div class="bslot-actions">
-          <button class="btn-rerender-view" type="button" data-item-id="${item.id}" data-view-id="${v.id}" title="Re-render this view with Gemini Flash">↻ Re-render</button>
-        </div>`;
-      slot.querySelector('.btn-rerender-view').addEventListener('click', e => {
-        rerenderHistoryView(e.currentTarget, item.id, v.id, slot);
-      });
-    }
-    grid.appendChild(slot);
+  el.content.querySelectorAll('.cr-mini-render img').forEach(img => {
+    img.addEventListener('click', () => openLightbox(img.src));
   });
-
-  // Summary slot: shows per-view model info if any model data is available
-  const hasModelData = modelRows.some(r => r.modelLabel);
-  if (hasModelData) {
-    const infoSlot = document.createElement('div');
-    infoSlot.className = 'bslot bslot-info';
-    infoSlot.innerHTML = `
-      <div class="bslot-info-title">Models used</div>
-      <div class="bslot-info-rows">
-        ${modelRows.map(r => `
-          <div class="bslot-info-row">
-            <span class="bslot-info-img">Img ${r.viewId}</span>
-            <span class="bslot-info-view">${escHtml(r.label)}</span>
-            ${r.modelLabel
-              ? `<span class="bslot-provider ${r.modelLabel === 'Gemini Flash' ? 'bslot-provider-gemini' : 'bslot-provider-mini'}">${escHtml(r.modelLabel)}</span>`
-              : '<span style="color:var(--text-dim);font-size:9px;">—</span>'}
-          </div>`).join('')}
-      </div>`;
-    grid.appendChild(infoSlot);
-  }
-
-  card.querySelector(`#hzip-${item.id}`)?.addEventListener('click', e => downloadHistoryZip(item.id, item.name || `Item_${item.id}`, viewResults, e.currentTarget));
-  card.querySelector(`#hregen-${item.id}`)?.addEventListener('click', () => retryItemFromHistory(item.id));
-  card.querySelector(`#hdel-${item.id}`)?.addEventListener('click', () => deleteCompletedBatch(item.id));
-  card.querySelector(`#hdrive-${item.id}`)?.addEventListener('click', () => uploadBatchToDrive(item.id));
-  return card;
+  renderCrPagination();
 }
 
 async function rerenderHistoryView(btn, itemId, viewId, slot) {
@@ -5011,7 +5733,6 @@ queueLogToggle.addEventListener('click', () => {
 
 queueLogClear.addEventListener('click', clearQueueLog);
 
-let completedPanelOpen = false;
 completedToggle.addEventListener('click', async () => {
   completedPanelOpen = !completedPanelOpen;
   completedToggle.classList.toggle('active', completedPanelOpen);
@@ -5028,16 +5749,256 @@ completedToggle.addEventListener('click', async () => {
   featurePanelOpen = false;
   aboutPanelOpen = false;
 
-  if (completedPanelOpen) await renderCompletedPanel();
+  if (completedPanelOpen) await initCompletedRenders();
   monitorPanel.style.display = 'none';
   monitorToggle?.classList.remove('active');
   monitorPanelOpen = false;
   if (monitorInterval) { clearInterval(monitorInterval); monitorInterval = null; }
 });
 
-completedRefreshBtn?.addEventListener('click', renderCompletedPanel);
+completedRefreshBtn?.addEventListener('click', initCompletedRenders);
 completedClearArchiveBtn?.addEventListener('click', clearCompletedArchive);
 
+function getViewLabel(id) {
+  return VIEWS.find(v => v.id === Number(id))?.label || 'View ' + id;
+}
+
+function downloadImage(btn) {
+  const url = btn?.dataset?.url;
+  if (!url) return;
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = url.split('/').pop().split('?')[0] || 'render.jpg';
+  a.target = '_blank';
+  a.click();
+}
+
+// ── CR: Render Batches View ──────────────────────────────────────────
+function renderCrBatches(data) {
+  const el = getCrElements();
+  if (!el.content) return;
+  const start = (crPage - 1) * crPerPage;
+  const page = data.slice(start, start + crPerPage);
+  if (!page.length) {
+    el.content.innerHTML = '<div class="cr-empty">No completed batches found</div>';
+    renderCrPagination();
+    return;
+  }
+  let html = '';
+  page.forEach(d => {
+    const item = d.item;
+    const views = d.views || [];
+    const doneViews = views.filter(v => v.status === 'done' && v.imageUrl);
+    const failedViews = views.filter(v => v.status !== 'done' || !v.imageUrl);
+    const status = doneViews.length === 4 ? 'done' : doneViews.length > 0 ? 'partial' : 'failed';
+    const cost = getEstimatedCost(item, doneViews.length);
+    const ts = item.updatedAt || (views.map(r => r.completedAt).filter(Boolean).sort().pop());
+    const timeStr = ts ? new Date(ts).toLocaleString() : '—';
+    const duration = views.reduce((acc, v) => {
+      if (v.completedAt && v.startedAt) return acc + (new Date(v.completedAt) - new Date(v.startedAt));
+      return acc;
+    }, 0);
+    const durationStr = duration ? Math.round(duration / 1000) + 's' : '—';
+    const driveStatus = item.driveUploadStatus === 'done' ? 'uploaded' : item.driveFolderName ? 'uploaded' : '—';
+
+    html += '<div class="cr-batch-header" data-batch-id="' + item.id + '" style="cursor:pointer;">';
+    html += '<div class="cr-batch-info">';
+    html += '<strong>' + escHtml(item.name || 'Batch #' + item.id) + '</strong>';
+    html += '<span class="cr-badge ' + status + '">' + status + '</span>';
+    html += '<span class="cr-provider">' + (item.provider || 'openai-mini') + '</span>';
+    html += '</div>';
+    html += '<div class="cr-batch-meta">';
+    html += '<span>💰 ' + cost + '</span>';
+    html += '<span>⏱ ' + timeStr + '</span>';
+    html += '<span>⚡ ' + durationStr + '</span>';
+    html += '<span class="cr-drive-state" data-status="' + (item.driveUploadStatus || '') + '">☁️ ' + driveStatus + '</span>';
+    html += '</div>';
+    html += '<div class="cr-batch-actions">';
+    html += '<button class="btn-dl-all" onclick="downloadHistoryZip(' + item.id + ',\'' + sanitizeDownloadName(item.name || 'batch') + '\',' + JSON.stringify(views).replace(/'/g, "\\'") + ',this)">⬇ ZIP</button>';
+    html += '</div>';
+    html += '</div>';
+
+    // Render groups (products)
+    const groups = groupViewsByProduct(views);
+    html += '<div class="cr-groups">';
+    groups.forEach(g => {
+      html += '<div class="cr-render-group">';
+      html += '<div class="cr-group-head">';
+      html += '<span><strong>' + escHtml(g.product || 'Product') + '</strong> <span style="color:var(--text-secondary);font-size:11px;">' + (g.brand || '') + '</span></span>';
+      html += '<div class="cr-group-actions">';
+      html += '<button class="btn-dl-all" onclick="downloadHistoryZip(' + item.id + ',\'' + sanitizeDownloadName(g.product || 'product') + '\',' + JSON.stringify(g.views).replace(/'/g, "\\'") + ',this)" style="font-size:11px;padding:3px 8px;">⬇ ZIP</button>';
+      html += '</div>';
+      html += '</div>';
+      html += '<div class="cr-image-strip">';
+      g.views.forEach(v => {
+        const viewLabel = getViewLabel(v.viewId || v.view);
+        const isDone = v.status === 'done' && v.imageUrl;
+        const provider = v.providerUsed || item.provider || 'openai-mini';
+        const badgeClass = provider === 'gemini' || provider === 'gemini-flash' ? 'bslot-provider-gemini' : 'bslot-provider-mini';
+        const badgeText = provider === 'gemini' || provider === 'gemini-flash' ? 'Gemini Flash' : 'GPT-mini';
+        html += '<div class="cr-mini-render">';
+        if (isDone) {
+          html += '<img src="' + v.imageUrl + '" alt="' + viewLabel + '" loading="lazy" onclick="openLightbox(\'' + v.imageUrl + '\')" style="width:100%;display:block;cursor:pointer;" />';
+        } else {
+          html += '<div style="padding:20px 8px;text-align:center;color:var(--text-muted);font-size:11px;">❌ Unavailable</div>';
+        }
+        html += '<div class="cr-mini-label">';
+        html += '<span>' + viewLabel + '</span>';
+        html += '<span class="bslot-provider ' + badgeClass + '">' + badgeText + '</span>';
+        html += '</div>';
+        html += '<div class="cr-mini-actions">';
+        if (isDone) {
+          html += '<button class="btn-dl1" data-url="' + v.imageUrl + '" onclick="downloadImage(this)">⬇</button>';
+        }
+        html += '<button class="btn-rerender" onclick="rerenderCrView(this,' + item.id + ',\'' + (v.viewId || v.view) + '\')">↻</button>';
+        html += '</div>';
+        html += '</div>';
+      });
+      html += '</div>';
+      html += '</div>';
+    });
+    html += '</div>';
+  });
+  el.content.innerHTML = html;
+  renderCrPagination();
+}
+
+function groupViewsByProduct(views) {
+  const map = {};
+  views.forEach(v => {
+    const key = v.productName || v.product || 'Product';
+    if (!map[key]) map[key] = { product: key, brand: v.brand || '', views: [] };
+    map[key].views.push(v);
+  });
+  return Object.values(map);
+}
+
+async function rerenderCrView(btn, itemId, viewId) {
+  btn.disabled = true;
+  btn.textContent = '...';
+  try {
+    const res = await fetchApi('/api/queue/rerender-view', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ itemId, viewId, provider: 'gemini' })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'HTTP ' + res.status);
+    toast('View ' + viewId + ' re-rendered', 'success');
+    await initCompletedRenders();
+  } catch (err) {
+    toast('Re-render failed: ' + formatError(err), 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '↻';
+  }
+}
+
+// ── CR: Init / Refresh ──────────────────────────────────────────────
+async function initCompletedRenders() {
+  const el = getCrElements();
+  if (!el.content) return;
+  el.content.innerHTML = '<div class="cr-loading">Loading completed batches...</div>';
+  try {
+    await loadCrData();
+    populateCrFilters(crData);
+    crFiltered = filterCrData(crData);
+    renderCrStats(crFiltered);
+    crPage = 1;
+    renderCrBatches(crFiltered);
+    if (el.headerSub) el.headerSub.textContent = crFiltered.length + ' batch(es)';
+  } catch (err) {
+    el.content.innerHTML = '<div class="cr-empty">Error loading data: ' + formatError(err) + '</div>';
+  }
+}
+
+// ── CR: Filter Event Handlers ────────────────────────────────────────
+document.getElementById('crSearch')?.addEventListener('input', () => {
+  crPage = 1;
+  crFiltered = filterCrData(crData);
+  renderCrStats(crFiltered);
+  renderCrBatches(crFiltered);
+});
+document.getElementById('crDateFilter')?.addEventListener('change', () => {
+  crPage = 1;
+  crFiltered = filterCrData(crData);
+  renderCrStats(crFiltered);
+  renderCrBatches(crFiltered);
+});
+document.getElementById('crBrandFilter')?.addEventListener('change', () => {
+  crPage = 1;
+  crFiltered = filterCrData(crData);
+  renderCrStats(crFiltered);
+  renderCrBatches(crFiltered);
+});
+document.getElementById('crStatusFilter')?.addEventListener('change', () => {
+  crPage = 1;
+  crFiltered = filterCrData(crData);
+  renderCrStats(crFiltered);
+  renderCrBatches(crFiltered);
+});
+document.getElementById('crPerPage')?.addEventListener('change', () => {
+  crPage = 1;
+  crPerPage = parseInt(document.getElementById('crPerPage').value) || 10;
+  crFiltered = filterCrData(crData);
+  renderCrBatches(crFiltered);
+});
+
+// ── CR: Pagination ──────────────────────────────────────────────────
+document.getElementById('crPrevPage')?.addEventListener('click', () => {
+  if (crPage > 1) { crPage--; renderCrBatches(crFiltered); }
+});
+document.getElementById('crNextPage')?.addEventListener('click', () => {
+  const totalPages = Math.ceil(crFiltered.length / crPerPage) || 1;
+  if (crPage < totalPages) { crPage++; renderCrBatches(crFiltered); }
+});
+
+// ── CR: Refresh & Download All ──────────────────────────────────────
+document.getElementById('crRefreshBtn')?.addEventListener('click', initCompletedRenders);
+document.getElementById('crDownloadAllBtn')?.addEventListener('click', async () => {
+  const btn = document.getElementById('crDownloadAllBtn');
+  btn.disabled = true;
+  btn.textContent = 'Zipping...';
+  try {
+    for (const d of crFiltered) {
+      const doneViews = (d.views || []).filter(v => v.status === 'done' && v.imageUrl);
+      if (doneViews.length) {
+        await downloadRenderZipFromServer(d.item.id, d.item.name || 'batch', doneViews);
+      }
+    }
+    toast('All batches downloaded', 'success');
+  } catch (err) {
+    toast('Download all failed: ' + formatError(err), 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '⬇ Download All ZIP';
+  }
+});
+
+// ── CR: Sidebar Navigation ──────────────────────────────────────────
+document.querySelectorAll('.cr-nav-item').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.cr-nav-item').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    const view = btn.dataset.crView;
+    if (view === 'batches') {
+      crPage = 1;
+      crFiltered = filterCrData(crData);
+      renderCrBatches(crFiltered);
+    } else if (view === 'stats') {
+      const el = getCrElements();
+      if (el.content) {
+        const stats = computeCrStats(crFiltered.length ? crFiltered : crData);
+        el.content.innerHTML = '<div class="cr-empty"><h3>Statistics</h3><p>Total batches: ' + stats.total + '</p><p>Completed: ' + stats.done + '</p><p>Failed: ' + stats.failed + '</p><p>Partial: ' + stats.partial + '</p><p>Success Rate: ' + stats.rate + '%</p><p>Total Cost: $' + (stats.totalCost ? stats.totalCost.toFixed(2) : '0.00') + '</p><p>Avg Render Time: ' + stats.avgTime + '</p><p>Drive Uploads: ' + stats.driveCount + '</p></div>';
+      }
+    } else if (view === 'archive') {
+      const el = getCrElements();
+      if (el.content) {
+        el.content.innerHTML = '<div class="cr-empty"><h3>Archive</h3><p>Archived completed batches will appear here.</p></div>';
+      }
+    }
+  });
+});
   // ── API MONITOR TOGGLE ─────────────────────────────────────────────
   const SERVICE_LABELS = {
     supabase: { icon: '☁️', name: 'Supabase' },
@@ -5132,36 +6093,204 @@ completedClearArchiveBtn?.addEventListener('click', clearCompletedArchive);
 
   });
 
-  // ── MATCHED IMAGES TOGGLE ─────────────────────────────────────────
+  // ── MATCHED IMAGES SUBPAGE ────────────────────────────────────────
   let matchedImagesPanelOpen = false;
   const matchedImagesToggle = document.getElementById('matchedImagesToggle');
   const matchedImagesPanel = document.getElementById('matchedImagesPanel');
-  const matchedImagesGrid = document.getElementById('matchedImagesGrid');
-  const matchedImagesSearch = document.getElementById('matchedImagesSearch');
-  const matchedImagesCount = document.getElementById('matchedImagesCount');
-  const matchedImagesTimestamp = document.getElementById('matchedImagesTimestamp');
   const matchedImagesRefreshBtn = document.getElementById('matchedImagesRefreshBtn');
-  const matchedCanvasView = document.getElementById('matchedCanvasView');
-  const matchedDetailView = document.getElementById('matchedDetailView');
-  const matchedDetailContent = document.getElementById('matchedDetailContent');
-  const matchedDetailBackBtn = document.getElementById('matchedDetailBackBtn');
+
+  // MI state
+  let miData = [];
+  let miPage = 1;
+  let miPerPage = 12;
+  let miFiltered = [];
+  let miSelectedImg = null;
+
+  function getMiElements() {
+    return {
+      sidebar: document.getElementById('miSidebar'),
+      main: document.getElementById('miMain'),
+      canvasView: document.getElementById('matchedCanvasView'),
+      detailView: document.getElementById('matchedDetailView'),
+      detailContent: document.getElementById('matchedDetailContent'),
+      detailBackBtn: document.getElementById('matchedDetailBackBtn'),
+      stats: document.getElementById('miStats'),
+      content: document.getElementById('miContent'),
+      pagination: document.getElementById('miPagination'),
+      search: document.getElementById('miSearch'),
+      brandFilter: document.getElementById('miBrandFilter'),
+      statusFilter: document.getElementById('miStatusFilter'),
+      perPage: document.getElementById('miPerPage'),
+      refreshBtn: document.getElementById('miRefreshBtn'),
+      addAllBtn: document.getElementById('miAddAllBtn'),
+      prevPage: document.getElementById('miPrevPage'),
+      nextPage: document.getElementById('miNextPage'),
+      pageInfo: document.getElementById('miPageInfo'),
+      headerSub: document.getElementById('miHeaderSub'),
+      statTotal: document.getElementById('miStatTotal'),
+      statRendered: document.getElementById('miStatRendered'),
+      statProcessing: document.getElementById('miStatProcessing'),
+      statPending: document.getElementById('miStatPending'),
+      statBrands: document.getElementById('miStatBrands'),
+      statSources: document.getElementById('miStatSources'),
+      navItems: document.querySelectorAll('.mi-nav-item')
+    };
+  }
 
   async function fetchMatchedImages(search = '') {
     try {
-      const params = new URLSearchParams({ limit: '100' });
+      const params = new URLSearchParams({ limit: '200' });
       if (search) params.set('search', search);
       const res = await fetchApi('/api/agent/matched-images?' + params.toString());
       if (!res.ok) throw new Error('Server returned ' + res.status);
       return await res.json();
     } catch (err) {
-      console.error('[MATCHED-IMAGES] Fetch error:', err);
+      console.error('[MI] Fetch error:', err);
       return { success: false, images: [], total: 0 };
     }
   }
 
-  // ── Show detail subpage for a matched image ──
-  function showMatchedDetail(img) {
-    if (!matchedDetailView || !matchedCanvasView || !matchedDetailContent) return;
+  function computeMiStats(data) {
+    const images = data.images || [];
+    const total = images.length;
+    const rendered = images.filter(i => i.has_completed_render === true).length;
+    const processing = images.filter(i => i.queue_status === 'processing' || i.queue_status === 'generating').length;
+    const pending = images.filter(i => !i.has_completed_render && (!i.queue_status || i.queue_status === 'pending' || i.queue_status === 'waiting')).length;
+    const brands = new Set(images.map(i => i.product_brand).filter(Boolean)).size;
+    const sources = new Set(images.map(i => i.source_batch).filter(Boolean)).size;
+    return { total, rendered, processing, pending, brands, sources };
+  }
+
+  function renderMiStats(data) {
+    const el = getMiElements();
+    const stats = computeMiStats(data);
+    if (el.statTotal) el.statTotal.textContent = stats.total;
+    if (el.statRendered) el.statRendered.textContent = stats.rendered;
+    if (el.statProcessing) el.statProcessing.textContent = stats.processing;
+    if (el.statPending) el.statPending.textContent = stats.pending;
+    if (el.statBrands) el.statBrands.textContent = stats.brands;
+    if (el.statSources) el.statSources.textContent = stats.sources;
+  }
+
+  function filterMiData(data) {
+    const el = getMiElements();
+    const images = data.images || [];
+    const search = (el.search?.value || '').toLowerCase().trim();
+    const brand = el.brandFilter?.value || '';
+    const status = el.statusFilter?.value || '';
+
+    let filtered = images;
+    if (search) {
+      filtered = filtered.filter(i =>
+        (i.product_name || '').toLowerCase().includes(search) ||
+        (i.product_code || '').toLowerCase().includes(search) ||
+        (i.product_brand || '').toLowerCase().includes(search) ||
+        (i.description || '').toLowerCase().includes(search)
+      );
+    }
+    if (brand) {
+      filtered = filtered.filter(i => (i.product_brand || '') === brand);
+    }
+    if (status) {
+      if (status === 'rendered') filtered = filtered.filter(i => i.has_completed_render === true);
+      else if (status === 'processing') filtered = filtered.filter(i => i.queue_status === 'processing' || i.queue_status === 'generating');
+      else if (status === 'pending') filtered = filtered.filter(i => !i.has_completed_render && (!i.queue_status || i.queue_status === 'pending' || i.queue_status === 'waiting'));
+    }
+    return filtered;
+  }
+
+  function populateMiBrands(data) {
+    const el = getMiElements();
+    if (!el.brandFilter) return;
+    const images = data.images || [];
+    const brands = [...new Set(images.map(i => i.product_brand).filter(Boolean))].sort();
+    el.brandFilter.innerHTML = '<option value="">All Brands</option>' + brands.map(b => `<option value="${escapeHtml(b)}">${escapeHtml(b)}</option>`).join('');
+  }
+
+  function renderMiCards(data) {
+    const el = getMiElements();
+    if (!el.content) return;
+
+    miFiltered = filterMiData(data);
+    const totalPages = Math.max(1, Math.ceil(miFiltered.length / miPerPage));
+    if (miPage > totalPages) miPage = totalPages;
+    const start = (miPage - 1) * miPerPage;
+    const pageItems = miFiltered.slice(start, start + miPerPage);
+
+    // Show canvas view, hide detail
+    if (el.canvasView) el.canvasView.style.display = 'block';
+    if (el.detailView) el.detailView.style.display = 'none';
+
+    if (el.headerSub) {
+      el.headerSub.textContent = `${miFiltered.length} matched image(s) — Page ${miPage} of ${totalPages}`;
+    }
+
+    if (pageItems.length === 0) {
+      el.content.innerHTML = '<div class="mi-empty"><div class="mi-empty-icon">🖼️</div>No matched images found. Try adjusting your filters or upload a PDF+ZIP to generate matches.</div>';
+      renderMiPagination(totalPages);
+      return;
+    }
+
+    el.content.innerHTML = '<div class="mi-grid"></div>';
+    const grid = el.content.querySelector('.mi-grid');
+
+    for (const img of pageItems) {
+      const card = document.createElement('div');
+      card.className = 'mi-card';
+
+      const displayUrl = img.image_url || img.image_data_url || '';
+      const createdDate = img.created_at ? new Date(img.created_at).toLocaleString() : '';
+      const hasCompletedRender = img.has_completed_render === true;
+      const queueStatus = img.queue_status || '';
+      const descPreview = (img.description || '').substring(0, 100);
+      const descFull = img.description || '';
+
+      let statusBadge = '';
+      if (hasCompletedRender) {
+        statusBadge = '<span class="mi-badge rendered">✅ Rendered</span>';
+      } else if (queueStatus === 'processing' || queueStatus === 'generating') {
+        statusBadge = '<span class="mi-badge processing">⏳ Processing</span>';
+      } else {
+        statusBadge = '<span class="mi-badge pending">⏳ Pending</span>';
+      }
+
+      card.innerHTML = `
+        <div class="mi-card-img-wrap">
+          <img src="${escapeHtml(displayUrl)}" alt="${escapeHtml(img.product_name)}" onerror="this.style.display='none'" loading="lazy"/>
+          ${statusBadge}
+        </div>
+        <div class="mi-card-body">
+          <div class="mi-card-name" title="${escapeHtml(img.product_name)}">${escapeHtml(img.product_name)}</div>
+          ${img.product_code ? `<div class="mi-card-code">${escapeHtml(img.product_code)}</div>` : ''}
+          ${img.product_brand ? `<div class="mi-card-brand">🏷️ ${escapeHtml(img.product_brand)}</div>` : ''}
+          <div class="mi-card-desc" title="${escapeHtml(descFull)}">${escapeHtml(descPreview)}${descFull.length > 100 ? '...' : ''}</div>
+          <div class="mi-card-meta">
+            ${img.match_type ? `<span>🔗 ${escapeHtml(img.match_type)}</span>` : ''}
+            ${img.match_score ? `<span>⭐ ${img.match_score}</span>` : ''}
+            ${createdDate ? `<span>🕐 ${createdDate}</span>` : ''}
+          </div>
+        </div>
+        <div class="mi-card-footer">
+          <span>Click to view details</span>
+        </div>
+      `;
+
+      card.addEventListener('click', (e) => {
+        if (e.target.closest('button')) return;
+        showMiDetail(img);
+      });
+
+      grid.appendChild(card);
+    }
+
+    renderMiPagination(totalPages);
+  }
+
+  function showMiDetail(img) {
+    const el = getMiElements();
+    if (!el.detailView || !el.canvasView || !el.detailContent) return;
+
+    miSelectedImg = img;
 
     const displayUrl = img.image_url || img.image_data_url || '';
     const createdDate = img.created_at ? new Date(img.created_at).toLocaleString() : '';
@@ -5170,52 +6299,51 @@ completedClearArchiveBtn?.addEventListener('click', clearCompletedArchive);
     const queueStatus = img.queue_status || '';
     const descFull = img.description || '';
 
-    // Determine status badge
     let statusBadge = '';
     if (hasCompletedRender) {
-      statusBadge = '<span class="matched-detail-status-badge rendered">✅ Rendered</span>';
+      statusBadge = '<span class="mi-badge rendered">✅ Rendered</span>';
     } else if (queueStatus === 'processing' || queueStatus === 'generating') {
-      statusBadge = '<span class="matched-detail-status-badge processing">⏳ Processing</span>';
+      statusBadge = '<span class="mi-badge processing">⏳ Processing</span>';
     } else {
-      statusBadge = '<span class="matched-detail-status-badge pending">⏳ Pending</span>';
+      statusBadge = '<span class="mi-badge pending">⏳ Pending</span>';
     }
 
-    matchedDetailContent.innerHTML = `
-      <div class="matched-detail-layout">
-        <div class="matched-detail-image-section">
+    el.detailContent.innerHTML = `
+      <div class="mi-detail-layout">
+        <div class="mi-detail-image-section">
           <img src="${escapeHtml(displayUrl)}" alt="${escapeHtml(img.product_name)}" onerror="this.style.display='none'"/>
-          <div class="matched-detail-img-label">${escapeHtml(img.image_name || '')}</div>
+          <div class="mi-detail-img-label">${escapeHtml(img.image_name || '')}</div>
         </div>
-        <div class="matched-detail-info-section">
-          <div class="matched-detail-name">${escapeHtml(img.product_name)}</div>
-          ${img.product_code ? `<div class="matched-detail-code">${escapeHtml(img.product_code)}</div>` : ''}
-          ${img.product_brand ? `<div class="matched-detail-brand">🏷️ ${escapeHtml(img.product_brand)}</div>` : ''}
-          <div style="display:flex;gap:8px;align-items:center;margin-top:4px;">
+        <div class="mi-detail-info-section">
+          <div class="mi-detail-name">${escapeHtml(img.product_name)}</div>
+          ${img.product_code ? `<div class="mi-detail-code">${escapeHtml(img.product_code)}</div>` : ''}
+          ${img.product_brand ? `<div class="mi-detail-brand">🏷️ ${escapeHtml(img.product_brand)}</div>` : ''}
+          <div style="display:flex;gap:8px;align-items:center;margin-top:4px;flex-wrap:wrap;">
             ${statusBadge}
             ${img.match_type ? `<span style="font-size:11px;color:var(--text-muted);">🔗 ${escapeHtml(img.match_type)}</span>` : ''}
             ${img.match_score ? `<span style="font-size:11px;color:var(--text-muted);">⭐ ${img.match_score}</span>` : ''}
           </div>
-          <div class="matched-detail-desc-label">Description</div>
-          <div class="matched-detail-desc">${escapeHtml(descFull) || '<em style="color:var(--text-muted)">No description available</em>'}</div>
-          <div class="matched-detail-meta-grid">
-            ${img.image_name ? `<div class="matched-detail-meta-item"><strong>Original Image</strong>${escapeHtml(img.image_name)}</div>` : ''}
-            ${img.source_batch ? `<div class="matched-detail-meta-item"><strong>Source</strong>${escapeHtml(img.source_batch)}</div>` : ''}
-            ${img.source_pdf ? `<div class="matched-detail-meta-item"><strong>PDF</strong>${escapeHtml(img.source_pdf)}</div>` : ''}
-            ${img.source_zip ? `<div class="matched-detail-meta-item"><strong>ZIP</strong>${escapeHtml(img.source_zip)}</div>` : ''}
-            ${createdDate ? `<div class="matched-detail-meta-item"><strong>Matched On</strong>${createdDate}</div>` : ''}
-            ${img.queue_item_id ? `<div class="matched-detail-meta-item"><strong>Queue ID</strong>#${img.queue_item_id}</div>` : ''}
+          <div class="mi-detail-desc-label">Description</div>
+          <div class="mi-detail-desc">${escapeHtml(descFull) || '<em style="color:var(--text-muted)">No description available</em>'}</div>
+          <div class="mi-detail-meta-grid">
+            ${img.image_name ? `<div class="mi-detail-meta-item"><strong>Original Image</strong>${escapeHtml(img.image_name)}</div>` : ''}
+            ${img.source_batch ? `<div class="mi-detail-meta-item"><strong>Source</strong>${escapeHtml(img.source_batch)}</div>` : ''}
+            ${img.source_pdf ? `<div class="mi-detail-meta-item"><strong>PDF</strong>${escapeHtml(img.source_pdf)}</div>` : ''}
+            ${img.source_zip ? `<div class="mi-detail-meta-item"><strong>ZIP</strong>${escapeHtml(img.source_zip)}</div>` : ''}
+            ${createdDate ? `<div class="mi-detail-meta-item"><strong>Matched On</strong>${createdDate}</div>` : ''}
+            ${img.queue_item_id ? `<div class="mi-detail-meta-item"><strong>Queue ID</strong>#${img.queue_item_id}</div>` : ''}
           </div>
-          <div class="matched-detail-actions">
-            <button class="matched-detail-add-btn" data-id="${img.id || ''}" data-name="${escapeHtml(img.product_name)}" data-code="${escapeHtml(img.product_code || '')}" data-desc="${escapeHtml(descFull)}" data-brand="${escapeHtml(img.product_brand || '')}" data-url="${escapeHtml(displayUrl)}" data-imgname="${escapeHtml(img.image_name || '')}">➕ Add to Queue</button>
-            <button class="matched-detail-view-btn" data-url="${escapeHtml(displayUrl)}">🔍 View Full Image</button>
-            ${hasCompletedRender && completedRenderUrl ? `<button class="matched-detail-render-btn" data-url="${escapeHtml(completedRenderUrl)}">🎨 View Completed Render</button>` : ''}
+          <div class="mi-detail-actions">
+            <button class="mi-detail-add-btn" data-id="${img.id || ''}" data-name="${escapeHtml(img.product_name)}" data-code="${escapeHtml(img.product_code || '')}" data-desc="${escapeHtml(descFull)}" data-brand="${escapeHtml(img.product_brand || '')}" data-url="${escapeHtml(displayUrl)}" data-imgname="${escapeHtml(img.image_name || '')}">➕ Add to Queue</button>
+            <button class="mi-detail-view-btn" data-url="${escapeHtml(displayUrl)}">🔍 View Full Image</button>
+            ${hasCompletedRender && completedRenderUrl ? `<button class="mi-detail-render-btn" data-url="${escapeHtml(completedRenderUrl)}">🎨 View Completed Render</button>` : ''}
           </div>
         </div>
       </div>
     `;
 
-    // Wire up detail view buttons
-    const addBtn = matchedDetailContent.querySelector('.matched-detail-add-btn');
+    // Wire up detail buttons
+    const addBtn = el.detailContent.querySelector('.mi-detail-add-btn');
     if (addBtn) {
       addBtn.addEventListener('click', () => {
         const name = addBtn.dataset.name;
@@ -5253,12 +6381,12 @@ completedClearArchiveBtn?.addEventListener('click', clearCompletedArchive);
       });
     }
 
-    const viewBtn = matchedDetailContent.querySelector('.matched-detail-view-btn');
+    const viewBtn = el.detailContent.querySelector('.mi-detail-view-btn');
     if (viewBtn) {
       viewBtn.addEventListener('click', () => window.open(displayUrl, '_blank'));
     }
 
-    const renderBtn = matchedDetailContent.querySelector('.matched-detail-render-btn');
+    const renderBtn = el.detailContent.querySelector('.mi-detail-render-btn');
     if (renderBtn) {
       renderBtn.addEventListener('click', () => {
         if (completedRenderUrl) window.open(completedRenderUrl, '_blank');
@@ -5266,76 +6394,42 @@ completedClearArchiveBtn?.addEventListener('click', clearCompletedArchive);
     }
 
     // Switch to detail view
-    matchedCanvasView.style.display = 'none';
-    matchedDetailView.style.display = 'block';
+    el.canvasView.style.display = 'none';
+    el.detailView.style.display = 'block';
+
+    // Update sidebar active state
+    el.navItems.forEach(n => n.classList.remove('active'));
+    const detailNav = [...el.navItems].find(n => n.dataset.miView === 'detail');
+    if (detailNav) detailNav.classList.add('active');
   }
 
-  // ── Render gallery grid (canvas view) ──
-  function renderMatchedImages(data) {
-    if (!matchedImagesGrid) return;
-    const images = data.images || [];
-    matchedImagesGrid.innerHTML = '';
-
-    // Ensure we're showing canvas view (not detail)
-    if (matchedCanvasView) matchedCanvasView.style.display = 'block';
-    if (matchedDetailView) matchedDetailView.style.display = 'none';
-
-    if (matchedImagesTimestamp) {
-      matchedImagesTimestamp.textContent = 'Total: ' + (data.total || 0) + ' record(s)';
-    }
-    if (matchedImagesCount) {
-      matchedImagesCount.textContent = images.length + ' shown';
-    }
-
-    if (images.length === 0) {
-      matchedImagesGrid.innerHTML = '<div class="matched-empty"><div class="matched-empty-icon">🖼️</div>No matched images yet. Upload a PDF+ZIP and run the matching workflow to see results here.</div>';
+  function renderMiPagination(totalPages) {
+    const el = getMiElements();
+    if (!el.pagination) return;
+    if (totalPages <= 1) {
+      el.pagination.style.display = 'none';
       return;
     }
+    el.pagination.style.display = 'flex';
+    if (el.pageInfo) el.pageInfo.textContent = `Page ${miPage} of ${totalPages}`;
+    if (el.prevPage) el.prevPage.disabled = miPage <= 1;
+    if (el.nextPage) el.nextPage.disabled = miPage >= totalPages;
+  }
 
-    for (const img of images) {
-      const card = document.createElement('div');
-      card.className = 'matched-card';
-      card.style.cursor = 'pointer';
-
-      const displayUrl = img.image_url || img.image_data_url || '';
-      const createdDate = img.created_at ? new Date(img.created_at).toLocaleString() : '';
-      const hasCompletedRender = img.has_completed_render === true;
-      const completedRenderUrl = img.completed_render_url || '';
-      const queueStatus = img.queue_status || '';
-      const descPreview = (img.description || '').substring(0, 120);
-      const descFull = img.description || '';
-
-      card.innerHTML = `
-        <div class="matched-card-img-wrap ${hasCompletedRender ? 'has-render' : ''}">
-          <img class="matched-card-img" src="${escapeHtml(displayUrl)}" alt="${escapeHtml(img.product_name)}" onerror="this.style.display='none'" loading="lazy"/>
-          ${hasCompletedRender ? '<span class="matched-render-badge" title="This product has completed renders">✅ Rendered</span>' : ''}
-          ${queueStatus === 'processing' || queueStatus === 'generating' ? '<span class="matched-render-badge processing" title="This product is currently being rendered">⏳ Processing</span>' : ''}
-        </div>
-        <div class="matched-card-body">
-          <div class="matched-card-name" title="${escapeHtml(img.product_name)}">${escapeHtml(img.product_name)}</div>
-          ${img.product_code ? `<div class="matched-card-code">${escapeHtml(img.product_code)}</div>` : ''}
-          ${img.product_brand ? `<div style="font-size:10px;color:var(--text-muted);margin-bottom:4px;">🏷️ ${escapeHtml(img.product_brand)}</div>` : ''}
-          <div class="matched-card-desc" title="${escapeHtml(descFull)}">${escapeHtml(descPreview)}${descFull.length > 120 ? '...' : ''}</div>
-          <div class="matched-card-meta">
-            ${img.match_type ? `<span>🔗 ${escapeHtml(img.match_type)}</span>` : ''}
-            ${img.match_score ? `<span>⭐ ${img.match_score}</span>` : ''}
-            ${createdDate ? `<span>🕐 ${createdDate}</span>` : ''}
-          </div>
-        </div>
-        <div class="matched-card-footer">
-          <span style="font-size:10px;color:var(--text-muted);padding:4px 0;">Click to view details</span>
-        </div>
-      `;
-
-      // Click card → open detail subpage
-      card.addEventListener('click', (e) => {
-        // Don't open detail if clicking a button inside the card
-        if (e.target.closest('button')) return;
-        showMatchedDetail(img);
-      });
-
-      matchedImagesGrid.appendChild(card);
+  // ── Init Matched Images (main entry) ──
+  async function initMatchedImages() {
+    const data = await fetchMatchedImages();
+    if (!data.success) {
+      const el = getMiElements();
+      if (el.content) el.content.innerHTML = '<div class="mi-empty"><div class="mi-empty-icon">⚠️</div>Failed to load matched images. Check server connection.</div>';
+      return;
     }
+    miData = data;
+    miPage = 1;
+    miPerPage = parseInt(getMiElements().perPage?.value || '12', 10);
+    renderMiStats(data);
+    populateMiBrands(data);
+    renderMiCards(data);
   }
 
   matchedImagesToggle?.addEventListener('click', () => {
@@ -5359,37 +6453,147 @@ completedClearArchiveBtn?.addEventListener('click', clearCompletedArchive);
     monitorToggle?.classList.remove('active');
     monitorPanelOpen = false;
     if (monitorInterval) { clearInterval(monitorInterval); monitorInterval = null; }
-    // Reset to canvas view when opening
-    if (matchedCanvasView) matchedCanvasView.style.display = 'block';
-    if (matchedDetailView) matchedDetailView.style.display = 'none';
     if (matchedImagesPanelOpen) {
-      fetchMatchedImages(matchedImagesSearch?.value || '').then(renderMatchedImages);
+      initMatchedImages();
     }
   });
 
   matchedImagesRefreshBtn?.addEventListener('click', async () => {
     if (matchedImagesPanelOpen) {
-      const data = await fetchMatchedImages(matchedImagesSearch?.value || '');
-      renderMatchedImages(data);
+      await initMatchedImages();
     }
   });
 
-  // Back to gallery from detail subpage
-  matchedDetailBackBtn?.addEventListener('click', () => {
-    if (matchedCanvasView) matchedCanvasView.style.display = 'block';
-    if (matchedDetailView) matchedDetailView.style.display = 'none';
+  // Detail back button
+  const miDetailBackBtn = document.getElementById('matchedDetailBackBtn');
+  miDetailBackBtn?.addEventListener('click', () => {
+    const el = getMiElements();
+    if (el.canvasView) el.canvasView.style.display = 'block';
+    if (el.detailView) el.detailView.style.display = 'none';
+    // Update sidebar active state
+    el.navItems.forEach(n => n.classList.remove('active'));
+    const galleryNav = [...el.navItems].find(n => n.dataset.miView === 'gallery');
+    if (galleryNav) galleryNav.classList.add('active');
   });
 
-  // Search with debounce
-  let matchedSearchTimeout = null;
-  matchedImagesSearch?.addEventListener('input', () => {
-    clearTimeout(matchedSearchTimeout);
-    matchedSearchTimeout = setTimeout(async () => {
+  // ── Filter event handlers ──
+  let miSearchTimeout = null;
+  const miSearchEl = document.getElementById('miSearch');
+  miSearchEl?.addEventListener('input', () => {
+    clearTimeout(miSearchTimeout);
+    miSearchTimeout = setTimeout(() => {
       if (matchedImagesPanelOpen) {
-        const data = await fetchMatchedImages(matchedImagesSearch.value);
-        renderMatchedImages(data);
+        miPage = 1;
+        renderMiCards(miData);
       }
     }, 400);
+  });
+
+  document.getElementById('miBrandFilter')?.addEventListener('change', () => {
+    if (matchedImagesPanelOpen) { miPage = 1; renderMiCards(miData); }
+  });
+
+  document.getElementById('miStatusFilter')?.addEventListener('change', () => {
+    if (matchedImagesPanelOpen) { miPage = 1; renderMiCards(miData); }
+  });
+
+  document.getElementById('miPerPage')?.addEventListener('change', (e) => {
+    if (matchedImagesPanelOpen) {
+      miPerPage = parseInt(e.target.value, 10);
+      miPage = 1;
+      renderMiCards(miData);
+    }
+  });
+
+  // ── Pagination event handlers ──
+  document.getElementById('miPrevPage')?.addEventListener('click', () => {
+    if (miPage > 1) { miPage--; renderMiCards(miData); }
+  });
+
+  document.getElementById('miNextPage')?.addEventListener('click', () => {
+    const totalPages = Math.max(1, Math.ceil(miFiltered.length / miPerPage));
+    if (miPage < totalPages) { miPage++; renderMiCards(miData); }
+  });
+
+  // ── Refresh button ──
+  document.getElementById('miRefreshBtn')?.addEventListener('click', async () => {
+    if (matchedImagesPanelOpen) {
+      await initMatchedImages();
+    }
+  });
+
+  // ── Add All to Queue button ──
+  document.getElementById('miAddAllBtn')?.addEventListener('click', () => {
+    if (!matchedImagesPanelOpen || !miData || !miData.images) return;
+    const images = miData.images || [];
+    let added = 0;
+    for (const img of images) {
+      const code = img.product_code || '';
+      const name = img.product_name || '';
+      const desc = img.description || '';
+      const brand = img.product_brand || '';
+      const url = img.image_url || img.image_data_url || '';
+
+      const alreadyExists = pendingItems.some(item =>
+        item.driveFolderName === code || (item.name === code && item.desc === desc)
+      );
+      if (alreadyExists) continue;
+
+      pendingItems.push({
+        id: nextId++,
+        name: code || name,
+        dataUrl: url,
+        desc: desc,
+        brand: brand,
+        status: STATUS.WAIT,
+        supabaseUrl: '',
+        driveFolderName: code || '',
+        provider: provider || 'openai',
+        resolution: nb2Res || '1K'
+      });
+      added++;
+    }
+    if (added > 0) {
+      renderPendingList();
+      updateCost();
+      checkReady();
+      saveState();
+      toast(`Added ${added} item(s) to Bulk Queue`, 'success');
+    } else {
+      toast('No new items to add (all already in queue)', 'info');
+    }
+  });
+
+  // ── Sidebar navigation ──
+  document.querySelectorAll('.mi-nav-item').forEach(item => {
+    item.addEventListener('click', () => {
+      const view = item.dataset.miView;
+      const el = getMiElements();
+      el.navItems.forEach(n => n.classList.remove('active'));
+      item.classList.add('active');
+
+      if (view === 'gallery') {
+        if (el.canvasView) el.canvasView.style.display = 'block';
+        if (el.detailView) el.detailView.style.display = 'none';
+      } else if (view === 'stats') {
+        // Show stats overlay
+        if (el.canvasView) el.canvasView.style.display = 'block';
+        if (el.detailView) el.detailView.style.display = 'none';
+        // Scroll to stats
+        const statsEl = document.getElementById('miStats');
+        if (statsEl) statsEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      } else if (view === 'detail') {
+        if (miSelectedImg) {
+          showMiDetail(miSelectedImg);
+        } else {
+          toast('Select an image first to view details', 'info');
+          // Switch back to gallery
+          el.navItems.forEach(n => n.classList.remove('active'));
+          const galleryNav = [...el.navItems].find(n => n.dataset.miView === 'gallery');
+          if (galleryNav) galleryNav.classList.add('active');
+        }
+      }
+    });
   });
 
 logToggle.addEventListener('click', () => {
@@ -5972,6 +7176,7 @@ const batchBackBtn = document.getElementById('batchBackBtn');
 const batchSubmitBtn = document.getElementById('batchSubmitBtn');
 
 function hideWorkspacePanels() {
+  if (mainPanel) mainPanel.style.display = '';
   if (bulkUploadPanel) bulkUploadPanel.style.display = 'none';
   if (bulkRenderPanel) bulkRenderPanel.style.display = 'none';
   if (batchProcessorPanel) batchProcessorPanel.style.display = 'none';
@@ -10542,12 +11747,16 @@ function initDiningChairMatch() {
 
   // Hide other panels when opening
   function hideAllPanels() {
+    if (mainPanel) mainPanel.style.display = '';
     document.querySelectorAll('.main > div, .dcm-panel').forEach(el => {
       if (el.id !== 'diningChairMatchPanel') el.style.display = 'none';
     });
     // Also hide other panel containers
-    document.querySelectorAll('[id$="Panel"]').forEach(el => {
+    document.querySelectorAll('.main > div[id$="Panel"]').forEach(el => {
       if (el.id !== 'diningChairMatchPanel') el.style.display = 'none';
+    });
+    document.querySelectorAll('.topbar .tb-btn.active').forEach(btn => {
+      if (btn.id !== 'diningChairMatchToggle') btn.classList.remove('active');
     });
   }
 
@@ -10671,8 +11880,12 @@ function initRenderProduct() {
   let isOpen = false;
 
   function hideAllPanels() {
-    document.querySelectorAll('.main > div, .dcm-panel, [id$="Panel"]').forEach(el => {
+    if (mainPanel) mainPanel.style.display = '';
+    document.querySelectorAll('.main > div, .dcm-panel, .main > div[id$="Panel"]').forEach(el => {
       if (el.id !== 'renderProductPanel') el.style.display = 'none';
+    });
+    document.querySelectorAll('.topbar .tb-btn.active').forEach(btn => {
+      if (btn.id !== 'renderProductToggle') btn.classList.remove('active');
     });
   }
 
@@ -10767,6 +11980,7 @@ function initRenderQueue() {
   if (!toggle || !panel) return;
 
   function hideAllPanels() {
+    if (mainPanel) mainPanel.style.display = '';
     document.querySelectorAll('.main > div[id$="Panel"], .dcm-panel').forEach(el => {
       if (el.id !== 'renderQueuePanel') {
         el.style.display = 'none';

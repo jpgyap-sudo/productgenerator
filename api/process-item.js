@@ -298,7 +298,7 @@ async function processItem(itemId, resolution, provider = 'openai-mini') {
             status: finalStatus,
             provider,
             apiModel: provider === 'gemini'
-              ? 'gemini-3.1-flash-image-preview / gemini-3-pro-image-preview'
+              ? 'gemini-3.1-flash-image-preview (+ fallbacks)'
               : provider === 'openai'
                 ? process.env.OPENAI_IMAGE_MODEL || 'gpt-image-1-mini'
                 : provider === 'openai-mini'
