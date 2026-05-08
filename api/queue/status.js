@@ -13,7 +13,7 @@ import { supabase, QUEUE_TABLE, RESULTS_TABLE, BUCKET_NAME } from '../../lib/sup
 import { VIEWS } from '../../lib/fal.js';
 import { renderZipPublicUrl } from '../../lib/vps-storage.js';
 
-const OPENAI_IMAGE_MODEL = process.env.OPENAI_IMAGE_MODEL || 'gpt-image-1.5';
+const OPENAI_IMAGE_MODEL = process.env.OPENAI_IMAGE_MODEL || 'gpt-image-1-mini';
 
 // In-memory cache with 2 second TTL, keyed by itemId
 // Using a Map so different itemIds don't share cache entries
@@ -268,10 +268,30 @@ async function updateQueueStatuses(queueItems, rows) {
         updated_at: update.updated_at
       };
       if (update.provider) updateData.provider = update.provider;
-      await supabase
-        .from(QUEUE_TABLE)
-        .update(updateData)
-        .eq('id', update.id);
+
+      // Use schema fallback: strip unknown columns and retry
+      let currentValues = { ...updateData };
+      const strippedColumns = [];
+      for (let attempt = 0; attempt < 6; attempt++) {
+        if (Object.keys(currentValues).length === 0) break;
+        const { error } = await supabase
+          .from(QUEUE_TABLE)
+          .update(currentValues)
+          .eq('id', update.id);
+        if (!error) {
+          if (strippedColumns.length > 0) {
+            console.warn(`[STATUS] Updated item ${update.id} without optional columns: ${strippedColumns.join(', ')}`);
+          }
+          break;
+        }
+        const missingColumn = getMissingSchemaColumn(error);
+        if (!missingColumn || !(missingColumn in currentValues)) {
+          console.error(`[STATUS] Failed to update item ${update.id}:`, error.message);
+          break;
+        }
+        strippedColumns.push(missingColumn);
+        delete currentValues[missingColumn];
+      }
     }
   }
 }
@@ -295,4 +315,26 @@ function groupResults(rows) {
     });
   }
   return grouped;
+}
+
+/**
+ * Extract the missing column name from a Supabase schema cache error.
+ * Returns the column name (e.g., 'sub_text', 'brand') or null if not found.
+ */
+function getMissingSchemaColumn(error) {
+  const message = String(error?.message || '');
+  const quoted = message.match(/'([^']+)' column/i);
+  if (quoted) return quoted[1];
+  const plain = message.match(/column\s+([a-zA-Z0-9_]+)\s+does not exist/i);
+  if (plain) return plain[1];
+
+  for (const column of [
+    'sub_text', 'brand', 'resolution', 'drive_folder_name',
+    'drive_folder_id', 'drive_folder_url', 'drive_upload_status',
+    'drive_upload_done', 'drive_upload_total', 'drive_upload_error',
+    'archived_at', 'api_model'
+  ]) {
+    if (message.includes(column)) return column;
+  }
+  return null;
 }

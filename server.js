@@ -259,36 +259,45 @@ async function processNextBatch() {
     // Skip if already being processed
     if (currentJobs.has(item.id)) continue;
 
-    const provider = item.provider || detectProvider(item) || 'openai';
+    // Reserve the slot IMMEDIATELY to prevent duplicate processing.
+    // We create a placeholder promise that gets replaced after setup.
+    const setupPromise = (async () => {
+      const provider = item.provider || detectProvider(item) || 'openai';
 
-    console.log(`[WORKER] Starting item ${item.id} ("${item.name}") with provider: ${provider}`);
+      console.log(`[WORKER] Starting item ${item.id} ("${item.name}") with provider: ${provider}`);
 
-    // Mark as active
-    const providerLabel = provider.startsWith('stability')
-      ? provider.includes('cheap') || provider.includes('mini')
-        ? 'Stability AI (cheap/mini)'
-        : 'Stability AI'
-      : provider === 'gemini'
-        ? 'Gemini'
-        : provider.includes('cheap') || provider.includes('mini')
-          ? 'OpenAI (cheap/mini)'
-          : 'OpenAI';
-    await updateQueueItemFields(item.id, {
-      status: 'active',
-      sub_text: `Generating 4 views with ${providerLabel}...`,
-      provider,
-      updated_at: new Date().toISOString()
-    });
+      // Mark as active
+      const providerLabel = provider.startsWith('stability')
+        ? provider.includes('cheap') || provider.includes('mini')
+          ? 'Stability AI (cheap/mini)'
+          : 'Stability AI'
+        : provider === 'gemini'
+          ? 'Gemini'
+          : provider.includes('cheap') || provider.includes('mini')
+            ? 'OpenAI (cheap/mini)'
+            : 'OpenAI';
+      await updateQueueItemFields(item.id, {
+        status: 'active',
+        sub_text: `Generating 4 views with ${providerLabel}...`,
+        provider,
+        updated_at: new Date().toISOString()
+      });
 
-    // Ensure render_results rows exist
-    await ensureRenderRows(item.id, provider);
+      // Ensure render_results rows exist
+      await ensureRenderRows(item.id, provider);
 
-    // Start processing in background
-    const jobPromise = processItem(item.id, provider).finally(() => {
-      currentJobs.delete(item.id);
-    });
+      // Start processing in background
+      const jobPromise = processItem(item.id, provider).finally(() => {
+        currentJobs.delete(item.id);
+      });
 
-    currentJobs.set(item.id, jobPromise);
+      // Replace the placeholder with the real job promise
+      currentJobs.set(item.id, jobPromise);
+      return jobPromise;
+    })();
+
+    // Set the placeholder immediately so subsequent poll cycles skip this item
+    currentJobs.set(item.id, setupPromise);
   }
 }
 
@@ -548,7 +557,7 @@ async function processItem(itemId, provider = 'openai') {
             provider,
             apiModel: provider === 'gemini'
               ? 'gemini-3.1-flash-image-preview / gemini-3-pro-image-preview'
-              : process.env.OPENAI_IMAGE_MODEL || 'gpt-image-1.5',
+              : process.env.OPENAI_IMAGE_MODEL || 'gpt-image-1-mini',
             updatedAt: new Date().toISOString(),
             driveFolderId: item.drive_folder_id || '',
             driveFolderName: item.drive_folder_name || '',
@@ -570,7 +579,13 @@ async function processItem(itemId, provider = 'openai') {
         }
       }
 
-      await triggerDriveUpload(item);
+      // Fetch fresh item data for Drive upload (item object may be stale)
+      const { data: freshItems } = await supabase
+        .from(QUEUE_TABLE)
+        .select('*')
+        .eq('id', itemId)
+        .single();
+      await triggerDriveUpload(freshItems || item);
     }
 
   } catch (error) {
@@ -589,11 +604,25 @@ async function triggerDriveUpload(item) {
     const hasDriveEnv = !!process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
     if (!hasDriveEnv) return;
 
-    // Check if upload is already in progress or completed
-    if (item.drive_upload_status === 'uploading') return;
+    // Fetch fresh drive state to avoid race conditions
+    const { data: freshItem } = await supabase
+      .from(QUEUE_TABLE)
+      .select('drive_upload_status, drive_folder_id, drive_folder_name')
+      .eq('id', item.id)
+      .single();
 
-    const alreadyUploaded = !!(item.drive_folder_id && item.drive_folder_id !== '')
-      || !!(item.drive_folder_name && item.drive_folder_name !== '');
+    const driveStatus = freshItem?.drive_upload_status || item.drive_upload_status || '';
+    const driveFolderId = freshItem?.drive_folder_id || item.drive_folder_id || '';
+    const driveFolderName = freshItem?.drive_folder_name || item.drive_folder_name || '';
+
+    // Check if upload is already in progress or completed
+    if (driveStatus === 'uploading') return;
+
+    // Only skip if upload was actually completed (has a folder ID from a previous upload).
+    // drive_folder_name alone is NOT sufficient — it may be a user-specified folder name hint
+    // from the agent flow, not an indicator that upload is done.
+    const alreadyUploaded = !!(driveFolderId && driveFolderId !== '')
+      || driveStatus === 'done';
 
     if (alreadyUploaded) return;
 
@@ -626,14 +655,37 @@ async function triggerDriveUpload(item) {
         imageUrl: row.image_url
       }));
 
-      const counter = await getNextFolderCounter();
-      const safeName = (item.name || `Item_${item.id}`)
-        .replace(/[^a-zA-Z0-9\s_-]/g, '')
-        .replace(/\s+/g, '_')
-        .replace(/_+/g, '_')
-        .replace(/^_|_$/g, '')
-        .substring(0, 55);
-      const folderName = `${String(counter).padStart(3, '0')}_${safeName}`;
+      // Use user-specified drive_folder_name if provided, otherwise generate from counter + item name
+      let folderName;
+      if (driveFolderName && driveFolderName.trim()) {
+        // User specified a folder name (e.g., from agent flow) — use it directly
+        folderName = driveFolderName.trim()
+          .replace(/[^a-zA-Z0-9\s_-]/g, '')
+          .replace(/\s+/g, '_')
+          .replace(/_+/g, '_')
+          .replace(/^_|_$/g, '')
+          .substring(0, 60);
+        // If the user-specified name is empty after sanitization, fall back to generated name
+        if (!folderName) {
+          const counter = await getNextFolderCounter();
+          const safeName = (item.name || `Item_${item.id}`)
+            .replace(/[^a-zA-Z0-9\s_-]/g, '')
+            .replace(/\s+/g, '_')
+            .replace(/_+/g, '_')
+            .replace(/^_|_$/g, '')
+            .substring(0, 55);
+          folderName = `${String(counter).padStart(3, '0')}_${safeName}`;
+        }
+      } else {
+        const counter = await getNextFolderCounter();
+        const safeName = (item.name || `Item_${item.id}`)
+          .replace(/[^a-zA-Z0-9\s_-]/g, '')
+          .replace(/\s+/g, '_')
+          .replace(/_+/g, '_')
+          .replace(/^_|_$/g, '')
+          .substring(0, 55);
+        folderName = `${String(counter).padStart(3, '0')}_${safeName}`;
+      }
 
       await updateDriveUploadState(item.id, {
         drive_upload_status: 'uploading',

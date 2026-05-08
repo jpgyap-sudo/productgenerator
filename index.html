@@ -1869,7 +1869,7 @@ textarea:focus { outline: none; border-color: var(--text-secondary); }
                 <div class="about-spec-name">OpenAI — GPT Image</div>
                 <div class="about-spec-detail">
                   <span class="spec-tag">Provider: OpenAI</span>
-                  <span class="spec-tag">Model: gpt-image-1.5 by default</span>
+                  <span class="spec-tag">Model: gpt-image-1-mini by default</span>
                   <span class="spec-tag">Capability: Image editing & generation</span>
                   <span class="spec-tag">Max Resolution: 4K</span>
                   <span class="spec-tag">Best for: Photorealistic renders, e-commerce quality</span>
@@ -3611,6 +3611,9 @@ async function loadState() {
           if (p.hasLocalImage && !p.dataUrl && !p.supabaseUrl) {
             p.needsReupload = true;
           }
+          // Ensure provider and resolution are set (may be missing from old saves)
+          if (!p.provider) p.provider = state.provider || provider || 'openai';
+          if (!p.resolution) p.resolution = state.nb2Res || nb2Res || '1K';
         });
       }
       if (state.nb2Res) {
@@ -3808,7 +3811,27 @@ bulkRenderToggle?.addEventListener('click', () => {
 });
 bulkRenderClose?.addEventListener('click', hideBulkRenderPanel);
 bulkOpenRenderBtn?.addEventListener('click', showBulkRenderPanel);
-bulkStartBtn?.addEventListener('click', () => confirmAddBtn.click());
+bulkStartBtn?.addEventListener('click', async () => {
+  // First add all pending items to queue
+  if (pendingItems.length > 0) {
+    // Temporarily disable auto-queue to avoid double-start
+    const autoWasChecked = autoQueueToggle?.checked;
+    if (autoQueueToggle) autoQueueToggle.checked = false;
+    confirmAddBtn.click();
+    // Re-enable auto-queue after confirmAddBtn finishes (it uses setTimeout internally)
+    if (autoWasChecked && autoQueueToggle) {
+      setTimeout(() => { autoQueueToggle.checked = true; }, 100);
+    }
+  }
+  // Then start the queue processing after a small delay for confirmAddBtn to finish
+  setTimeout(() => {
+    if (queue.some(q => q.status === STATUS.WAIT)) {
+      startBtn.click();
+    } else {
+      toast('No items to process', 'info');
+    }
+  }, 600);
+});
 
 /** Default prompts for each view (same as VIEWS array) */
 const DEFAULT_FEATURE_PROMPTS = [
@@ -6014,12 +6037,6 @@ async function pollStatus() {
     // Store render results for use when building batch cards
     if (data.renderResults) {
       lastPollRenderResults = data.renderResults;
-      for (const serverItem of data.queue || []) {
-        if (serverItem.status !== 'done' && serverItem.status !== 'error') continue;
-        const localItem = queue.find(q => q.id === serverItem.id) || serverItem;
-        const viewResults = data.renderResults[serverItem.id] || [];
-        if (viewResults.length) archiveCompletedItem(localItem, viewResults);
-      }
     }
 
     // Update active card with render results
@@ -6348,7 +6365,11 @@ window.addEventListener('beforeunload', function(e) {
         hasLocalImage: true,
         status: STATUS.WAIT,
         supabaseUrl: '',
-        desc: p.desc || ''
+        desc: p.desc || '',
+        brand: p.brand || '',
+        driveFolderName: p.driveFolderName || '',
+        provider: p.provider || provider || 'openai',
+        resolution: p.resolution || nb2Res || '1K'
       })),
       nb2Res,
       provider,
@@ -6457,6 +6478,8 @@ function initUploadAgent() {
   agentToggle?.addEventListener('click', () => {
     showBulkUploadPanel();
     if (agentArrow) agentArrow.style.transform = 'rotate(90deg)';
+    // Also ensure the agent section is visible inside the bulk upload panel
+    if (existingAgentSection) existingAgentSection.style.display = 'block';
   });
 
   // ── PDF file selection ──
@@ -6678,125 +6701,8 @@ function initUploadAgent() {
     }
   });
 
-  // ── Submit button ──
-  if (false) agentSubmitBtn.addEventListener('click', async () => {
-    if (!agentResultData) return;
-
-    agentSubmitBtn.disabled = true;
-    agentSubmitBtn.textContent = '⏳ Submitting...';
-
-    try {
-      // Get the product info (from AI or manual)
-      let name, brand, description;
-      const descEdit = document.getElementById('agentDescEdit');
-
-      if (agentResultData.products && agentResultData.products.length > 0) {
-        const product = agentResultData.products[0];
-        name = product.name;
-        brand = product.brand || '';
-        description = descEdit ? descEdit.value : product.description;
-      } else {
-        const nameInput = document.getElementById('agentNameManual');
-        const brandInput = document.getElementById('agentBrandManual');
-        name = nameInput ? nameInput.value.trim() : '';
-        brand = brandInput ? brandInput.value.trim() : '';
-        description = descEdit ? descEdit.value.trim() : '';
-      }
-
-      if (!name) {
-        addToast('Please enter a product name.', 'error');
-        agentSubmitBtn.disabled = false;
-        agentSubmitBtn.textContent = '🚀 Submit to Queue';
-        return;
-      }
-
-      if (!description) {
-        addToast('Please enter a product description.', 'error');
-        agentSubmitBtn.disabled = false;
-        agentSubmitBtn.textContent = '🚀 Submit to Queue';
-        return;
-      }
-
-      // Get the image data URL
-      let imageDataUrl = '';
-      let imageName = '';
-
-      if (agentResultData.selectedImage && agentResultData.selectedImage.dataUrl) {
-        imageDataUrl = agentResultData.selectedImage.dataUrl;
-        imageName = agentResultData.selectedImage.name;
-      } else if (agentResultData.allImages) {
-        const firstWithData = agentResultData.allImages.find(i => i.dataUrl);
-        if (firstWithData) {
-          imageDataUrl = firstWithData.dataUrl;
-          imageName = firstWithData.name;
-        }
-      }
-
-      if (!imageDataUrl) {
-        addToast('No image data available. Please try uploading the ZIP again.', 'error');
-        agentSubmitBtn.disabled = false;
-        agentSubmitBtn.textContent = '🚀 Submit to Queue';
-        return;
-      }
-
-      // Get the generated product code (if available)
-      let productCode = '';
-      if (agentResultData.products && agentResultData.products.length > 0) {
-        productCode = agentResultData.products[0].generatedCode || '';
-      }
-
-      // Submit to queue
-      const res = await fetchApi('/api/agent/submit', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name,
-          brand,
-          description,
-          productCode,  // Send the generated code (e.g., HACH-005R) for Drive folder naming
-          imageDataUrl,
-          imageName
-        })
-      });
-
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.error || `Server error: ${res.status}`);
-      }
-
-      const result = await res.json();
-
-      addToast(`✅ "${name}" queued at position #${result.queuePosition}`, 'success');
-
-      // Reset agent UI
-      agentResult.style.display = 'none';
-      agentResultData = null;
-      selectedPdfFile = null;
-      selectedZipFile = null;
-      agentPdfText.textContent = 'Drop PDF catalog here or click to browse';
-      agentPdfSub.textContent = 'PDF files only · max 50MB';
-      agentPdfIcon.textContent = '📄';
-      agentZipText.textContent = 'Drop ZIP file here or click to browse';
-      agentZipSub.textContent = 'ZIP files only · max 50MB';
-      agentZipIcon.textContent = '🗜️';
-      agentSelectedImg.style.display = 'none';
-      agentSelectedImg.src = '';
-      agentAnalyzeBtn.disabled = true;
-      agentSubmitBtn.textContent = '🚀 Submit to Queue';
-
-      // Refresh queue display
-      if (typeof renderQueue === 'function') renderQueue();
-
-    } catch (err) {
-      addToast(`Submit failed: ${err.message}`, 'error');
-      agentSubmitBtn.disabled = false;
-      agentSubmitBtn.textContent = '🚀 Submit to Queue';
-    }
-  });
-
-  agentSubmitBtn.addEventListener('click', async (event) => {
-    event.preventDefault();
-    event.stopImmediatePropagation();
+  // ── Submit button: add checked products to pendingItems for Bulk Queue review ──
+  agentSubmitBtn.addEventListener('click', async () => {
     if (!agentResultData) return;
 
     agentSubmitBtn.disabled = true;
@@ -6836,7 +6742,9 @@ function initUploadAgent() {
           brand: product.brand,
           status: STATUS.WAIT,
           supabaseUrl: '',
-          driveFolderName: product.driveFolderName || ''
+          driveFolderName: product.driveFolderName || '',
+          provider: provider || 'openai',
+          resolution: nb2Res || '1K'
         });
       }
 
@@ -6869,7 +6777,7 @@ function initUploadAgent() {
       agentSubmitBtn.disabled = false;
       agentSubmitBtn.textContent = '+ Add to Bulk Queue';
     }
-  }, true);
+  });
 }
 
 function escapeHtml(str) {

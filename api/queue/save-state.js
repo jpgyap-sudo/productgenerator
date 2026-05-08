@@ -10,8 +10,8 @@ import { createClient } from '@supabase/supabase-js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
-const SUPA_QUEUE_TABLE = process.env.SUPA_QUEUE_TABLE || 'queue_items';
-const SUPA_BUCKET = process.env.SUPA_BUCKET || 'product-images';
+const SUPA_QUEUE_TABLE = process.env.SUPA_QUEUE_TABLE || 'product_queue';
+const SUPA_BUCKET = process.env.SUPA_BUCKET || 'product_images';
 
 function dataUrlToBuffer(dataUrl) {
   const matches = dataUrl.match(/^data:(.+);base64,(.+)$/);

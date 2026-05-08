@@ -59,8 +59,11 @@ export default async function handler(req, res) {
       return res.status(409).json({ error: 'Google Drive upload is already in progress' });
     }
 
+    // Only skip if upload was actually completed (has a folder ID from a previous upload).
+    // drive_folder_name alone is NOT sufficient — it may be a user-specified folder name hint
+    // from the agent flow, not an indicator that upload is done.
     const alreadyUploaded = !!(item.drive_folder_id && item.drive_folder_id !== '')
-      || !!(item.drive_folder_name && item.drive_folder_name !== '');
+      || item.drive_upload_status === 'done';
     if (alreadyUploaded) {
       return res.json({
         success: true,
