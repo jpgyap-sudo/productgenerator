@@ -39,6 +39,8 @@ import webhookHandler from './api/fal-webhook.js';
 import agentProcessHandler from './api/agent/process.js';
 import agentMatchHandler from './api/agent/match.js';
 import agentSubmitHandler from './api/agent/submit.js';
+import agentSaveMatchedHandler from './api/agent/save-matched.js';
+import agentMatchedImagesHandler from './api/agent/matched-images.js';
 import monitorHandler from './api/monitor.js';
 import rerenderViewHandler from './api/queue/rerender-view.js';
 
@@ -181,6 +183,27 @@ app.post('/api/agent/submit', async (req, res) => {
     if (!res.headersSent) res.json(result);
   } catch (err) {
     console.error('[AGENT-SUBMIT] Error:', err);
+    if (!res.headersSent) res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Matched Images Routes ──
+app.post('/api/agent/save-matched', async (req, res) => {
+  try {
+    const result = await agentSaveMatchedHandler(req, res);
+    if (!res.headersSent) res.json(result);
+  } catch (err) {
+    console.error('[SAVE-MATCHED] Error:', err);
+    if (!res.headersSent) res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/agent/matched-images', async (req, res) => {
+  try {
+    const result = await agentMatchedImagesHandler(req, res);
+    if (!res.headersSent) res.json(result);
+  } catch (err) {
+    console.error('[MATCHED-IMAGES] Error:', err);
     if (!res.headersSent) res.status(500).json({ error: err.message });
   }
 });

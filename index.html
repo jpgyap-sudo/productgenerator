@@ -1250,6 +1250,382 @@ textarea:focus { outline: none; border-color: var(--text-secondary); }
 .monitor-summary.all-ok { color: var(--success); }
 .monitor-summary.has-err { color: var(--error); }
 
+/* ── MATCHED IMAGES PANEL ────────────────────────────────────── */
+.matched-panel {
+  max-width: 1100px;
+  margin: 0 auto;
+}
+.matched-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 14px;
+  margin-top: 12px;
+}
+.matched-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  transition: background var(--transition), border-color var(--transition);
+}
+.matched-card-img {
+  width: 100%;
+  height: 200px;
+  object-fit: cover;
+  display: block;
+  background: var(--surface-2);
+}
+.matched-card-body {
+  padding: 10px 12px;
+}
+.matched-card-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.matched-card-code {
+  font-size: 10px;
+  color: var(--accent);
+  font-family: monospace;
+  margin-bottom: 4px;
+}
+.matched-card-desc {
+  font-size: 11px;
+  color: var(--text-secondary);
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  margin-bottom: 6px;
+}
+.matched-card-meta {
+  font-size: 10px;
+  color: var(--text-muted);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.matched-card-meta span {
+  background: var(--surface-2);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+.matched-card-footer {
+  display: flex;
+  gap: 6px;
+  padding: 8px 12px;
+  border-top: 1px solid var(--border-light);
+}
+.matched-card-footer button {
+  font-size: 10px;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+  transition: all var(--transition);
+}
+.matched-card-footer button:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.matched-card-img-wrap {
+  position: relative;
+  overflow: hidden;
+}
+.matched-card-img-wrap.has-render {
+  outline: 2px solid #22c55e;
+  outline-offset: -2px;
+}
+.matched-render-badge {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  font-size: 10px;
+  background: rgba(34, 197, 94, 0.9);
+  color: #fff;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-weight: 600;
+  pointer-events: none;
+  backdrop-filter: blur(4px);
+}
+.matched-render-badge.processing {
+  background: rgba(234, 179, 8, 0.9);
+}
+.matched-add-btn {
+  font-size: 10px;
+  padding: 4px 10px;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  background: var(--accent);
+  color: #fff;
+  cursor: pointer;
+  transition: all var(--transition);
+  font-weight: 600;
+}
+.matched-add-btn:hover {
+  opacity: 0.85;
+  border-color: var(--accent);
+}
+.matched-view-render-btn {
+  font-size: 10px;
+  padding: 4px 10px;
+  border: 1px solid #22c55e;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: #22c55e;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+.matched-view-render-btn:hover {
+  background: rgba(34, 197, 94, 0.1);
+  border-color: #22c55e;
+}
+
+/* ── Matched Images Detail Subpage ──────────────────────────── */
+.matched-detail-back {
+  font-size: 12px;
+  padding: 6px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+  transition: all var(--transition);
+  font-weight: 500;
+}
+.matched-detail-back:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.matched-detail-content {
+  margin-top: 16px;
+}
+.matched-detail-layout {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+@media (max-width: 768px) {
+  .matched-detail-layout {
+    grid-template-columns: 1fr;
+  }
+}
+.matched-detail-image-section {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: var(--surface-2);
+  min-height: 300px;
+  justify-content: center;
+}
+.matched-detail-image-section img {
+  max-width: 100%;
+  max-height: 400px;
+  object-fit: contain;
+  border-radius: var(--radius-sm);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+}
+.matched-detail-image-section .matched-detail-img-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 8px;
+  text-align: center;
+  word-break: break-all;
+}
+.matched-detail-info-section {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.matched-detail-info-section .matched-detail-name {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1.3;
+}
+.matched-detail-info-section .matched-detail-code {
+  font-size: 13px;
+  color: var(--accent);
+  font-family: monospace;
+}
+.matched-detail-info-section .matched-detail-brand {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+.matched-detail-info-section .matched-detail-desc-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-top: 4px;
+}
+.matched-detail-info-section .matched-detail-desc {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  background: var(--surface-2);
+  padding: 12px;
+  border-radius: var(--radius-sm);
+  max-height: 200px;
+  overflow-y: auto;
+}
+.matched-detail-info-section .matched-detail-meta-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 4px;
+}
+.matched-detail-info-section .matched-detail-meta-item {
+  font-size: 11px;
+  color: var(--text-muted);
+  background: var(--surface-2);
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+}
+.matched-detail-info-section .matched-detail-meta-item strong {
+  color: var(--text-secondary);
+  display: block;
+  font-size: 10px;
+  margin-bottom: 2px;
+}
+.matched-detail-info-section .matched-detail-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+.matched-detail-info-section .matched-detail-actions button {
+  font-size: 12px;
+  padding: 8px 18px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all var(--transition);
+  font-weight: 600;
+}
+.matched-detail-add-btn {
+  background: var(--accent);
+  color: #fff;
+  border: 1px solid var(--accent);
+}
+.matched-detail-add-btn:hover {
+  opacity: 0.85;
+}
+.matched-detail-add-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.matched-detail-view-btn {
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+.matched-detail-view-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.matched-detail-render-btn {
+  background: transparent;
+  color: #22c55e;
+  border: 1px solid #22c55e;
+}
+.matched-detail-render-btn:hover {
+  background: rgba(34, 197, 94, 0.1);
+}
+.matched-detail-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-weight: 600;
+}
+.matched-detail-status-badge.rendered {
+  background: rgba(34, 197, 94, 0.15);
+  color: #22c55e;
+}
+.matched-detail-status-badge.processing {
+  background: rgba(234, 179, 8, 0.15);
+  color: #b45309;
+}
+.matched-detail-status-badge.pending {
+  background: rgba(100, 116, 139, 0.15);
+  color: var(--text-muted);
+}
+.matched-search {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 12px;
+  box-sizing: border-box;
+  margin-bottom: 8px;
+}
+.matched-search:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.matched-empty {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+.matched-empty-icon {
+  font-size: 40px;
+  margin-bottom: 12px;
+  opacity: 0.5;
+}
+.matched-loading {
+  text-align: center;
+  padding: 40px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+.matched-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.matched-toolbar .matched-count {
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.matched-refresh-btn {
+  font-size: 11px;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all var(--transition);
+  white-space: nowrap;
+}
+.matched-refresh-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
 /* ── LOG PANEL ───────────────────────────────────────────────── */
 .bulk-upload-panel {
   max-width: 1280px;
@@ -2181,6 +2557,7 @@ border-top: 1px solid var(--border-light);
     <button class="tb-btn" id="bulkUploadToggle" title="Bulk upload PDF + ZIP workflow" aria-label="Bulk Upload">Bulk Upload</button>
     <button class="tb-btn" id="bulkRenderToggle" title="Review bulk items before rendering" aria-label="Bulk Render">Bulk Render</button>
     <button class="tb-btn" id="batchProcessorToggle" title="Batch process PDF catalog + ZIP images" aria-label="Batch Processor">📦 Batch</button>
+    <button class="tb-btn" id="matchedImagesToggle" title="View saved matched product-image pairs" aria-label="Matched Images">🖼️ Matched</button>
     <button class="tb-btn" id="completedToggle" title="Completed render history" aria-label="Completed Batches">✓ Completed</button>
     <button class="tb-btn" id="monitorToggle" title="API health monitoring" aria-label="API Monitor">📡 Monitor</button>
     <button class="tb-btn" id="featureToggle" title="View & edit product feature prompts" aria-label="Product Features">📋 Features</button>
@@ -2552,6 +2929,39 @@ border-top: 1px solid var(--border-light);
       <div class="monitor-foot">
         <span class="monitor-timestamp" id="monitorTimestamp">Last checked: —</span>
         <span class="monitor-summary" id="monitorSummary"></span>
+      </div>
+    </div>
+
+    <!-- ── MATCHED IMAGES PANEL (Canvas / Gallery) ─────────────── -->
+    <div class="matched-panel" id="matchedImagesPanel" style="display:none;">
+      <!-- Canvas view: gallery grid -->
+      <div id="matchedCanvasView">
+        <div class="sec-title">
+          <span>🖼️ Matched Images</span>
+          <span style="font-size:11px;font-weight:400;color:var(--text-secondary);margin-left:auto;">Saved original product images with matched descriptions from PDF+ZIP uploads</span>
+          <button class="btn-dl-all" id="matchedImagesRefreshBtn" type="button" style="margin-left:8px;">Refresh</button>
+        </div>
+        <div class="matched-toolbar">
+          <input type="text" class="matched-search" id="matchedImagesSearch" placeholder="Search by product name, code, or brand..." />
+          <span class="matched-count" id="matchedImagesCount"></span>
+        </div>
+        <div class="matched-grid" id="matchedImagesGrid">
+          <!-- populated by JS -->
+        </div>
+        <div class="monitor-foot">
+          <span class="monitor-timestamp" id="matchedImagesTimestamp"></span>
+        </div>
+      </div>
+
+      <!-- Detail subpage: shown when a card is clicked -->
+      <div id="matchedDetailView" style="display:none;">
+        <div class="sec-title">
+          <button class="matched-detail-back" id="matchedDetailBackBtn" type="button">&larr; Back to Gallery</button>
+          <span style="font-size:11px;font-weight:400;color:var(--text-secondary);margin-left:auto;">Product detail & actions</span>
+        </div>
+        <div class="matched-detail-content" id="matchedDetailContent">
+          <!-- populated by JS -->
+        </div>
       </div>
     </div>
 
@@ -4088,6 +4498,264 @@ completedClearArchiveBtn?.addEventListener('click', clearCompletedArchive);
       const data = await fetchMonitorStatus();
       renderMonitorStatus(data);
     }
+  // ── MATCHED IMAGES TOGGLE ─────────────────────────────────────────
+  let matchedImagesPanelOpen = false;
+  const matchedImagesToggle = document.getElementById('matchedImagesToggle');
+  const matchedImagesPanel = document.getElementById('matchedImagesPanel');
+  const matchedImagesGrid = document.getElementById('matchedImagesGrid');
+  const matchedImagesSearch = document.getElementById('matchedImagesSearch');
+  const matchedImagesCount = document.getElementById('matchedImagesCount');
+  const matchedImagesTimestamp = document.getElementById('matchedImagesTimestamp');
+  const matchedImagesRefreshBtn = document.getElementById('matchedImagesRefreshBtn');
+  const matchedCanvasView = document.getElementById('matchedCanvasView');
+  const matchedDetailView = document.getElementById('matchedDetailView');
+  const matchedDetailContent = document.getElementById('matchedDetailContent');
+  const matchedDetailBackBtn = document.getElementById('matchedDetailBackBtn');
+
+  async function fetchMatchedImages(search = '') {
+    try {
+      const params = new URLSearchParams({ limit: '100' });
+      if (search) params.set('search', search);
+      const res = await fetchApi('/api/agent/matched-images?' + params.toString());
+      if (!res.ok) throw new Error('Server returned ' + res.status);
+      return await res.json();
+    } catch (err) {
+      console.error('[MATCHED-IMAGES] Fetch error:', err);
+      return { success: false, images: [], total: 0 };
+    }
+  }
+
+  // ── Show detail subpage for a matched image ──
+  function showMatchedDetail(img) {
+    if (!matchedDetailView || !matchedCanvasView || !matchedDetailContent) return;
+
+    const displayUrl = img.image_url || img.image_data_url || '';
+    const createdDate = img.created_at ? new Date(img.created_at).toLocaleString() : '';
+    const hasCompletedRender = img.has_completed_render === true;
+    const completedRenderUrl = img.completed_render_url || '';
+    const queueStatus = img.queue_status || '';
+    const descFull = img.description || '';
+
+    // Determine status badge
+    let statusBadge = '';
+    if (hasCompletedRender) {
+      statusBadge = '<span class="matched-detail-status-badge rendered">✅ Rendered</span>';
+    } else if (queueStatus === 'processing' || queueStatus === 'generating') {
+      statusBadge = '<span class="matched-detail-status-badge processing">⏳ Processing</span>';
+    } else {
+      statusBadge = '<span class="matched-detail-status-badge pending">⏳ Pending</span>';
+    }
+
+    matchedDetailContent.innerHTML = `
+      <div class="matched-detail-layout">
+        <div class="matched-detail-image-section">
+          <img src="${escapeHtml(displayUrl)}" alt="${escapeHtml(img.product_name)}" onerror="this.style.display='none'"/>
+          <div class="matched-detail-img-label">${escapeHtml(img.image_name || '')}</div>
+        </div>
+        <div class="matched-detail-info-section">
+          <div class="matched-detail-name">${escapeHtml(img.product_name)}</div>
+          ${img.product_code ? `<div class="matched-detail-code">${escapeHtml(img.product_code)}</div>` : ''}
+          ${img.product_brand ? `<div class="matched-detail-brand">🏷️ ${escapeHtml(img.product_brand)}</div>` : ''}
+          <div style="display:flex;gap:8px;align-items:center;margin-top:4px;">
+            ${statusBadge}
+            ${img.match_type ? `<span style="font-size:11px;color:var(--text-muted);">🔗 ${escapeHtml(img.match_type)}</span>` : ''}
+            ${img.match_score ? `<span style="font-size:11px;color:var(--text-muted);">⭐ ${img.match_score}</span>` : ''}
+          </div>
+          <div class="matched-detail-desc-label">Description</div>
+          <div class="matched-detail-desc">${escapeHtml(descFull) || '<em style="color:var(--text-muted)">No description available</em>'}</div>
+          <div class="matched-detail-meta-grid">
+            ${img.image_name ? `<div class="matched-detail-meta-item"><strong>Original Image</strong>${escapeHtml(img.image_name)}</div>` : ''}
+            ${img.source_batch ? `<div class="matched-detail-meta-item"><strong>Source</strong>${escapeHtml(img.source_batch)}</div>` : ''}
+            ${img.source_pdf ? `<div class="matched-detail-meta-item"><strong>PDF</strong>${escapeHtml(img.source_pdf)}</div>` : ''}
+            ${img.source_zip ? `<div class="matched-detail-meta-item"><strong>ZIP</strong>${escapeHtml(img.source_zip)}</div>` : ''}
+            ${createdDate ? `<div class="matched-detail-meta-item"><strong>Matched On</strong>${createdDate}</div>` : ''}
+            ${img.queue_item_id ? `<div class="matched-detail-meta-item"><strong>Queue ID</strong>#${img.queue_item_id}</div>` : ''}
+          </div>
+          <div class="matched-detail-actions">
+            <button class="matched-detail-add-btn" data-id="${img.id || ''}" data-name="${escapeHtml(img.product_name)}" data-code="${escapeHtml(img.product_code || '')}" data-desc="${escapeHtml(descFull)}" data-brand="${escapeHtml(img.product_brand || '')}" data-url="${escapeHtml(displayUrl)}" data-imgname="${escapeHtml(img.image_name || '')}">➕ Add to Queue</button>
+            <button class="matched-detail-view-btn" data-url="${escapeHtml(displayUrl)}">🔍 View Full Image</button>
+            ${hasCompletedRender && completedRenderUrl ? `<button class="matched-detail-render-btn" data-url="${escapeHtml(completedRenderUrl)}">🎨 View Completed Render</button>` : ''}
+          </div>
+        </div>
+      </div>
+    `;
+
+    // Wire up detail view buttons
+    const addBtn = matchedDetailContent.querySelector('.matched-detail-add-btn');
+    if (addBtn) {
+      addBtn.addEventListener('click', () => {
+        const name = addBtn.dataset.name;
+        const code = addBtn.dataset.code;
+        const desc = addBtn.dataset.desc;
+        const brand = addBtn.dataset.brand;
+        const url = addBtn.dataset.url;
+
+        const alreadyExists = pendingItems.some(item =>
+          item.driveFolderName === code || (item.name === code && item.desc === desc)
+        );
+        if (alreadyExists) {
+          toast(`"${name}" is already in the queue.`, 'warning');
+          return;
+        }
+
+        pendingItems.push({
+          id: nextId++,
+          name: code || name,
+          dataUrl: url,
+          desc: desc,
+          brand: brand,
+          status: STATUS.WAIT,
+          supabaseUrl: '',
+          driveFolderName: code || '',
+          provider: provider || 'openai',
+          resolution: nb2Res || '1K'
+        });
+
+        renderPendingList();
+        updateCost();
+        checkReady();
+        saveState();
+        toast(`Added "${name}" to Bulk Queue`, 'success');
+      });
+    }
+
+    const viewBtn = matchedDetailContent.querySelector('.matched-detail-view-btn');
+    if (viewBtn) {
+      viewBtn.addEventListener('click', () => window.open(displayUrl, '_blank'));
+    }
+
+    const renderBtn = matchedDetailContent.querySelector('.matched-detail-render-btn');
+    if (renderBtn) {
+      renderBtn.addEventListener('click', () => {
+        if (completedRenderUrl) window.open(completedRenderUrl, '_blank');
+      });
+    }
+
+    // Switch to detail view
+    matchedCanvasView.style.display = 'none';
+    matchedDetailView.style.display = 'block';
+  }
+
+  // ── Render gallery grid (canvas view) ──
+  function renderMatchedImages(data) {
+    if (!matchedImagesGrid) return;
+    const images = data.images || [];
+    matchedImagesGrid.innerHTML = '';
+
+    // Ensure we're showing canvas view (not detail)
+    if (matchedCanvasView) matchedCanvasView.style.display = 'block';
+    if (matchedDetailView) matchedDetailView.style.display = 'none';
+
+    if (matchedImagesTimestamp) {
+      matchedImagesTimestamp.textContent = 'Total: ' + (data.total || 0) + ' record(s)';
+    }
+    if (matchedImagesCount) {
+      matchedImagesCount.textContent = images.length + ' shown';
+    }
+
+    if (images.length === 0) {
+      matchedImagesGrid.innerHTML = '<div class="matched-empty"><div class="matched-empty-icon">🖼️</div>No matched images yet. Upload a PDF+ZIP and run the matching workflow to see results here.</div>';
+      return;
+    }
+
+    for (const img of images) {
+      const card = document.createElement('div');
+      card.className = 'matched-card';
+      card.style.cursor = 'pointer';
+
+      const displayUrl = img.image_url || img.image_data_url || '';
+      const createdDate = img.created_at ? new Date(img.created_at).toLocaleString() : '';
+      const hasCompletedRender = img.has_completed_render === true;
+      const completedRenderUrl = img.completed_render_url || '';
+      const queueStatus = img.queue_status || '';
+      const descPreview = (img.description || '').substring(0, 120);
+      const descFull = img.description || '';
+
+      card.innerHTML = `
+        <div class="matched-card-img-wrap ${hasCompletedRender ? 'has-render' : ''}">
+          <img class="matched-card-img" src="${escapeHtml(displayUrl)}" alt="${escapeHtml(img.product_name)}" onerror="this.style.display='none'" loading="lazy"/>
+          ${hasCompletedRender ? '<span class="matched-render-badge" title="This product has completed renders">✅ Rendered</span>' : ''}
+          ${queueStatus === 'processing' || queueStatus === 'generating' ? '<span class="matched-render-badge processing" title="This product is currently being rendered">⏳ Processing</span>' : ''}
+        </div>
+        <div class="matched-card-body">
+          <div class="matched-card-name" title="${escapeHtml(img.product_name)}">${escapeHtml(img.product_name)}</div>
+          ${img.product_code ? `<div class="matched-card-code">${escapeHtml(img.product_code)}</div>` : ''}
+          ${img.product_brand ? `<div style="font-size:10px;color:var(--text-muted);margin-bottom:4px;">🏷️ ${escapeHtml(img.product_brand)}</div>` : ''}
+          <div class="matched-card-desc" title="${escapeHtml(descFull)}">${escapeHtml(descPreview)}${descFull.length > 120 ? '...' : ''}</div>
+          <div class="matched-card-meta">
+            ${img.match_type ? `<span>🔗 ${escapeHtml(img.match_type)}</span>` : ''}
+            ${img.match_score ? `<span>⭐ ${img.match_score}</span>` : ''}
+            ${createdDate ? `<span>🕐 ${createdDate}</span>` : ''}
+          </div>
+        </div>
+        <div class="matched-card-footer">
+          <span style="font-size:10px;color:var(--text-muted);padding:4px 0;">Click to view details</span>
+        </div>
+      `;
+
+      // Click card → open detail subpage
+      card.addEventListener('click', (e) => {
+        // Don't open detail if clicking a button inside the card
+        if (e.target.closest('button')) return;
+        showMatchedDetail(img);
+      });
+
+      matchedImagesGrid.appendChild(card);
+    }
+  }
+
+  matchedImagesToggle?.addEventListener('click', () => {
+    matchedImagesPanelOpen = !matchedImagesPanelOpen;
+    matchedImagesToggle.classList.toggle('active', matchedImagesPanelOpen);
+    matchedImagesPanel.style.display = matchedImagesPanelOpen ? 'block' : 'none';
+    welcomeState.style.display = matchedImagesPanelOpen ? 'none' : 'flex';
+    hideWorkspacePanels();
+    document.getElementById('queueLogPanel').style.display = 'none';
+    document.getElementById('logPanel').style.display = 'none';
+    document.getElementById('featurePanel').style.display = 'none';
+    document.getElementById('aboutPanel').style.display = 'none';
+    completedPanel.style.display = 'none';
+    completedToggle.classList.remove('active');
+    featureToggle.classList.remove('active');
+    if (aboutToggle) aboutToggle.classList.remove('active');
+    featurePanelOpen = false;
+    aboutPanelOpen = false;
+    completedPanelOpen = false;
+    monitorPanel.style.display = 'none';
+    monitorToggle?.classList.remove('active');
+    monitorPanelOpen = false;
+    if (monitorInterval) { clearInterval(monitorInterval); monitorInterval = null; }
+    // Reset to canvas view when opening
+    if (matchedCanvasView) matchedCanvasView.style.display = 'block';
+    if (matchedDetailView) matchedDetailView.style.display = 'none';
+    if (matchedImagesPanelOpen) {
+      fetchMatchedImages(matchedImagesSearch?.value || '').then(renderMatchedImages);
+    }
+  });
+
+  matchedImagesRefreshBtn?.addEventListener('click', async () => {
+    if (matchedImagesPanelOpen) {
+      const data = await fetchMatchedImages(matchedImagesSearch?.value || '');
+      renderMatchedImages(data);
+    }
+  });
+
+  // Back to gallery from detail subpage
+  matchedDetailBackBtn?.addEventListener('click', () => {
+    if (matchedCanvasView) matchedCanvasView.style.display = 'block';
+    if (matchedDetailView) matchedDetailView.style.display = 'none';
+  });
+
+  // Search with debounce
+  let matchedSearchTimeout = null;
+  matchedImagesSearch?.addEventListener('input', () => {
+    clearTimeout(matchedSearchTimeout);
+    matchedSearchTimeout = setTimeout(async () => {
+      if (matchedImagesPanelOpen) {
+        const data = await fetchMatchedImages(matchedImagesSearch.value);
+        renderMatchedImages(data);
+      }
+    }, 400);
   });
 
 logToggle.addEventListener('click', () => {
@@ -4306,7 +4974,8 @@ async function loadQueueFromSupabase() {
           driveUploadStatus: row.drive_upload_status || '',
           driveUploadDone: row.drive_upload_done || 0,
           driveUploadTotal: row.drive_upload_total || 0,
-          driveUploadError: row.drive_upload_error || ''
+          driveUploadError: row.drive_upload_error || '',
+          updatedAt: row.updated_at || ''
         };
         item.status = recoverInterruptedStatus(item);
         return item;
@@ -7011,6 +7680,7 @@ async function pollStatus() {
           localItem.driveUploadDone = serverItem.driveUploadDone || 0;
           localItem.driveUploadTotal = serverItem.driveUploadTotal || 0;
           localItem.driveUploadError = serverItem.driveUploadError || '';
+          if (serverItem.updatedAt) localItem.updatedAt = serverItem.updatedAt;
           if (serverItem.imageUrl && !localItem.dataUrl) {
             localItem.dataUrl = serverItem.imageUrl;
           }
@@ -7931,12 +8601,69 @@ function initUploadAgent() {
     agentPhase2.style.display = 'none';
   });
 
-  // ── Submit button: add matched products to pendingItems for Bulk Queue review ──
+  // ── Helper: Save matched images to database ──
+  async function saveMatchedImages(products, sourceBatch = 'agent-upload') {
+    if (!products || !products.length) return { saved: 0, ids: [] };
+
+    // Build matches array for the API
+    const matches = products.map(p => {
+      // Find match info from agentMatchData if available
+      let matchScore = 0;
+      let matchType = '';
+      if (agentMatchData && agentMatchData.matches) {
+        const found = agentMatchData.matches.find(m =>
+          m.product?.name === p.name || m.product?.productCode === p.driveFolderName
+        );
+        if (found) {
+          matchScore = found.score || 0;
+          matchType = found.matchType || '';
+        }
+      }
+      return {
+        productName: p.name,
+        productBrand: p.brand || '',
+        productCode: p.driveFolderName || '',
+        description: p.description,
+        imageDataUrl: p.dataUrl || '',
+        imageName: p.matchedImageName || '',
+        matchScore,
+        matchType,
+        sourceBatch
+      };
+    });
+
+    try {
+      const res = await fetchApi('/api/agent/save-matched', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          matches,
+          sourcePdf: selectedPdfFile?.name || '',
+          sourceZip: selectedZipFile?.name || ''
+        })
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        console.warn('[SAVE-MATCHED] API error:', errData.error || res.status);
+        return { saved: 0, ids: [], error: errData.error };
+      }
+
+      const result = await res.json();
+      console.log(`[SAVE-MATCHED] Saved ${result.saved} matched pair(s) to database`);
+      return result;
+    } catch (err) {
+      console.warn('[SAVE-MATCHED] Failed to save matched images:', err.message);
+      return { saved: 0, ids: [], error: err.message };
+    }
+  }
+
+  // ── Submit button: save matched pairs to DB first, then add to pendingItems ──
   agentSubmitBtn.addEventListener('click', async () => {
     if (!agentResultData) return;
 
     agentSubmitBtn.disabled = true;
-    agentSubmitBtn.textContent = 'Adding...';
+    agentSubmitBtn.textContent = 'Saving matches...';
 
     try {
       const products = collectAgentProductsForQueue();
@@ -7955,6 +8682,18 @@ function initUploadAgent() {
         return;
       }
 
+      // Step 1: Save matched pairs to database FIRST
+      agentSubmitBtn.textContent = 'Saving to database...';
+      const saveResult = await saveMatchedImages(products, 'agent-upload');
+      if (saveResult.saved > 0) {
+        toast(`Saved ${saveResult.saved} matched image(s) to database`, 'success');
+      } else if (saveResult.error) {
+        console.warn('Matched images save had issues:', saveResult.error);
+        // Continue anyway — don't block the queue submission
+      }
+
+      // Step 2: Add to pendingItems for Bulk Queue
+      agentSubmitBtn.textContent = 'Adding to queue...';
       for (const product of products) {
         pendingItems.push({
           id: nextId++,
@@ -8002,6 +8741,48 @@ function initUploadAgent() {
       agentSubmitBtn.textContent = '+ Add All Matched to Queue';
     }
   });
+}
+
+// ── Global helper: Save matched images to database (shared by agent + batch processor) ──
+async function saveMatchedImagesGlobal(products, sourceBatch = 'global', sourcePdfName = '', sourceZipName = '') {
+  if (!products || !products.length) return { saved: 0, ids: [] };
+
+  const matches = products.map(p => ({
+    productName: p.name,
+    productBrand: p.brand || '',
+    productCode: p.driveFolderName || '',
+    description: p.description,
+    imageDataUrl: p.dataUrl || '',
+    imageName: p.matchedImageName || '',
+    matchScore: p.matchScore || 0,
+    matchType: p.matchType || '',
+    sourceBatch
+  }));
+
+  try {
+    const res = await fetchApi('/api/agent/save-matched', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        matches,
+        sourcePdf: sourcePdfName,
+        sourceZip: sourceZipName
+      })
+    });
+
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      console.warn('[SAVE-MATCHED] API error:', errData.error || res.status);
+      return { saved: 0, ids: [], error: errData.error };
+    }
+
+    const result = await res.json();
+    console.log(`[SAVE-MATCHED] Saved ${result.saved} matched pair(s) to database`);
+    return result;
+  } catch (err) {
+    console.warn('[SAVE-MATCHED] Failed to save matched images:', err.message);
+    return { saved: 0, ids: [], error: err.message };
+  }
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -8429,12 +9210,12 @@ function initBatchProcessor() {
     batchStep3.style.display = 'none';
   });
 
-  // ── Submit button: add ALL matched products (each with its own image) to pendingItems ──
+  // ── Submit button: save matched pairs to DB first, then add to pendingItems ──
   batchSubmitBtn?.addEventListener('click', async () => {
     if (!batchResultData) return;
 
     batchSubmitBtn.disabled = true;
-    batchSubmitBtn.textContent = 'Adding...';
+    batchSubmitBtn.textContent = 'Saving matches...';
 
     try {
       const products = collectBatchProductsForQueue();
@@ -8453,7 +9234,23 @@ function initBatchProcessor() {
         return;
       }
 
-      // Add EACH product with its OWN matched image to pendingItems
+      // Step 1: Save matched pairs to database FIRST
+      batchSubmitBtn.textContent = 'Saving to database...';
+      const saveResult = await saveMatchedImagesGlobal(
+        products,
+        'batch-processor',
+        batchPdfFile?.name || '',
+        batchZipFile?.name || ''
+      );
+      if (saveResult.saved > 0) {
+        toast(`Saved ${saveResult.saved} matched image(s) to database`, 'success');
+      } else if (saveResult.error) {
+        console.warn('Matched images save had issues:', saveResult.error);
+        // Continue anyway — don't block the queue submission
+      }
+
+      // Step 2: Add EACH product with its OWN matched image to pendingItems
+      batchSubmitBtn.textContent = 'Adding to queue...';
       for (const product of products) {
         pendingItems.push({
           id: nextId++,
