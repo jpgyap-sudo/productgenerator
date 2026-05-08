@@ -33,6 +33,7 @@ import statusHandler from './api/queue/status.js';
 import completedHandler from './api/queue/completed.js';
 import downloadZipHandler from './api/queue/download-zip.js';
 import uploadDriveHandler from './api/queue/upload-drive.js';
+import saveStateHandler from './api/queue/save-state.js';
 import webhookHandler from './api/fal-webhook.js';
 import agentProcessHandler from './api/agent/process.js';
 import agentSubmitHandler from './api/agent/submit.js';
@@ -126,6 +127,16 @@ app.post('/api/queue/download-zip', async (req, res) => {
     if (!res.headersSent) res.json(result);
   } catch (err) {
     console.error('[DOWNLOAD-ZIP] Error:', err);
+    if (!res.headersSent) res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/queue/save-state', async (req, res) => {
+  try {
+    const result = await saveStateHandler(req, res);
+    if (!res.headersSent) res.json(result);
+  } catch (err) {
+    console.error('[SAVE-STATE] Error:', err);
     if (!res.headersSent) res.status(500).json({ error: err.message });
   }
 });

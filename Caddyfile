@@ -1,19 +1,20 @@
 # ═══════════════════════════════════════════════════════════════════
 #  Caddyfile — Reverse proxy for Product Image Studio
 #
-#  Replace 'yourdomain.com' with your actual domain name.
-#  Caddy automatically provisions Let's Encrypt TLS certificates.
+#  IMPORTANT: Replace 'yourdomain.com' with your actual domain name
+#  BEFORE deploying. Caddy automatically provisions Let's Encrypt
+#  TLS certificates for the domain.
 #
 #  Installation: sudo apt install -y caddy
 #  Start:        sudo caddy start
 #  Reload:       sudo caddy reload
 # ═══════════════════════════════════════════════════════════════════
 
-yourdomain.com {
-    # Reverse proxy to Express.js backend
+:80 {
+    # Fallback: serve on port 80 without TLS (for direct IP access)
+    # Replace the block above with your domain when you have one.
     reverse_proxy localhost:3000
 
-    # Security headers
     header {
         X-Content-Type-Options "nosniff"
         X-Frame-Options "DENY"
@@ -22,12 +23,30 @@ yourdomain.com {
         Permissions-Policy "camera=(), microphone=(), geolocation=()"
     }
 
-    # Gzip compression
     encode gzip
 
-    # Logging
     log {
         output file /var/log/caddy/product-image-studio.log
         format json
     }
 }
+
+# ── Production domain (uncomment and configure when you have a domain) ──
+# yourdomain.com {
+#     reverse_proxy localhost:3000
+#
+#     header {
+#         X-Content-Type-Options "nosniff"
+#         X-Frame-Options "DENY"
+#         X-XSS-Protection "1; mode=block"
+#         Referrer-Policy "strict-origin-when-cross-origin"
+#         Permissions-Policy "camera=(), microphone=(), geolocation=()"
+#     }
+#
+#     encode gzip
+#
+#     log {
+#         output file /var/log/caddy/product-image-studio.log
+#         format json
+#     }
+# }

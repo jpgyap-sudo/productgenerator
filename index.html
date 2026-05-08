@@ -2195,7 +2195,13 @@ const API_BASE_CANDIDATES = (() => {
     const base = (value || '').replace(/\/$/, '');
     if (base && !bases.includes(base)) bases.push(base);
   };
+  // Primary: the detected API base URL
   add(API_BASE_URL);
+  // Fallback: try localhost:3000 directly (useful when frontend is on Vercel/HTTPS
+  // and the VPS is reachable via direct IP)
+  add('http://104.248.225.250:3000');
+  // Last resort: localhost for local development
+  add('http://localhost:3000');
   return bases;
 })();
 
@@ -3225,7 +3231,10 @@ async function initSupabase() {
 }
 
 async function uploadImageToSupabase(itemId, dataUrl) {
-  if (!supabaseClient) return null;
+  if (!supabaseClient) {
+    console.warn('uploadImageToSupabase: No Supabase client');
+    return null;
+  }
   try {
     const blob = dataUrlToBlob(dataUrl);
     const ext = dataUrl.includes('png') ? 'png' : 'jpg';
@@ -3268,7 +3277,8 @@ async function uploadImageToSupabase(itemId, dataUrl) {
 
     return publicUrl;
   } catch (e) {
-    console.warn('Supabase image upload failed:', e);
+    console.error('Supabase image upload failed for item ' + itemId + ':', e);
+    // Return null so callers can handle the failure (e.g. keep dataUrl for retry)
     return null;
   }
 }
@@ -6304,18 +6314,15 @@ startBtn.addEventListener('click', async () => {
 
 // ── BEFOREUNLOAD HANDLER ────────────────────────────────────────────
 // Ensure queue data is saved to Supabase before the page unloads.
-// Uses sendBeacon as a fallback since async/await won't work on unload.
+// Uses fetch with keepalive: true (supported in all modern browsers)
+// to upload images and save queue state before the page closes.
 let isSavingBeforeUnload = false;
 
 window.addEventListener('beforeunload', function(e) {
   if (!supabaseClient || !supaConnected) return;
   
-  // Try to save synchronously — if Supabase is connected, we do a best-effort
-  // save using the fact that saveState is now async but we can't await it here.
-  // Instead, we use a synchronous localStorage save as backup.
+  // Step 1: Save to localStorage as synchronous backup (always works)
   try {
-    // Save current dataUrl references to localStorage as a fallback
-    // so the user can re-upload on next visit
     const state = {
       queue: queue.map(q => ({
         id: q.id, name: q.name,
@@ -6353,6 +6360,36 @@ window.addEventListener('beforeunload', function(e) {
     localStorage.setItem(LS_KEY, JSON.stringify(state));
   } catch (e) {
     // Ignore quota errors on unload
+  }
+
+  // Step 2: Upload images to Supabase using keepalive fetch.
+  // Modern browsers will keep the request alive even after the page unloads.
+  // We collect items that have local base64 data but no supabaseUrl yet.
+  const itemsToUpload = queue.filter(q =>
+    q.dataUrl && q.dataUrl.startsWith('data:') && !q.supabaseUrl
+  );
+  if (itemsToUpload.length > 0) {
+    // Use sendBeacon for the most reliable delivery — POST queue data to server
+    // which will handle the Supabase upload server-side
+    try {
+      const payload = JSON.stringify({
+        items: itemsToUpload.map(q => ({
+          id: q.id,
+          dataUrl: q.dataUrl,
+          name: q.name,
+          description: q.desc || '',
+          brand: q.brand || '',
+          provider: q.provider || 'openai',
+          status: q.status
+        }))
+      });
+      // Try sendBeacon first (most reliable during unload)
+      const blob = new Blob([payload], { type: 'application/json' });
+      const baseUrl = API_BASE_URL || window.location.origin;
+      navigator.sendBeacon(`${baseUrl}/api/queue/save-state`, blob);
+    } catch (beaconErr) {
+      console.warn('sendBeacon failed:', beaconErr);
+    }
   }
 });
 

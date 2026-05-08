@@ -42,7 +42,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { name, brand, description, productCode, imageDataUrl, imageName, resolution } = req.body;
+    const { name, brand, description, productCode, imageDataUrl, imageName, resolution, provider: requestedProvider } = req.body;
 
     // Validate required fields
     if (!name || !name.trim()) {
@@ -97,8 +97,8 @@ export default async function handler(req, res) {
     const productDescription = description.trim();
     const productResolution = resolution || '1K';
 
-    // Determine provider based on sub_text (default to openai for agent submissions)
-    const provider = 'openai';
+    // Use the provider from the request, or default to 'openai'
+    const provider = requestedProvider || 'openai';
 
     // Use the generated product code as the folder name for Drive
     const generatedCode = (productCode || '').trim();

@@ -15,25 +15,21 @@ import { renderZipPublicUrl } from '../../lib/vps-storage.js';
 
 const OPENAI_IMAGE_MODEL = process.env.OPENAI_IMAGE_MODEL || 'gpt-image-1.5';
 
-// In-memory cache with 2 second TTL
-const cache = {
-  data: null,
-  key: null,
-  timestamp: 0,
-  TTL: 2000
-};
+// In-memory cache with 2 second TTL, keyed by itemId
+// Using a Map so different itemIds don't share cache entries
+const cacheMap = new Map();
+const CACHE_TTL = 2000;
 
 function getCached(key) {
-  if (cache.data && Date.now() - cache.timestamp < cache.TTL && cache.key === key) {
-    return cache.data;
+  const entry = cacheMap.get(key);
+  if (entry && Date.now() - entry.timestamp < CACHE_TTL) {
+    return entry.data;
   }
   return null;
 }
 
 function setCached(key, data) {
-  cache.data = data;
-  cache.key = key;
-  cache.timestamp = Date.now();
+  cacheMap.set(key, { data, timestamp: Date.now() });
 }
 
 export default async function handler(req, res) {

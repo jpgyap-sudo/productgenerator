@@ -44,8 +44,10 @@ services:
 
     # ── Volumes ──────────────────────────────────────────────────
     # Persist logs outside the container
+    # Mount .env directly so changes take effect on container restart
     volumes:
       - ./logs:/app/logs
+      - ./.env:/app/.env:ro
 
     # ── Health Check ─────────────────────────────────────────────
     healthcheck:
