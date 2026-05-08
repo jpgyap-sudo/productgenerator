@@ -61,7 +61,7 @@ async function test() {
     products = await extractProductInfo(pdfResult.text);
     console.log('  Products extracted:', products.length);
     products.forEach((p, i) => {
-      console.log(`    ${i+1}. ${p.name || '(no name)'} | Code: ${p.generatedCode || '(none)'} | Brand: ${p.brand || '(none)'}`);
+      console.log(`    ${i+1}. ${p.name || '(no name)'} | Code: ${p.productCode || '(none)'} | Brand: ${p.brand || '(none)'}`);
     });
     console.log('  ✅ DeepSeek extraction succeeded\n');
   } catch (err) {
@@ -93,7 +93,7 @@ async function test() {
 
   console.log('  Match details:');
   matchResult.matches.forEach((m, i) => {
-    const code = m.product?.generatedCode || '?';
+    const code = m.product?.productCode || '?';
     const imgName = m.matchedImage?.name || '?';
     const conf = m.verification?.confidence || '';
     const ok = m.verification?.isMatch === false ? '❌' : '✅';
