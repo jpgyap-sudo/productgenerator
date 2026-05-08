@@ -1897,6 +1897,23 @@ transition: border-color var(--transition);
 }
 .batch-match-card .bmc-picker img:hover { border-color: var(--accent); }
 .batch-match-card .bmc-picker img.selected { border-color: var(--accent); }
+.batch-match-card .bmc-visual-badge {
+font-size: 9px;
+font-weight: 700;
+padding: 2px 6px;
+border-radius: 8px;
+background: #7c3aed22;
+color: #a78bfa;
+white-space: nowrap;
+border: 1px solid #7c3aed44;
+}
+.batch-match-card .bmc-verify-reason {
+font-size: 10px;
+color: var(--text-muted);
+margin-top: 3px;
+font-style: italic;
+line-height: 1.3;
+}
 .batch-actions-row {
 display: flex;
 justify-content: flex-end;
@@ -7964,28 +7981,50 @@ function initBatchProcessor() {
 
     const cards = matches.map((match, idx) => {
       const product = match.product || {};
-      const matchedImage = match.matchedImage || {};
+      const hasMatch = match.matchedImage !== null && match.matchedImage !== undefined;
+      const matchedImage = hasMatch ? match.matchedImage : null;
       const score = match.score || 0;
-      const imageDataUrl = matchedImage.dataUrl || imageMap[matchedImage.name] || '';
+      const imageDataUrl = hasMatch ? (matchedImage.dataUrl || imageMap[matchedImage.name] || '') : '';
       const productCode = product.generatedCode || '';
 
       let badgeClass = 'low';
-      let badgeLabel = `${score}%`;
+      let badgeLabel = score > 0 ? `${score}%` : 'No match';
       if (score >= 100) { badgeClass = 'exact'; badgeLabel = 'Exact'; }
       else if (score >= 80) { badgeClass = 'high'; badgeLabel = `${score}%`; }
       else if (score >= 40) { badgeClass = 'medium'; badgeLabel = `${score}%`; }
 
-      const accepted = batchAcceptedMatches[idx]?.accepted !== false;
+      // Show visual search indicator
+      const isVisualSearch = match.matchType === 'visual-search';
+      const visualBadge = isVisualSearch
+        ? `<span class="bmc-visual-badge" title="Matched by Gemini AI visual search">👁 Visual</span>`
+        : '';
+
+      // Show verification reason if available
+      const verificationReason = match.verification?.reason
+        ? `<div class="bmc-verify-reason">${escapeHtml(match.verification.reason)}</div>`
+        : '';
+
+      // Only auto-accept if score >= 40 AND there's an actual matched image
+      const isGoodMatch = score >= 40 && hasMatch;
+      const accepted = batchAcceptedMatches[idx] ? batchAcceptedMatches[idx].accepted : isGoodMatch;
+
+      const thumbHtml = hasMatch
+        ? `<img class="bmc-thumb" src="${escapeHtml(imageDataUrl)}" alt="${escapeHtml(matchedImage.name || '')}" onerror="this.style.opacity='0.3';this.src='';this.alt='Image not found'"/>`
+        : `<div class="bmc-thumb" style="display:flex;align-items:center;justify-content:center;background:var(--surface-2);font-size:11px;color:var(--text-muted);text-align:center;padding:4px;">No image matched</div>`;
 
       return `<div class="batch-match-card" data-batch-idx="${idx}">
         <div class="bmc-header">
-          <img class="bmc-thumb" src="${escapeHtml(imageDataUrl)}" alt="${escapeHtml(matchedImage.name || '')}" onerror="this.style.display='none'"/>
+          ${thumbHtml}
           <div class="bmc-info">
             <div class="bmc-name">${escapeHtml(product.name || `Product ${idx + 1}`)}</div>
             ${productCode ? `<div class="bmc-code">Code: ${escapeHtml(productCode)}</div>` : ''}
-            <div class="bmc-image-name">Image: ${escapeHtml(matchedImage.name || '')}</div>
+            <div class="bmc-image-name">${hasMatch ? 'Image: ' + escapeHtml(matchedImage.name || '') : 'No matching image found'}</div>
+            ${verificationReason}
           </div>
-          <span class="bmc-badge ${badgeClass}">${badgeLabel}</span>
+          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
+            <span class="bmc-badge ${badgeClass}">${badgeLabel}</span>
+            ${visualBadge}
+          </div>
         </div>
         <div class="bmc-actions">
           <button class="accept ${accepted ? 'active' : ''}" data-batch-idx="${idx}" data-action="accept">✓ Accept</button>

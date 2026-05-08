@@ -22,7 +22,7 @@
 // ═══════════════════════════════════════════════════════════════════
 
 import { matchProductsToImages } from '../../lib/product-matcher.js';
-import { verifyMatches } from '../../lib/gemini-verify.js';
+import { verifyMatches, visualSearchMatch } from '../../lib/gemini-verify.js';
 
 /**
  * POST /api/agent/match
@@ -78,6 +78,71 @@ export default async function handler(req, res) {
     } else {
       console.log('[MATCH] Skipping Gemini verification');
     }
+
+    // Step 3: Gemini visual search fallback for products with no pattern match
+    // Products with score < 40 or no matchedImage get a second chance via visual search
+    const unmatchedProducts = matchResult.matches.filter(m =>
+      !m.matchedImage || m.score < 40
+    );
+
+    if (unmatchedProducts.length > 0 && verifyWithGemini) {
+      console.log(`[MATCH] Running visual search fallback for ${unmatchedProducts.length} unmatched product(s)`);
+
+      // Collect images that are NOT already used by accepted matches (score >= 40)
+      const usedIndices = new Set();
+      matchResult.matches.forEach(m => {
+        if (m.matchedImage && m.score >= 40) {
+          usedIndices.add(m.matchedImage.imageIndex);
+        }
+      });
+      const availableImages = images
+        .map((img, idx) => ({ ...img, imageIndex: idx }))
+        .filter(img => !usedIndices.has(img.imageIndex));
+
+      if (availableImages.length > 0) {
+        // Run visual search for each unmatched product sequentially (to avoid rate limits)
+        for (const um of unmatchedProducts) {
+          try {
+            const visualResult = await visualSearchMatch(um.product, availableImages);
+            if (visualResult && visualResult.matchedImage) {
+              // Update the match with the visual search result
+              um.matchedImage = visualResult.matchedImage;
+              um.score = visualResult.score;
+              um.matchType = 'visual-search';
+              um.verification = visualResult.verification;
+
+              // Remove the used image from available pool
+              const usedIdx = availableImages.findIndex(
+                img => img.imageIndex === visualResult.matchedImage.imageIndex
+              );
+              if (usedIdx !== -1) availableImages.splice(usedIdx, 1);
+
+              console.log(`[MATCH] Visual search found match for "${um.product.name}" (score: ${visualResult.score})`);
+            }
+          } catch (vsErr) {
+            console.error(`[MATCH] Visual search error for "${um.product.name}": ${vsErr.message}`);
+          }
+        }
+      } else {
+        console.log('[MATCH] No available images for visual search fallback');
+      }
+
+      // Recalculate match stats
+      const newMatched = matchResult.matches.filter(m => m.matchedImage !== null).length;
+      matchResult.matchStats.matched = newMatched;
+      matchResult.matchStats.unmatched = matchResult.matches.length - newMatched;
+    }
+
+    // Recalculate unmatchedImages based on final state
+    const finalUsedIndices = new Set();
+    matchResult.matches.forEach(m => {
+      if (m.matchedImage) {
+        finalUsedIndices.add(m.matchedImage.imageIndex);
+      }
+    });
+    matchResult.unmatchedImages = images
+      .map((img, idx) => ({ imageIndex: idx, name: img.name }))
+      .filter(img => !finalUsedIndices.has(img.imageIndex));
 
     return res.json({
       success: true,
