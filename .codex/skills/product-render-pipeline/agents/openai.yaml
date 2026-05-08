@@ -1,0 +1,4 @@
+interface:
+  display_name: "Product Render Pipeline"
+  short_description: "Implement OpenAI mini plus Gemini render pipelines."
+  default_prompt: "Use the product render pipeline skill to design or implement the structured product rendering flow."
