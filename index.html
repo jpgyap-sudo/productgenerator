@@ -2823,6 +2823,48 @@ function getViewApiText(item = {}, viewId) {
   return '';
 }
 
+// Cost per image (USD) by provider/model — approximate, for display only.
+// OpenAI prices: official pricing page (medium quality for gpt-image-1 variants).
+// Stability prices: from NB2_PRICES (1K default).
+// Gemini prices: estimated from Google AI token pricing for image output.
+const COST_PER_IMAGE = {
+  'gpt-image-1':      0.042,   // medium quality
+  'gpt-image-1-mini': 0.007,   // medium quality (est.)
+  'dall-e-3':         0.040,   // standard 1024×1024
+  'dall-e-2':         0.020,   // 1024×1024
+  'gemini-flash':     0.004,   // est.
+  'gemini-pro':       0.020,   // est.
+  'stability':        0.08,    // SDXL 1K (from NB2_PRICES)
+};
+
+function getEstimatedCost(item, doneCount = 4) {
+  const provider = getRenderProvider(item);
+  const model = (item.apiModel || '').toLowerCase();
+
+  if (provider === 'openai') {
+    let costPerImage;
+    if (model.includes('mini'))       costPerImage = COST_PER_IMAGE['gpt-image-1-mini'];
+    else if (model.includes('dall-e-3')) costPerImage = COST_PER_IMAGE['dall-e-3'];
+    else if (model.includes('dall-e-2')) costPerImage = COST_PER_IMAGE['dall-e-2'];
+    else                               costPerImage = COST_PER_IMAGE['gpt-image-1'];
+    return `~$${(costPerImage * doneCount).toFixed(2)}`;
+  }
+
+  if (provider === 'gemini') {
+    // Views 1–3 use Flash; view 4 (interior) uses Pro
+    const flashCount = Math.min(doneCount, 3);
+    const proCount = doneCount >= 4 ? 1 : 0;
+    const total = flashCount * COST_PER_IMAGE['gemini-flash'] + proCount * COST_PER_IMAGE['gemini-pro'];
+    return `~$${total.toFixed(2)}`;
+  }
+
+  if (provider === 'stability') {
+    return `~$${(COST_PER_IMAGE['stability'] * doneCount).toFixed(2)}`;
+  }
+
+  return null;
+}
+
 function getMergedCompletedRecords() {
   const records = new Map();
   const archiveRepair = [];
@@ -2922,6 +2964,7 @@ function createCompletedHistoryCard(item, viewResults = [], source = 'archive') 
       <div class="batch-info">
         <h3>${escHtml(item.name || `Item ${item.id}`)}</h3>
         <p>${escHtml(getBatchApiText(item))}</p>
+        ${(() => { const cost = getEstimatedCost(item, doneCount); return cost ? `<p style="color:var(--text-dim);font-size:11px;" title="Estimated cost based on provider pricing. Actual charges may vary.">Est. cost: ${escHtml(cost)}</p>` : ''; })()}
         <p>${doneCount} of ${VIEWS.length} renders stored · ${source === 'supabase' ? 'Supabase batch' : 'Archive-only batch'}</p>
         ${isArchiveOnly ? '<p style="color:var(--text-dim);font-size:10px;">Drive upload uses archived image URLs (ZIP/download available)</p>' : ''}
       </div>
