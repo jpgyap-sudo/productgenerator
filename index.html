@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+s<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8"/>
@@ -2962,30 +2962,28 @@ text-overflow: ellipsis;
 }
 .batch-match-grid {
 display: grid;
-grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-gap: 12px;
-max-height: 520px;
-overflow-y: auto;
+grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+gap: 14px;
 padding: 4px;
 }
 .batch-match-card {
 border: 1px solid var(--border-light);
-border-radius: 8px;
-padding: 12px;
+border-radius: 10px;
+padding: 14px;
 background: var(--surface);
 transition: border-color var(--transition);
 }
 .batch-match-card:hover { border-color: var(--accent); }
 .batch-match-card .bmc-header {
 display: flex;
-align-items: center;
-gap: 10px;
-margin-bottom: 8px;
+align-items: flex-start;
+gap: 14px;
+margin-bottom: 10px;
 }
 .batch-match-card .bmc-thumb {
-width: 72px;
-height: 72px;
-border-radius: 6px;
+width: 160px;
+height: 160px;
+border-radius: 8px;
 object-fit: cover;
 border: 1px solid var(--border-light);
 flex-shrink: 0;
@@ -3080,6 +3078,30 @@ color: var(--text-muted);
 margin-top: 3px;
 font-style: italic;
 line-height: 1.3;
+}
+.batch-match-pagination {
+display: flex;
+align-items: center;
+justify-content: center;
+gap: 12px;
+margin-top: 16px;
+padding: 8px 0;
+}
+.batch-match-pagination button {
+font-size: 12px;
+padding: 6px 16px;
+border: 1px solid var(--border);
+border-radius: 6px;
+cursor: pointer;
+background: var(--surface);
+color: var(--text);
+transition: all var(--transition);
+}
+.batch-match-pagination button:hover:not(:disabled) { background: var(--surface-2); border-color: var(--accent); }
+.batch-match-pagination button:disabled { opacity: 0.4; cursor: default; }
+.batch-match-pagination .bmp-info {
+font-size: 12px;
+color: var(--text-secondary);
 }
 .batch-actions-row {
 display: flex;
@@ -4321,6 +4343,11 @@ a.cr-meta-pill.cr-drive-link:hover { opacity: 0.8; }
             <span class="batch-step-hint">Accept, reject, or pick different images for each product</span>
           </div>
           <div class="batch-match-grid" id="batchMatchGrid"></div>
+          <div class="batch-match-pagination" id="batchMatchPagination" style="display:none;">
+            <button class="bmp-prev" id="bmpPrevBtn">← Previous</button>
+            <span class="bmp-info" id="bmpPageInfo">Page 1 of 1</span>
+            <button class="bmp-next" id="bmpNextBtn">Next →</button>
+          </div>
           <div class="batch-actions-row">
             <button class="batch-btn secondary" id="batchBackBtn">← Back to Inspect</button>
             <button class="batch-btn" id="batchSubmitBtn" disabled>+ Add All Matched to Queue</button>
@@ -6619,14 +6646,30 @@ function showBatchDetail(batchId) {
   });
   html += '</div>';
 
-  // Stats row
+  // Stats row — use real qaScore data if available
+  const viewsWithScore = doneViews.filter(v => v.qaScore != null);
+  const avgScore = viewsWithScore.length > 0
+    ? Math.round(viewsWithScore.reduce((s, v) => s + v.qaScore, 0) / viewsWithScore.length)
+    : null;
+  const passedCount = viewsWithScore.filter(v => v.qaScore >= 85).length;
+  const hasRealScores = viewsWithScore.length > 0;
   html += '<div class="bd-stats-row">';
   const stats = [
-    { label: 'Identity Match', value: doneViews.length > 0 ? (85 + Math.floor(Math.random() * 12)) + '%' : '—', status: 'High' },
-    { label: 'Material Match', value: doneViews.length > 0 ? (82 + Math.floor(Math.random() * 14)) + '%' : '—', status: 'High' },
-    { label: 'Color Match', value: doneViews.length > 0 ? (88 + Math.floor(Math.random() * 10)) + '%' : '—', status: 'Very High' },
-    { label: 'Shape Match', value: doneViews.length > 0 ? (86 + Math.floor(Math.random() * 12)) + '%' : '—', status: 'High' },
-    { label: 'Overall Score', value: doneViews.length > 0 ? (84 + Math.floor(Math.random() * 10)) + '%' : '—' }
+    {
+      label: 'Overall QA Score',
+      value: hasRealScores ? avgScore + '%' : doneViews.length > 0 ? 'N/A' : '—',
+      status: hasRealScores ? (avgScore >= 85 ? 'Pass' : avgScore >= 65 ? 'Needs Review' : 'Fail') : ''
+    },
+    {
+      label: 'Views Passed',
+      value: hasRealScores ? passedCount + ' / ' + viewsWithScore.length : doneViews.length > 0 ? doneViews.length + ' / ' + doneViews.length : '—',
+      status: hasRealScores && passedCount < viewsWithScore.length ? 'Review Required' : ''
+    },
+    {
+      label: 'Renders Done',
+      value: doneViews.length + ' / 4',
+      status: doneViews.length === 4 ? 'Complete' : 'Partial'
+    }
   ];
   stats.forEach(s => {
     html += '<div class="bd-stat"><span>' + s.label + '</span><strong>' + s.value + '</strong>';
@@ -6682,8 +6725,24 @@ function showBatchDetail(batchId) {
     const badgeClass = vProvider === 'gemini' || vProvider === 'gemini-flash' ? 'blue' : '';
     const badgeText = vProvider === 'gemini' || vProvider === 'gemini-flash' ? 'Gemini' : 'GPT';
 
+    // QA score — use real score if stored, otherwise don't claim QA passed
+    const score = v.qaScore != null ? Number(v.qaScore) : null;
+    const qaPassed = score != null ? score >= 85 : false;
+    const qaLabel = score != null
+      ? (score >= 85 ? 'QA PASSED' : score >= 65 ? 'NEEDS REVIEW' : 'QA FAILED')
+      : (isDone ? 'DONE' : null);
+    const qaBadgeClass = score != null
+      ? (score >= 85 ? '' : score >= 65 ? 'orange' : 'red')
+      : '';
+
+    // Per-card score display
+    const scoreDisplay = isDone ? (score != null ? score + '%' : '—') : '—';
+    const riskDisplay = isDone
+      ? (score != null ? (score >= 85 ? 'Low' : score >= 70 ? 'Medium' : 'High') : '—')
+      : '—';
+
     html += '<div class="bd-render-card">';
-    if (isDone) html += '<span class="bd-pill">QA PASSED</span>';
+    if (isDone && qaLabel) html += '<span class="bd-pill ' + qaBadgeClass + '">' + qaLabel + '</span>';
     html += '<div class="bd-render-image-wrap">';
     if (isDone) {
       html += '<img src="' + escHtml(v.imageUrl) + '" alt="' + escHtml(viewLabel) + '" onclick="openLightbox(\'' + escHtml(v.imageUrl) + '\')" />';
@@ -6694,9 +6753,9 @@ function showBatchDetail(batchId) {
     html += '<div class="bd-card-body">';
     html += '<div class="bd-card-title-row"><strong>' + escHtml(viewLabel) + '</strong><span class="bd-pill ' + badgeClass + '">' + badgeText + '</span></div>';
     html += '<div class="bd-mini-grid">';
-    html += '<div><span>' + (i === 3 ? 'Scene Match' : 'Consistency') + '</span><b>' + (isDone ? (88 + Math.floor(Math.random() * 10)) + '%' : '—') + '</b></div>';
-    html += '<div><span>' + (i === 3 ? 'Style' : 'Lighting') + '</span><b>' + (isDone ? (i === 3 ? 'Japandi Luxury' : 'High') : '—') + '</b></div>';
-    html += '<div><span>' + (i === 3 ? 'Room' : 'Risk') + '</span><b>' + (isDone ? (i === 3 ? 'Dining Area' : 'Low') : '—') + '</b></div>';
+    html += '<div><span>QA Score</span><b>' + scoreDisplay + '</b></div>';
+    html += '<div><span>Status</span><b>' + (isDone ? (qaLabel || 'Done') : '—') + '</b></div>';
+    html += '<div><span>Risk</span><b>' + riskDisplay + '</b></div>';
     html += '</div>';
     html += '<div class="bd-actions-row">';
     if (isDone) {
@@ -6717,9 +6776,9 @@ function showBatchDetail(batchId) {
   // Render Metadata
   html += '<div><h3>Render Metadata</h3>';
   html += '<p>Prompt Pack: v4</p>';
-  html += '<p>Primary Model: ' + escHtml(provider === 'gemini' ? 'Gemini Flash 3.1' : 'GPT Image Mini v2026.05') + '</p>';
-  html += '<p>Fix Model: Gemini Flash 3.1</p>';
-  html += '<p>Seed: ' + (item.seed || Math.floor(Math.random() * 999999)) + '</p>';
+  html += '<p>Primary Model: ' + escHtml(provider === 'gemini' ? 'Gemini Flash' : 'GPT Image Mini') + '</p>';
+  html += '<p>QC / Fix Model: Gemini 2.5 Flash</p>';
+  html += '<p>Seed: ' + (item.seed || '—') + '</p>';
   html += '<p>Aspect Ratio: 1:1</p></div>';
 
   // Prompt & Settings
@@ -6732,16 +6791,25 @@ function showBatchDetail(batchId) {
   });
   html += '</div></div>';
 
-  // AI QA Notes
+  // AI QA Notes — show real notes from QA engine, or summary if not available
   html += '<div><h3>AI QA Notes</h3><ul>';
-  const qaNotes = [
-    '✅ Identity preserved',
-    '✅ Material texture consistent',
-    '✅ Color accuracy high',
-    doneViews.length >= 3 ? '⚠️ Minor back curvature inferred' : '❌ Some views incomplete',
-    doneViews.length === 4 ? '✅ Final render approved' : '⏳ Awaiting completion'
-  ];
-  qaNotes.forEach(n => html += '<li>' + n + '</li>');
+  const allNotes = sortedViews.flatMap(v => {
+    const vLabel = getViewLabel(v.viewId || v.view) || 'View';
+    if (Array.isArray(v.qaNotes) && v.qaNotes.length > 0) {
+      return v.qaNotes.map(n => escHtml(vLabel + ': ' + n));
+    }
+    return [];
+  });
+  if (allNotes.length > 0) {
+    allNotes.forEach(n => html += '<li>' + n + '</li>');
+  } else {
+    // No real QA notes stored — show honest summary
+    html += '<li>' + (doneViews.length === 4 ? '✅ All 4 views rendered' : '⚠️ ' + doneViews.length + '/4 views rendered') + '</li>';
+    html += '<li>⚠️ Detailed QA notes not available for this batch (older format)</li>';
+    if (viewsWithScore.length > 0) {
+      html += '<li>' + (passedCount === viewsWithScore.length ? '✅' : '⚠️') + ' ' + passedCount + '/' + viewsWithScore.length + ' views passed QA threshold (≥85)</li>';
+    }
+  }
   html += '</ul></div>';
 
   // History & Lineage
@@ -6754,47 +6822,77 @@ function showBatchDetail(batchId) {
   html += '</div>'; // bottom-panel
   html += '</div>'; // main-panel
 
-  // Right sidebar
-  html += '<aside class="bd-rightbar">';
-  const sidebarBoxes = [
-    { title: 'Queue & System Health', items: [
-      'Queue Status', 'Healthy',
-      'Active Jobs', '2',
-      'Completed 24h', '312',
-      'Failed 24h', '7',
-      'Avg Render Time', '1m 08s',
-      'Repair Rate', '18.6%'
-    ]},
-    { title: 'System Resources', items: [
-      'GPU Usage', '62%',
-      'CPU Usage', '34%',
-      'Storage', '1.2TB / 2TB'
-    ]},
-    { title: 'Cost & Usage Today', items: [
-      'Total Cost', '$8.42',
-      'GPT Cost', '$5.21',
-      'Gemini Cost', '$2.91',
-      'Storage Cost', '$0.30'
-    ]},
-    { title: 'API Status', items: [
-      'OpenAI', 'Operational',
-      'Google Gemini', 'Operational',
-      'Cloud Storage', 'Operational'
-    ]}
-  ];
-  sidebarBoxes.forEach(box => {
-    html += '<div class="bd-box"><h3>' + box.title + '</h3>';
-    for (let i = 0; i < box.items.length; i += 2) {
-      html += '<p><span>' + box.items[i] + '</span><span>' + box.items[i + 1] + '</span></p>';
-    }
-    html += '</div>';
+  // Right sidebar — all values derived from real batch data
+  // Providers used per view
+  const providerMap = {};
+  sortedViews.forEach(v => {
+    const vl = getViewLabel(v.viewId || v.view) || 'View';
+    const vp = v.providerUsed || provider || '—';
+    const shortProv = vp === 'gemini-flash' || vp === 'gemini' ? 'Gemini Flash'
+      : vp === 'gpt-image-1-mini' || vp === 'openai-mini' ? 'GPT Mini'
+      : vp === 'openai' ? 'GPT Image' : vp;
+    providerMap[vl] = shortProv;
   });
+
+  html += '<aside class="bd-rightbar">';
+
+  // Box 1: Batch Status (real batch data)
+  html += '<div class="bd-box"><h3>Batch Status</h3>';
+  html += '<p><span>Batch ID</span><span>' + escHtml(String(item.id)) + '</span></p>';
+  html += '<p><span>Status</span><span>' + (status === 'done' ? 'Complete' : status === 'partial' ? 'Partial (' + doneViews.length + '/4)' : 'Failed') + '</span></p>';
+  html += '<p><span>Views Done</span><span>' + doneViews.length + ' / 4</span></p>';
+  html += '<p><span>Completed</span><span>' + escHtml(timeStr) + '</span></p>';
+  if (hasRealScores) {
+    html += '<p><span>QA Result</span><span>' + (passedCount === viewsWithScore.length ? 'All Passed' : passedCount + '/' + viewsWithScore.length + ' Passed') + '</span></p>';
+  }
+  html += '</div>';
+
+  // Box 2: Render Timing (real from item.duration; labeled as estimates if duration is 0)
+  const hasTiming = totalDuration > 0;
+  html += '<div class="bd-box"><h3>Render Timing' + (hasTiming ? '' : ' (est.)') + '</h3>';
+  html += '<p><span>Queue Wait</span><span>' + formatDuration(queueTime) + '</span></p>';
+  html += '<p><span>Render</span><span>' + formatDuration(renderTime) + '</span></p>';
+  html += '<p><span>QC / Fix</span><span>' + formatDuration(geminiTime) + '</span></p>';
+  html += '<p><span>Total</span><span>' + formatDuration(totalTime) + '</span></p>';
+  html += '</div>';
+
+  // Box 3: This Batch Cost (estimated per-render costs, not system-wide totals)
+  html += '<div class="bd-box"><h3>This Batch Cost (est.)</h3>';
+  html += '<p><span>GPT Renders</span><span>$' + gptCost + '</span></p>';
+  html += '<p><span>Gemini QC/Fix</span><span>$' + geminiCost + '</span></p>';
+  html += '<p><span>Storage</span><span>$' + storageCost + '</span></p>';
+  html += '<p><span>Total</span><span>$' + totalCost + '</span></p>';
+  html += '</div>';
+
+  // Box 4: Providers Used (real per-view provider data)
+  html += '<div class="bd-box"><h3>Providers Used</h3>';
+  if (Object.keys(providerMap).length > 0) {
+    Object.entries(providerMap).forEach(([view, prov]) => {
+      html += '<p><span>' + escHtml(view) + '</span><span>' + escHtml(prov) + '</span></p>';
+    });
+  } else {
+    html += '<p><span>Primary</span><span>' + escHtml(provider || '—') + '</span></p>';
+  }
+  html += '<p><span>API Status</span><span id="bd-api-status">Checking…</span></p>';
+  html += '</div>';
+
   html += '</aside>';
 
   html += '</div>'; // content-grid
 
   document.getElementById('bdModalBody').innerHTML = html;
   openBatchModal();
+
+  // Async: check real API status after modal renders
+  fetch('/api/monitor').then(r => r.json()).then(data => {
+    const el = document.getElementById('bd-api-status');
+    if (!el) return;
+    el.textContent = data.allOk ? 'All OK' : 'Degraded';
+    el.style.color = data.allOk ? '#4caf50' : '#e05555';
+  }).catch(() => {
+    const el = document.getElementById('bd-api-status');
+    if (el) { el.textContent = 'Unknown'; el.style.color = '#888'; }
+  });
 }
 
 function formatDuration(seconds) {
@@ -9387,16 +9485,12 @@ function updateActiveProgress() {
   if (barLabel) barLabel.textContent = `${done} / ${VIEWS.length} views`;
 }
 
-// ── BATCH CARD ─────────────────────────────────────────────────────
+// ── BATCH CARD (DISABLED) ──────────────────────────────────────────
+// Completed batches are now shown exclusively in the "✓ Completed" panel
+// (renderCrBatches / #completedPanel) with the batch detail modal.
+// The old #batch-section on the main page has been removed to free up space.
 function completedBatchHeaderHtml() {
-  return `<div class="sec-title" style="margin-top:1rem;">
-    <span class="pulse done"></span>
-    <span class="sec-title-text">Completed Batches</span>
-    <div class="sec-actions">
-      <button class="btn-mini-clear" type="button" onclick="clearCompletedItems()">Clear</button>
-      <button class="btn-dl-all" id="dlAllBtn" onclick="downloadAllBatches()">⬇ Download All</button>
-    </div>
-  </div>`;
+  return ''; // No-op: completed batches moved to dedicated panel
 }
 
 function driveProgressHtml(item) {
@@ -9540,78 +9634,11 @@ function updateActiveDriveStatus(item) {
   }
 }
 
+// createBatchCard is disabled — completed batches now live in the
+// dedicated "✓ Completed" panel (renderCrBatches / #completedPanel).
+// Keeping the function body as a no-op to avoid breaking callers.
 function createBatchCard(item, images) {
-  let batchSec = document.getElementById('batch-section');
-  if (!batchSec) {
-    batchSec = document.createElement('div');
-    batchSec.id = 'batch-section';
-    batchSec.innerHTML = completedBatchHeaderHtml();
-    // Insert batch section AFTER the active section (if it exists), otherwise at the end
-    const activeSec = document.getElementById('active-section');
-    if (activeSec) {
-      // Insert after the active section (nextSibling is fine even if null — insertBefore with null appends)
-      mainPanel.insertBefore(batchSec, activeSec.nextSibling);
-    } else {
-      mainPanel.appendChild(batchSec);
-    }
-  }
-
-  const count = Object.keys(images).length;
-  const card = document.createElement('div');
-  card.className = 'batch-card';
-  card.id = `bc-${item.id}`;
-  card.innerHTML = `
-    <div class="batch-head">
-      <img class="batch-thumb" src="${item.dataUrl}" alt="${escHtml(item.name)}"/>
-      <div class="batch-info">
-        <h3>${escHtml(item.name)}</h3>
-        <p>${escHtml(getBatchApiText(item))}</p>
-        <p>${count} of 4 renders completed</p>
-      </div>
-      <div class="batch-actions">
-        <button class="btn-retry-batch" id="bretry-${item.id}" ${count === VIEWS.length ? 'style="display:none"' : ''}>↻ Retry failed</button>
-        ${driveUploadButtonHtml(item)}
-        <button class="btn-zip" id="bzip-${item.id}">⬇ ZIP</button>
-        <button class="btn-mini-clear" id="bdel-${item.id}">Delete</button>
-      </div>
-    </div>
-    <div class="batch-grid" id="bgrid-${item.id}"></div>
-    <div class="zip-progress" id="zprog-${item.id}">
-      <span>Zipping...</span>
-      <div class="zip-bar"><div class="zip-bar-fill" id="zfill-${item.id}"></div></div>
-      <span id="zpct-${item.id}">0%</span>
-    </div>
-    ${driveProgressHtml(item)}`;
-  batchSec.appendChild(card);
-  updateBatchDriveStatus(item);
-
-  const grid = document.getElementById(`bgrid-${item.id}`);
-  VIEWS.forEach(v => {
-    const img = images[v.id];
-    const slot = document.createElement('div');
-    slot.className = 'bslot';
-    if (img) {
-      const src = `data:image/jpeg;base64,${img.b64}`;
-      slot.innerHTML = `
-        <img src="${src}" alt="${v.label}" onclick="openLightbox('${src}')"/>
-        <div class="bslot-label">Img ${v.id} — ${v.label}</div>
-        <button class="btn-dl1" onclick="dlOne('${src}','${item.name}_img${v.id}')">⬇ Download</button>`;
-    } else {
-      slot.innerHTML = `
-        <div style="min-height:90px;display:flex;align-items:center;justify-content:center;"><span style="font-size:10px;color:var(--text-dim);">Not generated</span></div>
-        <div class="bslot-label">Img ${v.id} — ${v.label}</div>`;
-    }
-    grid.appendChild(slot);
-  });
-
-  document.getElementById(`bzip-${item.id}`).addEventListener('click', () => dlZip(item.id, item.name, images));
-  document.getElementById(`bdel-${item.id}`).addEventListener('click', () => deleteCompletedBatch(item.id));
-  const driveBtn = document.getElementById(`bdrive-${item.id}`);
-  if (driveBtn) driveBtn.addEventListener('click', () => uploadBatchToDrive(item.id));
-  const retryBtn = document.getElementById(`bretry-${item.id}`);
-  if (retryBtn) {
-    retryBtn.addEventListener('click', () => retryFailedViews(item, images));
-  }
+  // Completed batches moved to dedicated panel — no-op
 }
 
 function dlOne(src, filename) {
@@ -9652,108 +9679,12 @@ async function dlZip(itemId, name, images) {
 }
 
 // ── BATCH CARD FROM SERVER RENDER RESULTS (URL-based) ──────────────
-// Called after server-side processing so renders show actual images + working downloads.
+// Completed batches now live in the dedicated "✓ Completed" panel.
+// This function only archives the item for the panel; no DOM card is created.
 function createBatchCardFromUrls(item, viewResults) {
   if (document.getElementById(`bc-${item.id}`)) return;
   archiveCompletedItem(item, viewResults);
-
-  let batchSec = document.getElementById('batch-section');
-  if (!batchSec) {
-    batchSec = document.createElement('div');
-    batchSec.id = 'batch-section';
-    batchSec.innerHTML = completedBatchHeaderHtml();
-    const activeSec = document.getElementById('active-section');
-    if (activeSec) {
-      mainPanel.insertBefore(batchSec, activeSec.nextSibling);
-    } else {
-      mainPanel.appendChild(batchSec);
-    }
-  }
-
-  const doneCount = viewResults.filter(r => r.status === 'done' && r.imageUrl).length;
-  const hasImage = item.dataUrl && (item.dataUrl.startsWith('data:') || item.dataUrl.startsWith('http'));
-
-  const card = document.createElement('div');
-  card.className = 'batch-card';
-  card.id = `bc-${item.id}`;
-  card.innerHTML = `
-    <div class="batch-head">
-      ${hasImage
-        ? `<img class="batch-thumb" src="${item.dataUrl}" alt="${escHtml(item.name)}"/>`
-        : `<div class="batch-thumb" style="display:flex;align-items:center;justify-content:center;background:var(--border-light);font-size:18px;color:var(--text-dim);">📷</div>`
-      }
-      <div class="batch-info">
-        <h3>${escHtml(item.name)}</h3>
-        <p>${escHtml(getBatchApiText(item))}</p>
-        <p style="font-size:11px;color:var(--text-secondary);">${(() => {
-          const rawTs = item.updatedAt || viewResults.map(r => r.completedAt).filter(Boolean).sort().pop() || null;
-          const ts = rawTs ? new Date(rawTs) : null;
-          const dateStr = ts && !isNaN(ts) ? ts.toLocaleDateString('en-SG', { year:'numeric', month:'short', day:'numeric' }) : '';
-          const timeStr = ts && !isNaN(ts) ? ts.toLocaleTimeString('en-SG', { hour:'2-digit', minute:'2-digit', hour12:false }) : '';
-          return dateStr ? `${dateStr} · ${timeStr}` : '';
-        })()}</p>
-        <p>${doneCount} of 4 renders completed</p>
-      </div>
-      <div class="batch-actions">
-        <button class="btn-retry-batch" id="bretry-${item.id}" ${doneCount === VIEWS.length ? 'style="display:none"' : ''}>↻ Retry failed</button>
-        ${driveUploadButtonHtml(item, viewResults)}
-        <button class="btn-zip" id="bzip-${item.id}">⬇ ZIP</button>
-        <button class="btn-mini-clear" id="bdel-${item.id}">Delete</button>
-      </div>
-    </div>
-    <div class="batch-grid" id="bgrid-${item.id}"></div>
-    <div class="zip-progress" id="zprog-${item.id}">
-      <span>Zipping...</span>
-      <div class="zip-bar"><div class="zip-bar-fill" id="zfill-${item.id}"></div></div>
-      <span id="zpct-${item.id}">0%</span>
-    </div>
-    ${driveProgressHtml(item)}`;
-  batchSec.appendChild(card);
-  updateBatchDriveStatus(item);
-
-  const grid = document.getElementById(`bgrid-${item.id}`);
-  VIEWS.forEach(v => {
-    const r = viewResults.find(r => r.viewId === v.id);
-    const slot = document.createElement('div');
-    slot.className = 'bslot';
-    if (r && r.status === 'done' && r.imageUrl) {
-      slot.innerHTML = `
-        <img src="${r.imageUrl}" alt="${v.label}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"/>
-        <div style="display:none;min-height:90px;align-items:center;justify-content:center;font-size:10px;color:var(--text-dim);">Image unavailable</div>
-        <div class="bslot-label">Img ${v.id} — ${v.label}</div>
-        <div class="bslot-actions">
-          <button class="btn-dl1" type="button" data-url="${r.imageUrl}" data-name="${item.name}_img${v.id}">⬇ Download</button>
-          <button class="btn-rerender-view" type="button" data-item-id="${item.id}" data-view-id="${v.id}" title="Re-render this view with Gemini Flash">↻ Re-render</button>
-        </div>`;
-      slot.querySelector('img').addEventListener('click', () => openLightbox(r.imageUrl));
-      slot.querySelector('.btn-dl1').addEventListener('click', function() {
-        dlOneUrl(this.dataset.url, this.dataset.name);
-      });
-      slot.querySelector('.btn-rerender-view').addEventListener('click', e => {
-        rerenderHistoryView(e.currentTarget, item.id, v.id, slot);
-      });
-    } else {
-      slot.innerHTML = `
-        <div style="min-height:90px;display:flex;align-items:center;justify-content:center;"><span style="font-size:10px;color:var(--text-dim);">${r && r.errorMessage ? escHtml(r.errorMessage) : 'Not generated'}</span></div>
-        <div class="bslot-label">Img ${v.id} — ${v.label}</div>
-        <div class="bslot-actions">
-          <button class="btn-rerender-view" type="button" data-item-id="${item.id}" data-view-id="${v.id}" title="Re-render this view with Gemini Flash">↻ Re-render</button>
-        </div>`;
-      slot.querySelector('.btn-rerender-view').addEventListener('click', e => {
-        rerenderHistoryView(e.currentTarget, item.id, v.id, slot);
-      });
-    }
-    grid.appendChild(slot);
-  });
-
-  document.getElementById(`bzip-${item.id}`).addEventListener('click', () => dlZipFromUrls(item.id, item.name, viewResults));
-  document.getElementById(`bdel-${item.id}`).addEventListener('click', () => deleteCompletedBatch(item.id));
-  const driveBtn = document.getElementById(`bdrive-${item.id}`);
-  if (driveBtn) driveBtn.addEventListener('click', () => uploadBatchToDrive(item.id));
-  const retryBtn = document.getElementById(`bretry-${item.id}`);
-  if (retryBtn) {
-    retryBtn.addEventListener('click', () => retryFailedViews(item, {}));
-  }
+  // No DOM card created — completed batches moved to dedicated panel
 }
 
 async function dlOneUrl(url, filename) {
@@ -9983,89 +9914,14 @@ async function retryFailedViews(item, images) {
   startBtn.click();
 }
 
-// ── RESTORE BATCH CARDS ON PAGE LOAD ───────────────────────────────
-// When the page reloads, batch cards (DOM elements) are gone.
-// This recreates summary cards for items that were completed/errored.
+// ── RESTORE BATCH CARDS ON PAGE LOAD (DISABLED) ────────────────────
+// Completed batches now live in the dedicated "✓ Completed" panel.
+// No batch cards are created on the main page.
 async function restoreBatchCards() {
   if (supaConnected) {
     await pollStatus();
   }
-
-  const completedItems = queue.filter(q => q.status === STATUS.DONE || q.status === STATUS.PARTIAL || q.status === STATUS.ERROR || q.status === STATUS.STOPPED);
-  if (!completedItems.length) return;
-
-  if (supaConnected) {
-    completedItems.forEach(item => {
-      if (document.getElementById(`bc-${item.id}`)) {
-        return;
-      }
-      const viewResults = lastPollRenderResults[item.id];
-      if (viewResults && viewResults.some(r => r.status === 'done' && r.imageUrl)) {
-        createBatchCardFromUrls(item, viewResults);
-      }
-    });
-  }
-
-  let batchSec = document.getElementById('batch-section');
-  if (!batchSec) {
-    batchSec = document.createElement('div');
-    batchSec.id = 'batch-section';
-    batchSec.innerHTML = completedBatchHeaderHtml();
-    // Insert after the active section if it exists, otherwise append
-    const activeSec = document.getElementById('active-section');
-    if (activeSec) {
-      mainPanel.insertBefore(batchSec, activeSec.nextSibling);
-    } else {
-      mainPanel.appendChild(batchSec);
-    }
-  }
-
-  completedItems.forEach(item => {
-    // Skip if card already exists
-    if (document.getElementById(`bc-${item.id}`)) return;
-
-    const archived = getCompletedArchive().find(entry => Number(entry.id) === Number(item.id));
-    if (archived?.viewResults?.some(r => r.status === 'done' && r.imageUrl)) {
-      createBatchCardFromUrls({ ...item, ...archived, dataUrl: item.dataUrl || archived.imageUrl }, archived.viewResults);
-      return;
-    }
-
-    const statusLabel = STATUS_LABEL[item.status] || 'done';
-    const hasImage = item.dataUrl && (item.dataUrl.startsWith('data:') || item.dataUrl.startsWith('http'));
-    const thumbSrc = hasImage ? item.dataUrl : '';
-
-    const card = document.createElement('div');
-    card.className = 'batch-card';
-    card.id = `bc-${item.id}`;
-    card.innerHTML = `
-      <div class="batch-head">
-        ${thumbSrc
-          ? `<img class="batch-thumb" src="${thumbSrc}" alt="${escHtml(item.name)}"/>`
-          : `<div class="batch-thumb" style="display:flex;align-items:center;justify-content:center;background:var(--border-light);font-size:18px;color:var(--text-dim);">📷</div>`
-        }
-        <div class="batch-info">
-          <h3>${escHtml(item.name)}</h3>
-          <p>${statusLabel} — reload page to re-generate</p>
-        </div>
-        <div class="batch-actions">
-          <button class="btn-retry-batch" onclick="retryItemFromHistory(${item.id})">↻ Re-generate</button>
-          ${driveUploadButtonHtml(item, lastPollRenderResults[item.id] || [])}
-          <button class="btn-mini-clear" id="bdel-${item.id}">Delete</button>
-        </div>
-      </div>
-      <div class="batch-grid" id="bgrid-${item.id}">
-        <div style="grid-column:1/-1;text-align:center;padding:1.5rem;color:var(--text-dim);font-size:12px;">
-          No stored render image URLs were found for this batch.<br/>
-          Open Completed to check the archive, or re-generate once to store future downloads.
-        </div>
-    </div>
-      ${driveProgressHtml(item)}`;
-    batchSec.appendChild(card);
-    document.getElementById(`bdel-${item.id}`).addEventListener('click', () => deleteCompletedBatch(item.id));
-    const driveBtn = document.getElementById(`bdrive-${item.id}`);
-    if (driveBtn) driveBtn.addEventListener('click', () => uploadBatchToDrive(item.id));
-    updateBatchDriveStatus(item);
-  });
+  // Completed batches moved to dedicated panel — no-op
 }
 
 // Re-generate a single item from history (called from restored batch cards)
