@@ -208,8 +208,8 @@ export default async function handler(req, res) {
     }
 
     return res.status(500).json({
-      error: 'Failed to process upload',
-      details: err.message
+      error: `Failed to process upload: ${err.message}`,
+      code: err.code || null
     });
   }
 }

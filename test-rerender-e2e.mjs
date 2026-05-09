@@ -14,18 +14,31 @@
 const API_BASE = process.env.API_BASE || 'https://render.abcx124.xyz';
 const SUPABASE_URL = process.env.SUPABASE_URL || '';
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+const RERENDER_TIMEOUT_MS = 420000; // 7 minutes for Gemini API (2 models × 180s + overhead)
+
+async function fetchWithTimeout(url, options = {}, timeoutMs = 30000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, { ...options, signal: controller.signal });
+    return res;
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 async function main() {
   console.log('═══════════════════════════════════════════════════════════════════');
   console.log('  RERENDER E2E TEST');
   console.log('  API:', API_BASE);
+  console.log('  Rerender timeout:', RERENDER_TIMEOUT_MS / 1000, 'seconds');
   console.log('═══════════════════════════════════════════════════════════════════\n');
 
   // ── Step 1: Fetch completed batches ──
   console.log('Step 1: Fetch completed batches');
   let batches;
   try {
-    const res = await fetch(`${API_BASE}/api/queue/completed`);
+    const res = await fetchWithTimeout(`${API_BASE}/api/queue/completed`, {}, 15000);
     if (!res.ok) {
       const text = await res.text();
       throw new Error(`HTTP ${res.status}: ${text.slice(0, 200)}`);
@@ -79,19 +92,31 @@ async function main() {
 
   // ── Step 3: Call rerender API ──
   console.log('\nStep 3: Call rerender API');
+  console.log(`  (This may take up to ${RERENDER_TIMEOUT_MS / 60000} minutes for Gemini API...)`);
   let rerenderResult;
   try {
-    const res = await fetch(`${API_BASE}/api/queue/rerender-view`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        itemId: targetBatch.id,
-        viewId: targetView.viewId,
-        provider: 'gemini'
-      })
-    });
+    const res = await fetchWithTimeout(
+      `${API_BASE}/api/queue/rerender-view`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          itemId: targetBatch.id,
+          viewId: targetView.viewId,
+          provider: 'gemini'
+        })
+      },
+      RERENDER_TIMEOUT_MS
+    );
 
-    const data = await res.json();
+    const text = await res.text();
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch (parseErr) {
+      throw new Error(`Non-JSON response (HTTP ${res.status}): ${text.slice(0, 300)}`);
+    }
+
     if (!res.ok) {
       throw new Error(data.error || `HTTP ${res.status}`);
     }
@@ -122,10 +147,7 @@ async function main() {
     const imgUrl = rerenderResult.imageUrl.startsWith('http')
       ? rerenderResult.imageUrl
       : `${API_BASE}${rerenderResult.imageUrl}`;
-    const imgRes = await fetch(imgUrl, {
-      method: 'HEAD',
-      signal: AbortSignal.timeout(10000)
-    });
+    const imgRes = await fetchWithTimeout(imgUrl, { method: 'HEAD' }, 10000);
     if (imgRes.ok) {
       const contentType = imgRes.headers.get('content-type') || 'unknown';
       const contentLength = imgRes.headers.get('content-length') || 'unknown';
@@ -140,7 +162,7 @@ async function main() {
   // ── Step 6: Verify completed-batches.json was updated ──
   console.log('\nStep 6: Verify completed-batches.json was updated');
   try {
-    const res = await fetch(`${API_BASE}/api/queue/completed`);
+    const res = await fetchWithTimeout(`${API_BASE}/api/queue/completed`, {}, 15000);
     const data = await res.json();
     const updatedBatches = data.completedBatches || data;
     const updatedBatch = updatedBatches.find(b => Number(b.id) === Number(targetBatch.id));
