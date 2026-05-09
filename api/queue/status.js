@@ -11,7 +11,8 @@
 // ═══════════════════════════════════════════════════════════════════
 import { supabase, QUEUE_TABLE, RESULTS_TABLE, BUCKET_NAME } from '../../lib/supabase.js';
 import { VIEWS } from '../../lib/fal.js';
-import { renderZipPublicUrl } from '../../lib/vps-storage.js';
+import { downloadDriveFileBuffer, listRenderImagesInDriveFolder } from '../../lib/drive.js';
+import { renderZipPublicUrl, saveRenderImageBufferToVps } from '../../lib/vps-storage.js';
 
 const OPENAI_IMAGE_MODEL = process.env.OPENAI_IMAGE_MODEL || 'gpt-image-1-mini';
 
@@ -237,6 +238,20 @@ async function updateQueueStatuses(queueItems, rows) {
     let status = item.status;
     let subText = item.sub_text || '';
 
+    const reconciled = await reconcileDriveUploadsForItem(item, itemRows);
+    if (reconciled > 0) {
+      updates.push({
+        id: item.id,
+        status: reconciled + doneCount >= VIEWS.length ? 'done' : 'active',
+        sub_text: reconciled + doneCount >= VIEWS.length
+          ? 'All 4 views generated (recovered from Drive)'
+          : `${Math.min(VIEWS.length, reconciled + doneCount)}/4 views completed (recovered from Drive)`,
+        provider: inferredProvider || item.provider,
+        updated_at: new Date().toISOString()
+      });
+      continue;
+    }
+
     if (activeCount > 0) {
       status = 'active';
       subText = `${doneCount}/4 views completed`;
@@ -296,6 +311,66 @@ async function updateQueueStatuses(queueItems, rows) {
       }
     }
   }
+}
+
+async function reconcileDriveUploadsForItem(item, itemRows) {
+  const hasCompletedDriveUpload = item.drive_upload_status === 'done'
+    || !!(item.drive_folder_id && item.drive_folder_id !== '');
+  if (!hasCompletedDriveUpload || !item.drive_folder_id) return 0;
+
+  const rowsByView = new Map(itemRows.map(row => [Number(row.view_id), row]));
+  const missingViews = VIEWS.filter(view => {
+    const row = rowsByView.get(Number(view.id));
+    return !row || row.status !== 'done' || !row.image_url;
+  });
+  if (missingViews.length === 0) return 0;
+
+  let driveFiles = [];
+  try {
+    driveFiles = await listRenderImagesInDriveFolder(item.drive_folder_id);
+  } catch (error) {
+    console.warn(`[STATUS] Drive reconciliation could not list folder for item ${item.id}:`, error.message);
+    return 0;
+  }
+
+  const filesByView = new Map(driveFiles.map(file => [Number(file.viewId), file]));
+  let recovered = 0;
+
+  for (const view of missingViews) {
+    const file = filesByView.get(Number(view.id));
+    if (!file) continue;
+
+    try {
+      const buffer = await downloadDriveFileBuffer(file.id);
+      const stored = await saveRenderImageBufferToVps(
+        buffer,
+        file.mimeType || 'image/jpeg',
+        item.id,
+        view,
+        item.name || `Item ${item.id}`
+      );
+
+      const { error } = await supabase
+        .from(RESULTS_TABLE)
+        .update({
+          status: 'done',
+          image_url: stored.publicUrl,
+          error_message: '',
+          completed_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        })
+        .eq('queue_item_id', item.id)
+        .eq('view_id', view.id);
+
+      if (error) throw error;
+      recovered++;
+      console.log(`[STATUS] Recovered item ${item.id} view ${view.id} from Drive file ${file.name}`);
+    } catch (error) {
+      console.warn(`[STATUS] Failed to recover item ${item.id} view ${view.id} from Drive:`, error.message);
+    }
+  }
+
+  return recovered;
 }
 
 function getViewLabel(viewId) {

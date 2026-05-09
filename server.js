@@ -642,6 +642,7 @@ async function processItem(itemId, provider = 'openai-mini') {
     // Save results
     let successCount = completedViewIds.size;
     let failCount = 0;
+    let delayedCount = 0;
 
     for (let i = 0; i < viewsToGenerate.length; i++) {
       const view = viewsToGenerate[i];
@@ -686,13 +687,18 @@ async function processItem(itemId, provider = 'openai-mini') {
             .eq('view_id', view.id);
         }
       } else {
-        failCount++;
         const errMsg = result.status === 'rejected' ? result.reason?.message || 'Unknown error' : 'No result';
+        const delayed = isTimeoutLikeError(errMsg);
+        if (delayed) delayedCount++;
+        else failCount++;
+
         await supabase
           .from(RESULTS_TABLE)
           .update({
-            status: 'error',
-            error_message: errMsg,
+            status: delayed ? 'waiting' : 'error',
+            error_message: delayed
+              ? `${errMsg}. Still retryable; keeping this view queued.`
+              : errMsg,
             updated_at: new Date().toISOString()
           })
           .eq('queue_item_id', itemId)
@@ -701,10 +707,12 @@ async function processItem(itemId, provider = 'openai-mini') {
     }
 
     // Update queue item final status
-    const finalStatus = successCount === 4 ? 'done' : 'error';
+    const finalStatus = successCount === 4 ? 'done' : delayedCount > 0 ? 'active' : 'error';
     const statusText = successCount === 4
       ? 'All 4 views generated'
-      : `${successCount}/4 views generated`;
+      : delayedCount > 0
+        ? `${successCount}/4 views generated, ${delayedCount} delayed`
+        : `${successCount}/4 views generated`;
     await updateItemStatus(itemId, finalStatus, statusText);
 
     // Store the completed batch ZIP on the VPS and trigger Drive upload if all 4 views completed
@@ -777,13 +785,18 @@ async function processItem(itemId, provider = 'openai-mini') {
   }
 }
 
+function isTimeoutLikeError(message = '') {
+  return /timeout|timed out|abort|aborted|deadline|socket hang up|econnreset|etimedout/i.test(String(message || ''));
+}
+
 /**
  * Upload completed renders to Google Drive.
  * Uses sequential counter for folder naming (e.g., "001_ProductName").
  */
 async function triggerDriveUpload(item) {
   try {
-    const hasDriveEnv = !!process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
+    const hasDriveEnv = !!process.env.GOOGLE_SERVICE_ACCOUNT_JSON
+      || !!(process.env.GOOGLE_DRIVE_CLIENT_ID && process.env.GOOGLE_DRIVE_CLIENT_SECRET && process.env.GOOGLE_DRIVE_REFRESH_TOKEN);
     if (!hasDriveEnv) return;
 
     // Fetch fresh drive state to avoid race conditions
