@@ -6,15 +6,36 @@
 //    2. Pick a view that has an image
 //    3. Call rerender API for that view
 //    4. Verify the response contains a new image URL
-//    5. Verify the image URL is accessible (HTTP 200)
+//    5. Verify the image URL is accessible (HTTP 200) AND is a valid image
 //    6. Verify the completed-batches.json was updated
 //    7. Verify the render_results table was updated in Supabase
+//    8. Verify image content-type is actually an image
 // ══════════════════════════════════════════════════════════════════
 
 const API_BASE = process.env.API_BASE || 'https://render.abcx124.xyz';
 const SUPABASE_URL = process.env.SUPABASE_URL || '';
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 const RERENDER_TIMEOUT_MS = 420000; // 7 minutes for Gemini API (2 models × 180s + overhead)
+
+// ── Test counters ──
+let passed = 0;
+let failed = 0;
+let warnings = 0;
+
+function assert(condition, label) {
+  if (condition) {
+    console.log(`  ✅ ${label}`);
+    passed++;
+  } else {
+    console.error(`  ❌ ${label}`);
+    failed++;
+  }
+}
+
+function warn(label) {
+  console.log(`  ⚠️ ${label}`);
+  warnings++;
+}
 
 async function fetchWithTimeout(url, options = {}, timeoutMs = 30000) {
   const controller = new AbortController();
@@ -24,6 +45,42 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = 30000) {
     return res;
   } finally {
     clearTimeout(timer);
+  }
+}
+
+/**
+ * Verify that a URL points to an actual image by checking content-type
+ * and optionally downloading the first few bytes to validate the header.
+ */
+async function verifyImageUrl(url, label = 'Image') {
+  try {
+    const res = await fetchWithTimeout(url, { method: 'GET' }, 15000);
+    if (!res.ok) {
+      warn(`${label} returned HTTP ${res.status}`);
+      return false;
+    }
+
+    const contentType = res.headers.get('content-type') || '';
+    const contentLength = res.headers.get('content-length') || 'unknown';
+
+    // Check content-type indicates an image
+    const isImage = contentType.startsWith('image/');
+    if (!isImage) {
+      warn(`${label} content-type is "${contentType}", expected "image/*"`);
+      return false;
+    }
+
+    // Check content-length is reasonable (at least 1KB for a real image)
+    const sizeBytes = parseInt(contentLength, 10);
+    if (!isNaN(sizeBytes) && sizeBytes < 1024) {
+      warn(`${label} is very small (${sizeBytes} bytes) — may be a placeholder`);
+    }
+
+    console.log(`     ${label}: HTTP ${res.status} type=${contentType} size=${contentLength}`);
+    return true;
+  } catch (err) {
+    warn(`Could not verify ${label}: ${err.message}`);
+    return false;
   }
 }
 
@@ -39,16 +96,18 @@ async function main() {
   let batches;
   try {
     const res = await fetchWithTimeout(`${API_BASE}/api/queue/completed`, {}, 15000);
+    assert(res.ok, `Completed batches API responded with HTTP ${res.status}`);
     if (!res.ok) {
       const text = await res.text();
       throw new Error(`HTTP ${res.status}: ${text.slice(0, 200)}`);
     }
     const data = await res.json();
     batches = data.completedBatches || data;
+    assert(Array.isArray(batches), `Response is an array (got ${typeof batches})`);
     if (!Array.isArray(batches)) {
       throw new Error(`Expected array, got ${typeof batches}: ${JSON.stringify(data).slice(0, 200)}`);
     }
-    console.log(`  ✅ Got ${batches.length} completed batches`);
+    console.log(`     Found ${batches.length} completed batches`);
   } catch (err) {
     console.error(`  ❌ Failed to fetch completed batches: ${err.message}`);
     process.exit(1);
@@ -90,6 +149,11 @@ async function main() {
   console.log(`  ✅ Selected viewId=${targetView.viewId} (status=${targetView.status})`);
   console.log(`  ✅ Old image URL: ${(targetView.imageUrl || '').slice(0, 100)}...`);
 
+  // Verify the OLD image is actually accessible before rerender
+  console.log('\n  Verifying old image is accessible...');
+  const oldImageOk = await verifyImageUrl(targetView.imageUrl, 'Old image');
+  assert(oldImageOk, 'Old image is accessible and valid');
+
   // ── Step 3: Call rerender API ──
   console.log('\nStep 3: Call rerender API');
   console.log(`  (This may take up to ${RERENDER_TIMEOUT_MS / 60000} minutes for Gemini API...)`);
@@ -108,6 +172,8 @@ async function main() {
       },
       RERENDER_TIMEOUT_MS
     );
+
+    assert(res.ok, `Rerender API responded with HTTP ${res.status}`);
 
     const text = await res.text();
     let data;
@@ -131,57 +197,43 @@ async function main() {
 
   // ── Step 4: Verify the new image URL is different from the old one ──
   console.log('\nStep 4: Verify image URL changed');
-  if (!rerenderResult.imageUrl) {
-    console.error('  ❌ No imageUrl in response');
-    process.exit(1);
-  }
+  assert(!!rerenderResult.imageUrl, 'imageUrl is present in response');
   if (rerenderResult.imageUrl === targetView.imageUrl) {
-    console.warn('  ⚠️ New image URL is identical to old one (may be expected if same image was re-uploaded)');
+    warn('New image URL is identical to old one (may be expected if same image was re-uploaded)');
   } else {
     console.log('  ✅ New image URL differs from old one');
   }
 
-  // ── Step 5: Verify the new image is accessible ──
-  console.log('\nStep 5: Verify image is accessible');
-  try {
-    const imgUrl = rerenderResult.imageUrl.startsWith('http')
-      ? rerenderResult.imageUrl
-      : `${API_BASE}${rerenderResult.imageUrl}`;
-    const imgRes = await fetchWithTimeout(imgUrl, { method: 'HEAD' }, 10000);
-    if (imgRes.ok) {
-      const contentType = imgRes.headers.get('content-type') || 'unknown';
-      const contentLength = imgRes.headers.get('content-length') || 'unknown';
-      console.log(`  ✅ Image accessible: HTTP ${imgRes.status} content-type=${contentType} size=${contentLength}`);
-    } else {
-      console.warn(`  ⚠️ Image HEAD returned HTTP ${imgRes.status} (may still work in browser)`);
-    }
-  } catch (err) {
-    console.warn(`  ⚠️ Could not verify image accessibility: ${err.message}`);
-  }
+  // ── Step 5: Verify the new image is accessible AND is a real image ──
+  console.log('\nStep 5: Verify new image is accessible and valid');
+  const newImageOk = await verifyImageUrl(rerenderResult.imageUrl, 'New image');
+  assert(newImageOk, 'New image is accessible and valid');
 
   // ── Step 6: Verify completed-batches.json was updated ──
   console.log('\nStep 6: Verify completed-batches.json was updated');
   try {
     const res = await fetchWithTimeout(`${API_BASE}/api/queue/completed`, {}, 15000);
+    assert(res.ok, 'Completed batches API reachable after rerender');
+
     const data = await res.json();
     const updatedBatches = data.completedBatches || data;
     const updatedBatch = updatedBatches.find(b => Number(b.id) === Number(targetBatch.id));
 
+    assert(!!updatedBatch, 'Batch still exists in completed list after rerender');
     if (!updatedBatch) {
-      console.error('  ❌ Batch no longer exists in completed list');
-      process.exit(1);
+      throw new Error('Batch no longer exists');
     }
 
     const updatedView = (updatedBatch.viewResults || []).find(v => Number(v.viewId) === Number(targetView.viewId));
+    assert(!!updatedView, 'View still exists in batch after rerender');
     if (!updatedView) {
-      console.error('  ❌ View no longer exists in batch');
-      process.exit(1);
+      throw new Error('View no longer exists');
     }
 
     if (updatedView.imageUrl === rerenderResult.imageUrl) {
       console.log('  ✅ completed-batches.json has the updated image URL');
     } else {
-      console.warn('  ⚠️ completed-batches.json image URL mismatch');
+      warn('completed-batches.json image URL mismatch');
       console.warn(`     Expected: ${rerenderResult.imageUrl.slice(0, 80)}`);
       console.warn(`     Got:      ${(updatedView.imageUrl || '').slice(0, 80)}`);
     }
@@ -189,10 +241,10 @@ async function main() {
     if (updatedView.providerUsed) {
       console.log(`  ✅ Provider used recorded: ${updatedView.providerUsed}`);
     } else {
-      console.warn('  ⚠️ providerUsed not recorded in completed-batches.json');
+      warn('providerUsed not recorded in completed-batches.json');
     }
   } catch (err) {
-    console.warn(`  ⚠️ Could not verify completed-batches.json: ${err.message}`);
+    warn(`Could not verify completed-batches.json: ${err.message}`);
   }
 
   // ── Step 7: Verify render_results table in Supabase (if env vars provided) ──
@@ -209,9 +261,9 @@ async function main() {
         .eq('view_id', targetView.viewId);
 
       if (error) {
-        console.warn(`  ⚠️ Supabase query failed: ${error.message}`);
+        warn(`Supabase query failed: ${error.message}`);
       } else if (!rows || !rows.length) {
-        console.warn('  ⚠️ No render_results row found for this item/view');
+        warn('No render_results row found for this item/view');
       } else {
         const row = rows[0];
         console.log(`  ✅ render_results row found`);
@@ -223,11 +275,16 @@ async function main() {
         if (row.image_url === rerenderResult.imageUrl) {
           console.log('  ✅ Supabase image_url matches rerender response');
         } else {
-          console.warn('  ⚠️ Supabase image_url differs from rerender response');
+          warn('Supabase image_url differs from rerender response');
+        }
+
+        // Verify the Supabase image URL is also accessible
+        if (row.image_url) {
+          await verifyImageUrl(row.image_url, 'Supabase image');
         }
       }
     } catch (err) {
-      console.warn(`  ⚠️ Supabase verification skipped: ${err.message}`);
+      warn(`Supabase verification skipped: ${err.message}`);
     }
   } else {
     console.log('\nStep 7: Skip Supabase verification (set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY env vars)');
@@ -243,7 +300,17 @@ async function main() {
   console.log(`  New URL:      ${(rerenderResult.imageUrl || '').slice(0, 80)}`);
   console.log(`  Provider:     ${rerenderResult.providerUsed}`);
   console.log('');
-  console.log('  ✅ All critical checks passed!');
+  console.log(`  Passed:   ${passed}`);
+  console.log(`  Failed:   ${failed}`);
+  console.log(`  Warnings: ${warnings}`);
+  console.log('');
+
+  if (failed > 0) {
+    console.error(`❌ ${failed} check(s) FAILED`);
+    process.exit(1);
+  } else {
+    console.log('  ✅ All critical checks passed!');
+  }
   console.log('═══════════════════════════════════════════════════════════════════\n');
 }
 

@@ -155,9 +155,27 @@ export default async function handler(req, res) {
       .map((img, idx) => ({ imageIndex: idx, name: img.name }))
       .filter(img => !finalUsedIndices.has(img.imageIndex));
 
+    // ── Strip dataUrl from response to reduce payload size ──
+    // The client already has the images with dataUrls from the process step.
+    // Sending them back doubles the payload and can cause memory/network issues.
+    // The client resolves dataUrl via imageMap[matchedImage.name].
+    const stripDataUrl = (obj) => {
+      if (!obj) return obj;
+      const { dataUrl, ...rest } = obj;
+      return rest;
+    };
+
+    const slimMatches = matchResult.matches.map(m => ({
+      ...m,
+      matchedImage: m.matchedImage ? stripDataUrl(m.matchedImage) : null,
+      product: m.product ? stripDataUrl(m.product) : null
+    }));
+
     return res.json({
       success: true,
-      ...matchResult
+      matches: slimMatches,
+      unmatchedImages: matchResult.unmatchedImages,
+      matchStats: matchResult.matchStats
     });
 
   } catch (err) {
