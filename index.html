@@ -259,6 +259,10 @@ body {
   overflow: hidden;
   border-right: none;
 }
+/* sidebar is display:none so removed from grid flow; force main to span all columns */
+.layout.panel-open .main {
+  grid-column: 1 / -1;
+}
 @media (max-width: 1280px) {
   :root { --sidebar-w: 260px; }
 }
@@ -5699,6 +5703,10 @@ async function renderCompletedPanel() {
 }
 
 async function rerenderHistoryView(btn, itemId, viewId, slot) {
+  if (!btn || !slot) {
+    console.warn('[RERENDER] Missing btn or slot element');
+    return;
+  }
   btn.disabled = true;
   btn.textContent = 'Rendering...';
 
@@ -5714,46 +5722,48 @@ async function rerenderHistoryView(btn, itemId, viewId, slot) {
 
     const { imageUrl, providerUsed } = data;
 
-    // Update the image in the slot
-    const img = slot.querySelector('img');
-    const unavailableDiv = img?.nextElementSibling;
-    if (img) {
-      img.src = imageUrl;
-      img.style.display = '';
-      if (unavailableDiv) unavailableDiv.style.display = 'none';
-      img.onclick = () => openLightbox(imageUrl);
-    } else {
-      // Slot had no image before — replace placeholder with img
-      const placeholder = slot.querySelector('div[style*="min-height"]');
-      if (placeholder) {
-        const newImg = document.createElement('img');
-        newImg.src = imageUrl;
-        newImg.alt = `View ${viewId}`;
-        newImg.style.width = '100%';
-        newImg.addEventListener('click', () => openLightbox(imageUrl));
-        slot.insertBefore(newImg, placeholder);
-        placeholder.remove();
-      }
-    }
-
-    // Update download button URL
-    const dlBtn = slot.querySelector('.btn-dl1');
-    if (dlBtn) dlBtn.dataset.url = imageUrl;
-
-    // Update the provider badge in the label
-    const label = slot.querySelector('.bslot-label');
-    if (label) {
-      const badgeClass = providerUsed === 'gemini-flash' ? 'bslot-provider-gemini' : 'bslot-provider-mini';
-      const badgeText = providerUsed === 'gemini-flash' ? 'Gemini Flash' : 'GPT-mini';
-      const existing = label.querySelector('.bslot-provider');
-      if (existing) {
-        existing.className = `bslot-provider ${badgeClass}`;
-        existing.textContent = badgeText;
+    // Update the image in the slot (if slot still exists in DOM)
+    if (slot && document.body.contains(slot)) {
+      const img = slot.querySelector('img');
+      const unavailableDiv = img?.nextElementSibling;
+      if (img) {
+        img.src = imageUrl;
+        img.style.display = '';
+        if (unavailableDiv) unavailableDiv.style.display = 'none';
+        img.onclick = () => openLightbox(imageUrl);
       } else {
-        const badge = document.createElement('span');
-        badge.className = `bslot-provider ${badgeClass}`;
-        badge.textContent = badgeText;
-        label.appendChild(badge);
+        // Slot had no image before — replace placeholder with img
+        const placeholder = slot.querySelector('div[style*="min-height"]');
+        if (placeholder) {
+          const newImg = document.createElement('img');
+          newImg.src = imageUrl;
+          newImg.alt = `View ${viewId}`;
+          newImg.style.width = '100%';
+          newImg.addEventListener('click', () => openLightbox(imageUrl));
+          slot.insertBefore(newImg, placeholder);
+          placeholder.remove();
+        }
+      }
+
+      // Update download button URL
+      const dlBtn = slot.querySelector('.btn-dl1');
+      if (dlBtn) dlBtn.dataset.url = imageUrl;
+
+      // Update the provider badge in the label
+      const label = slot.querySelector('.bslot-label');
+      if (label) {
+        const badgeClass = providerUsed === 'gemini-flash' ? 'bslot-provider-gemini' : 'bslot-provider-mini';
+        const badgeText = providerUsed === 'gemini-flash' ? 'Gemini Flash' : 'GPT-mini';
+        const existing = label.querySelector('.bslot-provider');
+        if (existing) {
+          existing.className = `bslot-provider ${badgeClass}`;
+          existing.textContent = badgeText;
+        } else {
+          const badge = document.createElement('span');
+          badge.className = `bslot-provider ${badgeClass}`;
+          badge.textContent = badgeText;
+          label.appendChild(badge);
+        }
       }
     }
 
@@ -6045,6 +6055,7 @@ function renderCrBatches(data) {
 }
 
 async function rerenderCrView(btn, itemId, viewId) {
+  if (!btn) return;
   btn.disabled = true;
   btn.textContent = '...';
   try {
@@ -6055,13 +6066,16 @@ async function rerenderCrView(btn, itemId, viewId) {
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'HTTP ' + res.status);
-    toast('View ' + viewId + ' re-rendered', 'success');
+    toast('View ' + viewId + ' re-rendered with ' + (data.providerUsed || 'Gemini Flash'), 'success');
+    // Refresh the completed batches view to show updated image
     await initCompletedRenders();
   } catch (err) {
     toast('Re-render failed: ' + formatError(err), 'error');
   } finally {
-    btn.disabled = false;
-    btn.textContent = '↻';
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = '↻';
+    }
   }
 }
 
