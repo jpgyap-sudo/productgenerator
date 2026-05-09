@@ -14,6 +14,8 @@
 import dotenv from 'dotenv';
 dotenv.config({ override: true });
 import express from 'express';
+import path from 'path';
+import fs from 'fs';
 import multer from 'multer';
 import { supabase, QUEUE_TABLE, RESULTS_TABLE } from './lib/supabase.js';
 import { VIEWS } from './lib/fal.js';
@@ -361,6 +363,22 @@ app.use('/vps-assets', express.static(VPS_ASSET_ROOT, {
 app.get('/completebatch', (req, res) => {
   res.sendFile('index.html', { root: process.cwd() });
 });
+
+// ── Furniture Render Studio (React SPA) ──
+const FURNITURE_RENDER_DIR = path.join(process.cwd(), 'furniture-render');
+const FURNITURE_RENDER_BUILD = path.join(FURNITURE_RENDER_DIR, 'dist');
+// Serve built files if they exist, otherwise serve source files
+if (fs.existsSync(FURNITURE_RENDER_BUILD)) {
+  app.use('/furniture-render', express.static(FURNITURE_RENDER_BUILD, { maxAge: '5m' }));
+  // SPA fallback for furniture-render routes
+  app.get('/furniture-render/*', (req, res) => {
+    res.sendFile(path.join(FURNITURE_RENDER_BUILD, 'index.html'));
+  });
+} else {
+  // Fall back to serving source files directly (for development)
+  app.use('/furniture-render', express.static(FURNITURE_RENDER_DIR, { maxAge: '1m' }));
+}
+
 app.use(express.static('.'));
 
 // ═══════════════════════════════════════════════════════════════════

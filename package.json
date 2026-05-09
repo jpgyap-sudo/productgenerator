@@ -8,6 +8,8 @@
     "dev": "node server.js",
     "start": "node server.js",
     "build": "echo 'No build step needed for VPS deployment'",
+    "build:furniture": "cd furniture-render && npm run build",
+    "dev:furniture": "cd furniture-render && npm run dev",
     "deploy": "node deploy-agent.mjs",
     "deploy:push": "node deploy-agent.mjs --no-push",
     "deploy:code": "node deploy-agent.mjs --no-deploy"

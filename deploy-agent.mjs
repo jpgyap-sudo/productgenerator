@@ -34,6 +34,7 @@ const CONFIG = {
   // Files to exclude from rsync
   rsyncExcludes: [
     'node_modules',
+    'furniture-render/node_modules',
     'logs',
     '.env',
     '.git',

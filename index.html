@@ -3928,6 +3928,7 @@ a.cr-meta-pill.cr-drive-link:hover { opacity: 0.8; }
     <button class="tb-btn" id="monitorToggle" title="API health monitoring" aria-label="API Monitor">📡 Monitor</button>
     <button class="tb-btn" id="featureToggle" title="View & edit product feature prompts" aria-label="Product Features">📋 Features</button>
     <button class="tb-btn" id="aboutToggle" title="How to use & AI specifications" aria-label="About">ℹ️ About</button>
+    <button class="tb-btn" id="furnitureRenderToggle" title="Furniture Render Studio — premium AI rendering UI" aria-label="Furniture Render" style="background:linear-gradient(135deg,#d3a64f22,#d3a64f11);border-color:#d3a64f44;color:#d3a64f;">🪑 Furniture Render</button>
     <button class="sidebar-toggle" id="sidebarToggle" title="Toggle sidebar" aria-label="Toggle sidebar">☰</button>
     <button class="dm-toggle" id="dmToggle" title="Toggle dark mode" aria-label="Toggle dark mode">🌙</button>
   </div>
@@ -5011,6 +5012,17 @@ a.cr-meta-pill.cr-drive-link:hover { opacity: 0.8; }
       <div class="log-list" id="logList">
         <div class="log-empty">No failures logged yet.</div>
       </div>
+    </div>
+
+    <!-- ── FURNITURE RENDER IFRAME ──────────────────────────────── -->
+    <div class="furniture-render-panel" id="furnitureRenderPanel" style="display:none;width:100%;height:calc(100vh - 78px);overflow:hidden;background:#0b0e13;">
+      <iframe
+        id="furnitureRenderFrame"
+        src="/furniture-render/index.html"
+        style="width:100%;height:100%;border:none;"
+        title="Furniture Render Studio"
+        sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+      ></iframe>
     </div>
   </main>
 
@@ -8591,6 +8603,46 @@ aboutToggle.addEventListener('click', () => {
   monitorPanelOpen = false;
   if (monitorInterval) { clearInterval(monitorInterval); monitorInterval = null; }
   if (aboutPanelOpen) setPanelOpen(); else clearPanelOpen();
+});
+
+// ── FURNITURE RENDER TOGGLE ───────────────────────────────────────
+let furnitureRenderOpen = false;
+const furnitureRenderToggle = document.getElementById('furnitureRenderToggle');
+const furnitureRenderPanel = document.getElementById('furnitureRenderPanel');
+const furnitureRenderFrame = document.getElementById('furnitureRenderFrame');
+
+furnitureRenderToggle.addEventListener('click', () => {
+  furnitureRenderOpen = !furnitureRenderOpen;
+  furnitureRenderToggle.classList.toggle('active', furnitureRenderOpen);
+  furnitureRenderPanel.style.display = furnitureRenderOpen ? 'block' : 'none';
+
+  if (furnitureRenderOpen) {
+    // Hide all other panels
+    welcomeState.style.display = 'none';
+    hideWorkspacePanels();
+    document.getElementById('queueLogPanel').style.display = 'none';
+    document.getElementById('logPanel').style.display = 'none';
+    document.getElementById('featurePanel').style.display = 'none';
+    completedPanel.style.display = 'none';
+    document.getElementById('aboutPanel').style.display = 'none';
+    monitorPanel.style.display = 'none';
+    featureToggle.classList.remove('active');
+    completedToggle.classList.remove('active');
+    aboutToggle.classList.remove('active');
+    monitorToggle?.classList.remove('active');
+    featurePanelOpen = false;
+    completedPanelOpen = false;
+    aboutPanelOpen = false;
+    monitorPanelOpen = false;
+    if (monitorInterval) { clearInterval(monitorInterval); monitorInterval = null; }
+    setPanelOpen();
+
+    // Reload iframe src to ensure fresh state
+    furnitureRenderFrame.src = furnitureRenderFrame.src;
+  } else {
+    clearPanelOpen();
+    welcomeState.style.display = 'flex';
+  }
 });
 
 // ── READY CHECK ───────────────────────────────────────────────────
