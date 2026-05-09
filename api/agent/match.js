@@ -60,7 +60,13 @@ export default async function handler(req, res) {
     }));
 
     // Step 1: Pattern matching (deterministic, instant)
-    const matchResult = matchProductsToImages(normalizedProducts, images);
+    // Use sequential fallback as a last resort when product codes don't match
+    // image filenames (e.g. CH-790 in PDF vs xref14 in ZIP).
+    // The sequential fallback assigns images in order as a reasonable heuristic
+    // for catalog data where products are listed in the same order as images.
+    const matchResult = matchProductsToImages(normalizedProducts, images, {
+      useSequentialFallback: true
+    });
 
     console.log(`[MATCH] Pattern matching: ${matchResult.matchStats.matched}/${matchResult.matchStats.total} matched, ${matchResult.unmatchedImages.length} images unmatched`);
 

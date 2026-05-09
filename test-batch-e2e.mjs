@@ -68,9 +68,9 @@ async function test() {
     console.log('  ⚠️ DeepSeek extraction failed (API key or network issue):', err.message);
     console.log('  Falling back to manual mock products for matching test...\n');
     products = [
-      { name: 'Dining Chair HC-001', brand: 'Home Atelier', description: 'A dining chair', generatedCode: 'HC-001' },
-      { name: 'Arm Chair HC-002', brand: 'Home Atelier', description: 'An arm chair', generatedCode: 'HC-002' },
-      { name: 'Bar Stool HC-003', brand: 'Home Atelier', description: 'A bar stool', generatedCode: 'HC-003' },
+      { name: 'Dining Chair HC-001', brand: 'Home Atelier', description: 'A dining chair', productCode: 'HC-001', generatedCode: 'HC-001' },
+      { name: 'Arm Chair HC-002', brand: 'Home Atelier', description: 'An arm chair', productCode: 'HC-002', generatedCode: 'HC-002' },
+      { name: 'Bar Stool HC-003', brand: 'Home Atelier', description: 'A bar stool', productCode: 'HC-003', generatedCode: 'HC-003' },
     ];
   }
 
@@ -85,9 +85,9 @@ async function test() {
     return;
   }
 
-  const matchResult = matchProductsToImages(products, zipResult.images);
+  const matchResult = matchProductsToImages(products, zipResult.images, { useSequentialFallback: true });
   console.log('  Total matches:', matchResult.matches.length);
-  console.log('  Unmatched products:', matchResult.unmatchedProducts?.length || 0);
+  console.log('  Unmatched products:', matchResult.matchStats.unmatched);
   console.log('  Unmatched images:', matchResult.unmatchedImages?.length || 0);
   console.log('');
 

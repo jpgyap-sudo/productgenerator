@@ -1,12 +1,13 @@
 import { matchProductsToImages } from './lib/product-matcher.js';
 
 // Test product matcher with 5 products and 5 images
+// Each product has both productCode (the field the matcher reads) and generatedCode (fallback)
 const products = [
-  { name: 'Dining Chair HC-001', brand: 'Home Atelier', description: 'A dining chair', generatedCode: 'HC-001' },
-  { name: 'Arm Chair HC-002', brand: 'Home Atelier', description: 'An arm chair', generatedCode: 'HC-002' },
-  { name: 'Bar Stool HC-003', brand: 'Home Atelier', description: 'A bar stool', generatedCode: 'HC-003' },
-  { name: 'Side Table HC-004', brand: 'Home Atelier', description: 'A side table', generatedCode: 'HC-004' },
-  { name: 'Coffee Table HC-005', brand: 'Home Atelier', description: 'A coffee table', generatedCode: 'HC-005' },
+  { name: 'Dining Chair HC-001', brand: 'Home Atelier', description: 'A dining chair', productCode: 'HC-001', generatedCode: 'HC-001' },
+  { name: 'Arm Chair HC-002', brand: 'Home Atelier', description: 'An arm chair', productCode: 'HC-002', generatedCode: 'HC-002' },
+  { name: 'Bar Stool HC-003', brand: 'Home Atelier', description: 'A bar stool', productCode: 'HC-003', generatedCode: 'HC-003' },
+  { name: 'Side Table HC-004', brand: 'Home Atelier', description: 'A side table', productCode: 'HC-004', generatedCode: 'HC-004' },
+  { name: 'Coffee Table HC-005', brand: 'Home Atelier', description: 'A coffee table', productCode: 'HC-005', generatedCode: 'HC-005' },
 ];
 const images = [
   { name: 'HC-001.jpg', width: 800, height: 600, dataUrl: 'data:image/jpeg;base64,abc' },
@@ -19,7 +20,7 @@ const images = [
 console.log('=== Product Matcher Test (5 products, 5 images) ===\n');
 const result = matchProductsToImages(products, images);
 console.log('Total matches:', result.matches.length);
-console.log('Unmatched products:', result.unmatchedProducts?.length || 0);
+console.log('Unmatched products:', result.matchStats.unmatched);
 console.log('Unmatched images:', result.unmatchedImages?.length || 0);
 console.log('');
 
@@ -48,6 +49,6 @@ if (uniqueUrls.size === products.length) {
 console.log('\n=== Mismatch Test (5 products, 3 images) ===');
 const fewImages = images.slice(0, 3);
 const mismatchResult = matchProductsToImages(products, fewImages);
-console.log('Matched:', mismatchResult.matches.length, '| Unmatched products:', mismatchResult.unmatchedProducts?.length || 0);
+console.log('Matched:', mismatchResult.matches.length, '| Unmatched products:', mismatchResult.matchStats.unmatched);
 
 console.log('\n✅ All matcher tests passed');
