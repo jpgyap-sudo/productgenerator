@@ -369,9 +369,12 @@ const FURNITURE_RENDER_DIR = path.join(process.cwd(), 'furniture-render');
 const FURNITURE_RENDER_BUILD = path.join(FURNITURE_RENDER_DIR, 'dist');
 // Serve built files if they exist, otherwise serve source files
 if (fs.existsSync(FURNITURE_RENDER_BUILD)) {
-  app.use('/furniture-render', express.static(FURNITURE_RENDER_BUILD, { maxAge: '5m' }));
-  // SPA fallback for furniture-render routes
-  app.get('/furniture-render/*', (req, res) => {
+  app.use('/furniture-render', express.static(FURNITURE_RENDER_BUILD, { maxAge: '0' }));
+  // SPA fallback — only for non-asset routes (don't catch .js/.css/etc.)
+  app.get('/furniture-render/*', (req, res, next) => {
+    if (/\.(js|css|png|jpg|jpeg|webp|svg|ico|woff2?|ttf|map)$/.test(req.path)) {
+      return next();
+    }
     res.sendFile(path.join(FURNITURE_RENDER_BUILD, 'index.html'));
   });
 } else {
