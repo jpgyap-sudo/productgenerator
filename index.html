@@ -255,6 +255,7 @@ body {
   grid-template-columns: 0 1fr;
 }
 .layout.panel-open .sidebar {
+  display: none;
   overflow: hidden;
   border-right: none;
 }
@@ -4793,6 +4794,11 @@ const monitorGrid = document.getElementById('monitorGrid');
 const monitorTimestamp = document.getElementById('monitorTimestamp');
 const monitorSummary = document.getElementById('monitorSummary');
 const monitorRefreshBtn = document.getElementById('monitorRefreshBtn');
+const layoutEl = document.querySelector('.layout');
+
+// Panel full-screen helpers
+function setPanelOpen() { if (layoutEl) layoutEl.classList.add('panel-open'); }
+function clearPanelOpen() { if (layoutEl) layoutEl.classList.remove('panel-open'); }
 
 // ── PENDING ELEMENTS ────────────────────────────────────────────────
 const pendingArea = document.getElementById('pendingArea');
@@ -5826,6 +5832,7 @@ queueLogToggle.addEventListener('click', () => {
   monitorToggle?.classList.remove('active');
   monitorPanelOpen = false;
   if (monitorInterval) { clearInterval(monitorInterval); monitorInterval = null; }
+  if (isHidden) setPanelOpen(); else clearPanelOpen();
   if (!document.getElementById('active-section')) {
     welcomeState.style.display = isHidden ? 'none' : 'flex';
   }
@@ -5838,6 +5845,8 @@ queueLogClear.addEventListener('click', clearQueueLog);
 async function showCompletedPanel() {
   completedPanelOpen = true;
   completedToggle.classList.add('active');
+  setPanelOpen();
+  document.getElementById('batch-section')?.remove();
 
   // Hide all other panels first to prevent layout conflicts
   hideWorkspacePanels();
@@ -5873,6 +5882,7 @@ function hideCompletedPanel() {
   completedPanelOpen = false;
   completedToggle.classList.remove('active');
   completedPanel.style.display = 'none';
+  clearPanelOpen();
   if (!document.getElementById('active-section')) {
     welcomeState.style.display = 'flex';
   }
@@ -6286,6 +6296,7 @@ document.querySelectorAll('.cr-nav-item').forEach(btn => {
     if (monitorInterval) { clearInterval(monitorInterval); monitorInterval = null; }
     stopMonitorCountdown();
     if (monitorPanelOpen) {
+      setPanelOpen();
       fetchMonitorStatus().then(renderMonitorStatus);
       monitorInterval = setInterval(async () => {
         const data = await fetchMonitorStatus();
@@ -6295,6 +6306,8 @@ document.querySelectorAll('.cr-nav-item').forEach(btn => {
       if (monitorAutoRefreshToggle?.checked) {
         startMonitorCountdown();
       }
+    } else {
+      clearPanelOpen();
     }
   });
 
@@ -6667,7 +6680,10 @@ document.querySelectorAll('.cr-nav-item').forEach(btn => {
     monitorPanelOpen = false;
     if (monitorInterval) { clearInterval(monitorInterval); monitorInterval = null; }
     if (matchedImagesPanelOpen) {
+      setPanelOpen();
       initMatchedImages();
+    } else {
+      clearPanelOpen();
     }
   });
 
@@ -6819,6 +6835,7 @@ logToggle.addEventListener('click', () => {
   monitorToggle?.classList.remove('active');
   monitorPanelOpen = false;
   if (monitorInterval) { clearInterval(monitorInterval); monitorInterval = null; }
+  if (isHidden) setPanelOpen(); else clearPanelOpen();
   // Only toggle welcomeState if there's no active section showing
   if (!document.getElementById('active-section')) {
     welcomeState.style.display = isHidden ? 'none' : 'flex';
@@ -7405,6 +7422,7 @@ function hideWorkspacePanels() {
 function showBulkUploadPanel() {
   if (!bulkUploadPanel) return;
   hideWorkspacePanels();
+  setPanelOpen();
   bulkUploadPanel.style.display = 'block';
   if (bulkUploadToggle) bulkUploadToggle.classList.add('active');
   completedPanel.style.display = 'none';
@@ -7429,6 +7447,7 @@ function hideBulkUploadPanel() {
   if (!bulkUploadPanel) return;
   bulkUploadPanel.style.display = 'none';
   if (bulkUploadToggle) bulkUploadToggle.classList.remove('active');
+  clearPanelOpen();
   if (!document.getElementById('active-section')) {
     welcomeState.style.display = 'flex';
   }
@@ -7437,6 +7456,7 @@ function hideBulkUploadPanel() {
 function showBulkRenderPanel() {
   if (!bulkRenderPanel) return;
   hideWorkspacePanels();
+  setPanelOpen();
   bulkRenderPanel.style.display = 'block';
   bulkRenderToggle?.classList.add('active');
   completedPanel.style.display = 'none';
@@ -7462,6 +7482,7 @@ function hideBulkRenderPanel() {
   if (!bulkRenderPanel) return;
   bulkRenderPanel.style.display = 'none';
   bulkRenderToggle?.classList.remove('active');
+  clearPanelOpen();
   if (!document.getElementById('active-section')) {
     welcomeState.style.display = 'flex';
   }
@@ -7471,6 +7492,7 @@ function hideBulkRenderPanel() {
 function showBatchProcessorPanel() {
   if (!batchProcessorPanel) return;
   hideWorkspacePanels();
+  setPanelOpen();
   batchProcessorPanel.style.display = 'block';
   batchProcessorToggle?.classList.add('active');
   completedPanel.style.display = 'none';
@@ -7495,6 +7517,7 @@ function hideBatchProcessorPanel() {
   if (!batchProcessorPanel) return;
   batchProcessorPanel.style.display = 'none';
   batchProcessorToggle?.classList.remove('active');
+  clearPanelOpen();
   if (!document.getElementById('active-section')) {
     welcomeState.style.display = 'flex';
   }
@@ -7682,7 +7705,7 @@ featureToggle.addEventListener('click', () => {
   completedPanelOpen = false;
   if (aboutToggle) aboutToggle.classList.remove('active');
   aboutPanelOpen = false;
-  if (featurePanelOpen) renderFeatureGrid();
+  if (featurePanelOpen) { setPanelOpen(); renderFeatureGrid(); } else { clearPanelOpen(); }
   monitorPanel.style.display = 'none';
   monitorToggle?.classList.remove('active');
   monitorPanelOpen = false;
@@ -7717,6 +7740,7 @@ aboutToggle.addEventListener('click', () => {
   monitorToggle?.classList.remove('active');
   monitorPanelOpen = false;
   if (monitorInterval) { clearInterval(monitorInterval); monitorInterval = null; }
+  if (aboutPanelOpen) setPanelOpen(); else clearPanelOpen();
 });
 
 // ── READY CHECK ───────────────────────────────────────────────────
@@ -10151,7 +10175,10 @@ window.addEventListener('beforeunload', function(e) {
   updateLogBadge();
   restoreInterruptedActiveCard();
   // Restore batch cards for completed items (they don't survive page reload)
-  await restoreBatchCards();
+  // but keep the dedicated completed route as a clean full-screen workspace.
+  if (!isCompleteBatchPath()) {
+    await restoreBatchCards();
+  }
   await reconcileServerProcessingOnLoad();
   restoreQueuedPreviewCard();
   initUploadAgent();
@@ -12063,9 +12090,11 @@ function initDiningChairMatch() {
     if (isOpen) {
       hideAllPanels();
       panel.style.display = 'block';
+      setPanelOpen();
       dcmRenderAll();
     } else {
       panel.style.display = 'none';
+      clearPanelOpen();
     }
   });
 
@@ -12073,6 +12102,7 @@ function initDiningChairMatch() {
     isOpen = false;
     toggle.classList.remove('active');
     panel.style.display = 'none';
+    clearPanelOpen();
   });
 
   // Accept
@@ -12192,8 +12222,10 @@ function initRenderProduct() {
     if (isOpen) {
       hideAllPanels();
       panel.style.display = 'block';
+      setPanelOpen();
     } else {
       panel.style.display = 'none';
+      clearPanelOpen();
     }
   });
 
@@ -12297,6 +12329,7 @@ function initRenderQueue() {
     toggle.classList.toggle('active', shouldOpen);
     if (shouldOpen) {
       hideAllPanels();
+      setPanelOpen();
       toggle.classList.add('active');
       panel.style.display = 'block';
       fetchQueueBatches();
@@ -12304,6 +12337,7 @@ function initRenderQueue() {
     } else {
       panel.style.display = 'none';
       toggle.classList.remove('active');
+      clearPanelOpen();
       if (!document.getElementById('active-section')) {
         welcomeState.style.display = 'flex';
       }
