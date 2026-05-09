@@ -298,7 +298,7 @@ ${color(C.bold, 'Config:')}
   console.log(`\n${color(C.green, '═══════════════════════════════════════════════════════════════')}`);
   console.log(`${color(C.green, `  ${color(C.bold, 'Deployment complete!')}`)}`);
   if (!flags.noDeploy) {
-    console.log(`${color(C.green, `  App is running at https://productgenerator.blond.vercel.app`)}`);
+    console.log(`${color(C.green, `  App is running at https://render.abcx124.xyz`)}`);
   }
   console.log(`${color(C.green, '═══════════════════════════════════════════════════════════════')}`);
 }

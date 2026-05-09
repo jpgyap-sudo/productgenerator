@@ -3,7 +3,7 @@
 //  Tests all API endpoints on the live VPS server
 // ═══════════════════════════════════════════════════════════════════
 
-const BASE = 'http://104.248.225.250:3000';
+const BASE = 'https://render.abcx124.xyz';
 let passed = 0;
 let failed = 0;
 const errors = [];
@@ -103,7 +103,7 @@ async function main() {
     const res = await fetch(`${BASE}/api/queue/save-state`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ queue: [], pendingItems: [] })
+      body: JSON.stringify({ items: [] })
     });
     expectStatus(res, 200);
   });

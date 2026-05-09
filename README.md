@@ -53,7 +53,6 @@ If you don't set the environment variable, the API key input field will be avail
 | File | Purpose |
 |------|---------|
 | `index.html` | Main application (single-page app) |
-| `vercel.json` | Vercel deployment configuration |
 | `package.json` | Project metadata & build script |
 
 ## Tech Stack
