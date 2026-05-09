@@ -5708,6 +5708,19 @@ function deleteCompletedBatchFromVps(id) {
   }).catch(e => console.warn('VPS completed batch delete failed:', e));
 }
 
+async function deleteCrBatch(id) {
+  if (!confirm('Delete this batch? This cannot be undone.')) return;
+  crData = crData.filter(d => Number(d.item.id) !== Number(id));
+  crFiltered = crFiltered.filter(d => Number(d.item.id) !== Number(id));
+  saveCompletedArchive(getCompletedArchive().filter(e => Number(e.id) !== Number(id)));
+  await deleteCompletedBatchFromVps(id);
+  vpsCompletedArchive = vpsCompletedArchive.filter(e => Number(e.id) !== Number(id));
+  const el = getCrElements();
+  if (el.headerSub) el.headerSub.textContent = `${crFiltered.length} completed batch${crFiltered.length === 1 ? '' : 'es'} shown`;
+  renderCrBatches(crFiltered);
+  toast('Batch deleted', 'success');
+}
+
 function clearCompletedBatchesFromVps(ids) {
   return fetchApi('/api/queue/completed', {
     method: 'DELETE',
@@ -6486,8 +6499,9 @@ function renderCrBatches(data) {
     html += '</div>';
     html += '<div class="cr-batch-actions">';
     if (doneViews.length > 0) {
-      html += '<button class="btn-dl-all" onclick="downloadHistoryZip(' + item.id + ',\'' + sanitizeDownloadName(item.name || 'batch') + '\',' + JSON.stringify(views).replace(/'/g, "\\'") + ',this)">⬇ ZIP</button>';
+      html += '<button class="btn-dl-all" onclick="event.stopPropagation();downloadHistoryZip(' + item.id + ',\'' + sanitizeDownloadName(item.name || 'batch') + '\',' + JSON.stringify(views).replace(/'/g, "\\'") + ',this)">⬇ ZIP</button>';
     }
+    html += '<button class="btn-delete-cr" onclick="event.stopPropagation();deleteCrBatch(' + item.id + ')" title="Delete this batch">🗑</button>';
     html += '</div>';
     html += '</div>';
 
