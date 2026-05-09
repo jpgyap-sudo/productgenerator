@@ -131,8 +131,7 @@ function Sidebar({ state, dispatch, addToast }) {
     dispatch({ type: 'SET_STATUS', payload: 'submitting' });
     try {
       const formData = new FormData();
-      // Convert base64 to blob
-      const resp = await fetch(state.file.preview);
+      const resp = await fetch(state.filePreview);
       const blob = await resp.blob();
       formData.append('productImage', blob, state.file.name);
       formData.append('description', state.description);
@@ -444,8 +443,8 @@ function MainStudio({ state, dispatch }) {
         <div className="fr-hero-main">
           <h3>Original Product Image <span>Uploaded</span></h3>
           <div className="fr-product-preview">
-            {state.file ? (
-              <img src={state.file.preview} alt="Product" className="fr-product-img" />
+            {state.filePreview ? (
+              <img src={state.filePreview} alt="Product" className="fr-product-img" />
             ) : (
               <div className="fr-sofa-large" />
             )}
@@ -607,7 +606,8 @@ function TemplatesPanel() {
 
 // ── App State ────────────────────────────────────────────────────
 const initialState = {
-  file: null,
+  file: null,        // File object
+  filePreview: null, // data URL string
   brand: '',
   description: '',
   resolution: '0.5K',
@@ -623,9 +623,9 @@ const initialState = {
 function reducer(state, action) {
   switch (action.type) {
     case 'SET_FILE':
-      return { ...state, file: action.payload, status: 'idle', renderResults: [] };
+      return { ...state, file: action.payload.file, filePreview: action.payload.preview, status: 'idle', renderResults: [] };
     case 'CLEAR_FILE':
-      return { ...state, file: null, status: 'idle', renderResults: [] };
+      return { ...state, file: null, filePreview: null, status: 'idle', renderResults: [] };
     case 'SET_BRAND':
       return { ...state, brand: action.payload };
     case 'SET_DESC':
