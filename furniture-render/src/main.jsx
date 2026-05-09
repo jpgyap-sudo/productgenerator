@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useRef, useEffect, useCallback, useReducer } from 'react';
+import React, { useMemo, useState, useRef, useEffect, useCallback, useReducer, Component } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
   Box, CheckCircle2, ChevronDown, Cloud, Download, Eye, ImagePlus, Pencil,
@@ -744,4 +744,32 @@ function App() {
   );
 }
 
-createRoot(document.getElementById('root')).render(<App />);
+class ErrorBoundary extends Component {
+  constructor(props) {
+    super(props);
+    this.state = { error: null };
+  }
+  static getDerivedStateFromError(error) {
+    return { error };
+  }
+  render() {
+    if (this.state.error) {
+      return (
+        <div style={{ padding: 40, color: '#f4f0e8', fontFamily: 'Inter, sans-serif', background: '#0b0e13', minHeight: '100vh' }}>
+          <h2 style={{ color: '#d3a64f' }}>Render Studio failed to load</h2>
+          <pre style={{ color: '#ff5555', fontSize: 13, whiteSpace: 'pre-wrap' }}>{String(this.state.error)}</pre>
+          <button onClick={() => window.location.reload()} style={{ marginTop: 16, padding: '10px 20px', background: '#d3a64f', border: 0, borderRadius: 8, cursor: 'pointer', fontWeight: 700 }}>
+            Reload
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+createRoot(document.getElementById('root')).render(
+  <ErrorBoundary>
+    <App />
+  </ErrorBoundary>
+);

@@ -2,6 +2,12 @@
 /* All classes prefixed with fr- to avoid conflicts with legacy UI */
 
 /* ── Reset & Base ──────────────────────────────────────────────── */
+html, body {
+  margin: 0;
+  padding: 0;
+  background: #080a0e;
+}
+
 .fr-app * {
   box-sizing: border-box;
 }
