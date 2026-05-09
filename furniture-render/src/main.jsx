@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useRef, useEffect, useCallback } from 'react';
+import React, { useMemo, useState, useRef, useEffect, useCallback, useReducer } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
   Box, CheckCircle2, ChevronDown, Cloud, Download, Eye, ImagePlus, Pencil,
@@ -146,9 +146,17 @@ function Sidebar({ state, dispatch, addToast }) {
       });
       const data = await result.json();
       if (data.error) throw new Error(data.error);
-      addToast('Added to render queue!', 'success');
-      dispatch({ type: 'SET_STATUS', payload: 'queued' });
-      dispatch({ type: 'SET_QUEUE_ID', payload: data.id || data.queueItemId });
+
+      // The /api/render/product endpoint returns outputs directly (synchronous)
+      if (data.outputs && data.outputs.length > 0) {
+        dispatch({ type: 'SET_RENDER_RESULTS', payload: data.outputs });
+        addToast('Render complete!', 'success');
+      } else {
+        // Fallback: poll for results
+        addToast('Added to render queue!', 'success');
+        dispatch({ type: 'SET_STATUS', payload: 'queued' });
+        dispatch({ type: 'SET_QUEUE_ID', payload: data.id || data.queueItemId });
+      }
     } catch (err) {
       addToast(`Failed: ${err.message}`, 'error');
       dispatch({ type: 'SET_STATUS', payload: 'idle' });
@@ -293,16 +301,40 @@ function ViewCard({ view, index }) {
   ];
 
   const statusColor = view.status === 'Complete' ? '#65d579'
+    : view.status === 'failed' ? '#ff5555'
     : view.status.includes('Gemini') ? '#b46cff'
     : view.status.includes('Generating') ? '#d3a64f'
     : '#8f97a3';
 
+  const hasImage = !!view.imageUrl;
+
   return (
     <div className="fr-view">
-      <div className="fr-view-img" style={{ background: gradients[index % gradients.length] }}>
-        <div className="fr-mini-sofa" />
-        {view.status.includes('Generating') && (
+      <div
+        className="fr-view-img"
+        style={{
+          background: hasImage ? 'none' : gradients[index % gradients.length],
+          backgroundColor: hasImage ? '#000' : undefined,
+        }}
+      >
+        {hasImage ? (
+          <img
+            src={view.imageUrl}
+            alt={view.title}
+            className="fr-render-img"
+            onError={(e) => {
+              e.target.style.display = 'none';
+              e.target.parentElement.style.background = gradients[index % gradients.length];
+            }}
+          />
+        ) : (
+          <div className="fr-mini-sofa" />
+        )}
+        {(view.status.includes('Generating') || view.status === 'rendering') && (
           <div className="fr-view-spinner"><RefreshCw size={20} className="fr-spin" /></div>
+        )}
+        {view.status === 'failed' && (
+          <div className="fr-view-error"><AlertCircle size={24} /></div>
         )}
       </div>
       <div className="fr-view-meta">
@@ -310,8 +342,16 @@ function ViewCard({ view, index }) {
         <small>{view.tag}</small>
         <span style={{ color: statusColor }}>{view.status}</span>
         <div>
-          <Download size={15} />
-          <Eye size={15} />
+          {hasImage && (
+            <a href={view.imageUrl} download={`${view.title}.png`} style={{ color: 'inherit', display: 'inline-flex' }}>
+              <Download size={15} />
+            </a>
+          )}
+          {hasImage && (
+            <a href={view.imageUrl} target="_blank" rel="noopener noreferrer" style={{ color: 'inherit', display: 'inline-flex' }}>
+              <Eye size={15} />
+            </a>
+          )}
         </div>
       </div>
     </div>
@@ -349,12 +389,35 @@ function PipelineProgress({ currentStep }) {
 
 // ── Main Studio ──────────────────────────────────────────────────
 function MainStudio({ state, dispatch }) {
-  const generatedViews = [
-    { title: 'Front View', status: state.mockMode ? 'Complete' : 'Queued', tag: state.resolution },
-    { title: 'Side View', status: state.mockMode ? 'Generating 42%' : 'Queued', tag: state.resolution },
-    { title: 'Isometric View', status: state.mockMode ? 'Complete' : 'Queued', tag: state.resolution },
-    { title: 'Interior View', status: state.mockMode ? 'Gemini Fix' : 'Queued', tag: state.resolution },
-  ];
+  // Map render results to view cards, handling both API formats:
+  //   /api/render/product returns: { view, status, imageUrl, ... }
+  //   /api/queue/status returns:   { viewId, status, imageUrl, ... }
+  const generatedViews = state.renderResults.length > 0
+    ? state.renderResults.map((r, i) => {
+        const viewIndex = r.viewId ? (r.viewId - 1) : i;
+        const viewLabel = VIEW_TYPES[viewIndex]?.label || `View ${viewIndex + 1}`;
+        const isComplete = r.status === 'done' || r.status === 'generated' || r.status === 'fixed' || r.status === 'fallback';
+        const isFailed = r.status === 'failed' || r.status === 'error';
+        return {
+          title: viewLabel,
+          status: isComplete ? 'Complete' : isFailed ? 'failed' : 'rendering',
+          tag: state.resolution,
+          imageUrl: r.imageUrl || null,
+        };
+      })
+    : state.mockMode
+    ? [
+        { title: 'Front View', status: 'Complete', tag: state.resolution, imageUrl: null },
+        { title: 'Side View', status: 'Generating 42%', tag: state.resolution, imageUrl: null },
+        { title: 'Isometric View', status: 'Complete', tag: state.resolution, imageUrl: null },
+        { title: 'Interior View', status: 'Gemini Fix', tag: state.resolution, imageUrl: null },
+      ]
+    : [
+        { title: 'Front View', status: 'Queued', tag: state.resolution, imageUrl: null },
+        { title: 'Side View', status: 'Queued', tag: state.resolution, imageUrl: null },
+        { title: 'Isometric View', status: 'Queued', tag: state.resolution, imageUrl: null },
+        { title: 'Interior View', status: 'Queued', tag: state.resolution, imageUrl: null },
+      ];
 
   return (
     <main className="fr-studio">
@@ -552,6 +615,7 @@ const initialState = {
   autoQueue: true,
   status: 'idle', // idle | submitting | queued | rendering | done | error
   queueId: null,
+  renderResults: [], // Array of { view, status, imageUrl, qaScore, ... }
   mockMode: true, // Show demo data
   activeTab: 'studio',
 };
@@ -559,9 +623,9 @@ const initialState = {
 function reducer(state, action) {
   switch (action.type) {
     case 'SET_FILE':
-      return { ...state, file: action.payload, status: 'idle' };
+      return { ...state, file: action.payload, status: 'idle', renderResults: [] };
     case 'CLEAR_FILE':
-      return { ...state, file: null, status: 'idle' };
+      return { ...state, file: null, status: 'idle', renderResults: [] };
     case 'SET_BRAND':
       return { ...state, brand: action.payload };
     case 'SET_DESC':
@@ -576,6 +640,8 @@ function reducer(state, action) {
       return { ...state, status: action.payload };
     case 'SET_QUEUE_ID':
       return { ...state, queueId: action.payload };
+    case 'SET_RENDER_RESULTS':
+      return { ...state, renderResults: action.payload, status: 'done' };
     case 'SET_ACTIVE_TAB':
       return { ...state, activeTab: action.payload };
     case 'TOGGLE_MOCK':
@@ -585,10 +651,53 @@ function reducer(state, action) {
   }
 }
 
+// ── Poll for render results ──────────────────────────────────────
+function useRenderPoller(state, dispatch, addToast) {
+  useEffect(() => {
+    if (state.status !== 'queued' || !state.queueId) return;
+
+    const poll = async () => {
+      try {
+        // Use the existing /api/queue/status endpoint with itemId
+        const res = await fetch(`${API_BASE}/api/queue/status?itemId=${state.queueId}`);
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+
+        // Check if render results are available for our item
+        const results = data.renderResults?.[state.queueId];
+        if (results && results.length > 0) {
+          const allDone = results.every(r => r.status === 'done');
+          const anyFailed = results.some(r => r.status === 'error');
+
+          if (allDone) {
+            dispatch({ type: 'SET_RENDER_RESULTS', payload: results });
+            addToast('Render complete!', 'success');
+          } else if (anyFailed && results.every(r => r.status === 'done' || r.status === 'error')) {
+            // Some failed, some done — show what we have
+            dispatch({ type: 'SET_RENDER_RESULTS', payload: results });
+            addToast('Render completed with some errors', 'info');
+          }
+          // else still processing, keep polling
+        }
+      } catch (err) {
+        // Silently retry on next interval
+      }
+    };
+
+    // Poll every 5 seconds
+    const interval = setInterval(poll, 5000);
+    // Also poll immediately
+    poll();
+
+    return () => clearInterval(interval);
+  }, [state.status, state.queueId]);
+}
+
 // ── App ──────────────────────────────────────────────────────────
 function App() {
   const [state, dispatch] = useReducer(reducer, initialState);
   const { toasts, addToast } = useToast();
+  useRenderPoller(state, dispatch, addToast);
 
   const renderContent = () => {
     switch (state.activeTab) {
@@ -621,6 +730,16 @@ function App() {
         {renderContent()}
       </div>
       <ToastContainer toasts={toasts} />
+      {/* Mock mode indicator */}
+      {state.mockMode && (
+        <div
+          className="fr-mock-badge"
+          onClick={() => dispatch({ type: 'TOGGLE_MOCK' })}
+          title="Click to disable mock mode"
+        >
+          MOCK
+        </div>
+      )}
     </div>
   );
 }
