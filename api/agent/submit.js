@@ -42,7 +42,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { name, brand, description, productCode, imageDataUrl, imageName, resolution, provider: requestedProvider } = req.body;
+    const { name, brand, description, productCode, imageDataUrl, imageName, galleryUrl, resolution, provider: requestedProvider } = req.body;
 
     // Validate required fields
     if (!name || !name.trim()) {
@@ -53,42 +53,70 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Product description is required' });
     }
 
-    if (!imageDataUrl) {
-      return res.status(400).json({ error: 'Product image is required' });
+    if (!imageDataUrl && !galleryUrl) {
+      return res.status(400).json({ error: 'Product image is required (provide imageDataUrl or galleryUrl)' });
     }
 
     console.log(`[AGENT-SUBMIT] Submitting: "${name}" (brand: ${brand || 'none'})`);
 
-    // Step 1: Upload image to Supabase Storage
-    console.log('[AGENT-SUBMIT] Uploading image to Supabase Storage...');
+    // ── Duplicate prevention: check if same product name + image name already exists ──
+    const normalizedImageName = (imageName || '').trim();
+    if (normalizedImageName) {
+      const { data: existingItems, error: checkError } = await supabase
+        .from(QUEUE_TABLE)
+        .select('id, name, image_url')
+        .eq('name', name.trim())
+        .filter('image_url', 'ilike', `%${normalizedImageName}%`);
 
-    const imageBuffer = dataUrlToBuffer(imageDataUrl);
-    const mimeType = imageDataUrl.split(';')[0].split(':')[1] || 'image/jpeg';
-    const ext = mimeType.split('/')[1] || 'jpg';
-    const fileName = `agent-uploads/${Date.now()}_${(imageName || 'product').replace(/[^a-zA-Z0-9._-]/g, '_')}`;
-
-    const { data: uploadData, error: uploadError } = await supabase.storage
-      .from('product_images')
-      .upload(fileName, imageBuffer, {
-        contentType: mimeType,
-        upsert: false
-      });
-
-    if (uploadError) {
-      console.error('[AGENT-SUBMIT] Storage upload failed:', uploadError.message);
-      return res.status(500).json({ error: `Failed to upload image: ${uploadError.message}` });
+      if (!checkError && existingItems && existingItems.length > 0) {
+        console.log(`[AGENT-SUBMIT] Duplicate detected: "${name}" with image "${normalizedImageName}" already queued (ID ${existingItems[0].id}). Skipping.`);
+        return res.json({
+          success: true,
+          itemId: existingItems[0].id,
+          queuePosition: 0,
+          duplicate: true,
+          message: `"${name}" is already queued with this image (skipped duplicate)`
+        });
+      }
     }
 
-    // Get public URL
-    const { data: publicUrlData } = supabase.storage
-      .from('product_images')
-      .getPublicUrl(fileName);
+    // ── Step 1: Resolve image URL ──
+    let imageUrl = '';
 
-    const imageUrl = publicUrlData?.publicUrl || '';
+    if (imageDataUrl && imageDataUrl.startsWith('data:')) {
+      // Upload data URL to Supabase Storage
+      console.log('[AGENT-SUBMIT] Uploading image to Supabase Storage...');
 
-    console.log(`[AGENT-SUBMIT] Image uploaded: ${imageUrl}`);
+      const imageBuffer = dataUrlToBuffer(imageDataUrl);
+      const mimeType = imageDataUrl.split(';')[0].split(':')[1] || 'image/jpeg';
+      const ext = mimeType.split('/')[1] || 'jpg';
+      const fileName = `agent-uploads/${Date.now()}_${(imageName || 'product').replace(/[^a-zA-Z0-9._-]/g, '_')}`;
 
-    // Step 2: Create queue item in Supabase
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('product_images')
+        .upload(fileName, imageBuffer, {
+          contentType: mimeType,
+          upsert: false
+        });
+
+      if (uploadError) {
+        console.error('[AGENT-SUBMIT] Storage upload failed:', uploadError.message);
+        return res.status(500).json({ error: `Failed to upload image: ${uploadError.message}` });
+      }
+
+      const { data: publicUrlData } = supabase.storage
+        .from('product_images')
+        .getPublicUrl(fileName);
+
+      imageUrl = publicUrlData?.publicUrl || '';
+      console.log(`[AGENT-SUBMIT] Image uploaded: ${imageUrl}`);
+    } else if (galleryUrl) {
+      // Use gallery URL directly (already on VPS filesystem)
+      imageUrl = galleryUrl;
+      console.log(`[AGENT-SUBMIT] Using gallery URL: ${imageUrl}`);
+    }
+
+    // ── Step 2: Create queue item in Supabase ──
     console.log('[AGENT-SUBMIT] Creating queue item...');
 
     const now = new Date().toISOString();
@@ -123,8 +151,6 @@ export default async function handler(req, res) {
 
     if (queueError) {
       console.error('[AGENT-SUBMIT] Queue insert failed:', queueError.message);
-      // Try to clean up the uploaded image
-      await supabase.storage.from('product_images').remove([fileName]);
       return res.status(500).json({ error: `Failed to create queue item: ${queueError.message}` });
     }
 

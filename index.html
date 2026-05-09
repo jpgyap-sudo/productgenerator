@@ -1591,6 +1591,13 @@ textarea:focus { outline: none; border-color: var(--text-secondary); }
 }
 .btn-dl-all:hover { background: var(--success); color: #fff; }
 .btn-dl-all:disabled { opacity: 0.4; cursor: not-allowed; background: var(--success-bg); color: var(--success); }
+.btn-delete-cr {
+  font-size: 10px; padding: 4px 10px; border-radius: 99px;
+  border: 1px solid var(--border); background: transparent;
+  color: var(--text-dim); cursor: pointer;
+  font-family: inherit; transition: all var(--transition);
+}
+.btn-delete-cr:hover { border-color: var(--error); color: var(--error); background: rgba(239,68,68,0.08); }
 .completed-panel {
   max-width: 1100px;
   margin: 0 auto;
@@ -7772,9 +7779,10 @@ async function saveQueueToSupabase() {
     // Upload images for items that have local dataUrl but no supabaseUrl yet.
     // This includes WAIT items (queued) and ACTIVE items (currently processing)
     // so that images survive a page reload even during active generation.
+    // Items with a galleryUrl (VPS-stored) skip Supabase upload since they're already persisted.
     const uploadPromises = [];
     for (const q of queue) {
-      if (q.dataUrl && !q.supabaseUrl) {
+      if (q.dataUrl && !q.supabaseUrl && !q.galleryUrl) {
         // Check if dataUrl is a local base64 blob (not already a URL)
         if (q.dataUrl.startsWith('data:')) {
           const promise = uploadImageToSupabase(q.id, q.dataUrl).then(url => {
@@ -7798,7 +7806,7 @@ async function saveQueueToSupabase() {
     const queueData = queue.map(q => ({
       id: q.id,
       name: q.name,
-      image_url: q.supabaseUrl || '',
+      image_url: q.supabaseUrl || q.galleryUrl || '',
       status: q.status,
       description: q.desc || '',
       brand: q.brand || '',
@@ -7959,7 +7967,12 @@ async function saveState() {
         hasLocalImage: true,
         status: STATUS.WAIT,
         supabaseUrl: '',
-        desc: p.desc || ''
+        desc: p.desc || '',
+        brand: p.brand || '',
+        driveFolderName: p.driveFolderName || '',
+        galleryUrl: p.galleryUrl || '',
+        provider: p.provider || provider || 'openai',
+        resolution: p.resolution || nb2Res || '1K'
       })),
       nb2Res,
       provider,
@@ -8755,8 +8768,8 @@ function renderQueue() {
     const itemDesc = item.desc || '';
 
     // Show placeholder if item needs re-upload (no image available)
-    const hasImage = item.dataUrl && item.dataUrl.startsWith('data:') || (item.dataUrl && item.dataUrl.startsWith('http'));
-    const thumbSrc = hasImage ? item.dataUrl : '';
+    const hasImage = (item.dataUrl && (item.dataUrl.startsWith('data:') || item.dataUrl.startsWith('http'))) || !!item.galleryUrl;
+    const thumbSrc = hasImage ? (item.dataUrl || item.galleryUrl || '') : '';
     const needsReupload = item.needsReupload || (!hasImage && item.status === STATUS.WAIT);
 
     const div = document.createElement('div');
@@ -8963,8 +8976,9 @@ function renderPendingList() {
     const div = document.createElement('div');
     div.className = 'q-item';
     div.id = `pi-${item.id}`;
+    const thumbSrc = item.dataUrl || item.galleryUrl || '';
     div.innerHTML = `
-      <img class="q-thumb" src="${item.dataUrl}" alt="${item.name}"/>
+      <img class="q-thumb" src="${thumbSrc}" alt="${item.name}"/>
       <div class="q-info">
         <div class="q-name">${escHtml(item.name)}</div>
         <div class="q-desc-wrap">
@@ -10697,6 +10711,7 @@ window.addEventListener('beforeunload', function(e) {
         desc: p.desc || '',
         brand: p.brand || '',
         driveFolderName: p.driveFolderName || '',
+        galleryUrl: p.galleryUrl || '',
         provider: p.provider || provider || 'openai',
         resolution: p.resolution || nb2Res || '1K'
       })),
@@ -11077,13 +11092,15 @@ function initUploadAgent() {
         if (!tile) return;
 
         if (action === 'accept') {
-          agentAcceptedMatches[idx] = { accepted: true, imageName: matches[idx]?.matchedImage?.name, dataUrl: matches[idx]?.matchedImage?.dataUrl || imageMap[matches[idx]?.matchedImage?.name] || '' };
+          const prev = agentAcceptedMatches[idx] || {};
+          agentAcceptedMatches[idx] = { accepted: true, imageName: matches[idx]?.matchedImage?.name, dataUrl: matches[idx]?.matchedImage?.dataUrl || imageMap[matches[idx]?.matchedImage?.name] || '', galleryUrl: prev.galleryUrl || '' };
           tile.querySelectorAll('button').forEach(b => b.classList.remove('primary'));
           tile.querySelector('[data-action="accept"]').classList.add('primary');
           tile.querySelector('[data-action="accept"]').textContent = '✓ Accepted';
           tile.querySelector('[data-action="reject"]').textContent = 'Reject';
         } else {
-          agentAcceptedMatches[idx] = { accepted: false, imageName: matches[idx]?.matchedImage?.name, dataUrl: matches[idx]?.matchedImage?.dataUrl || '' };
+          const prev = agentAcceptedMatches[idx] || {};
+          agentAcceptedMatches[idx] = { accepted: false, imageName: matches[idx]?.matchedImage?.name, dataUrl: matches[idx]?.matchedImage?.dataUrl || '', galleryUrl: prev.galleryUrl || '' };
           tile.querySelectorAll('button').forEach(b => b.classList.remove('primary'));
           tile.querySelector('[data-action="reject"]').classList.add('primary');
           tile.querySelector('[data-action="reject"]').textContent = '✗ Rejected';
@@ -11104,14 +11121,16 @@ function initUploadAgent() {
     if (!match) return;
 
     if (action === 'accept') {
-      agentAcceptedMatches[idx] = { accepted: true, imageName: match.matchedImage?.name, dataUrl: match.matchedImage?.dataUrl };
+      const prev = agentAcceptedMatches[idx] || {};
+      agentAcceptedMatches[idx] = { accepted: true, imageName: match.matchedImage?.name, dataUrl: match.matchedImage?.dataUrl, galleryUrl: prev.galleryUrl || '' };
       const card = agentMatchResults.querySelector(`.agent-match-card[data-match-idx="${idx}"]`);
       if (card) {
         card.querySelector('.accept').classList.add('active');
         card.querySelector('.reject').classList.remove('active');
       }
     } else if (action === 'reject') {
-      agentAcceptedMatches[idx] = { accepted: false, imageName: match.matchedImage?.name, dataUrl: match.matchedImage?.dataUrl };
+      const prev = agentAcceptedMatches[idx] || {};
+      agentAcceptedMatches[idx] = { accepted: false, imageName: match.matchedImage?.name, dataUrl: match.matchedImage?.dataUrl, galleryUrl: prev.galleryUrl || '' };
       const card = agentMatchResults.querySelector(`.agent-match-card[data-match-idx="${idx}"]`);
       if (card) {
         card.querySelector('.reject').classList.add('active');
@@ -11123,7 +11142,8 @@ function initUploadAgent() {
         const currentImage = agentAcceptedMatches[idx]?.imageName || match.matchedImage?.name || '';
         const pickerItems = (images || []).map(img => {
           const selected = img.name === currentImage ? 'selected' : '';
-          return `<img src="${img.dataUrl}" alt="${escapeHtml(img.name)}" class="${selected}" data-img-name="${escapeHtml(img.name)}" data-img-url="${img.dataUrl}"/>`;
+          const galleryUrl = img.galleryUrl || '';
+          return `<img src="${img.dataUrl}" alt="${escapeHtml(img.name)}" class="${selected}" data-img-name="${escapeHtml(img.name)}" data-img-url="${img.dataUrl}" data-gallery-url="${escapeHtml(galleryUrl)}"/>`;
         }).join('');
         picker.innerHTML = pickerItems;
         picker.style.display = 'grid';
@@ -11132,7 +11152,7 @@ function initUploadAgent() {
           pickImg.addEventListener('click', () => {
             picker.querySelectorAll('img').forEach(p => p.classList.remove('selected'));
             pickImg.classList.add('selected');
-            agentAcceptedMatches[idx] = { accepted: true, imageName: pickImg.dataset.imgName, dataUrl: pickImg.dataset.imgUrl };
+            agentAcceptedMatches[idx] = { accepted: true, imageName: pickImg.dataset.imgName, dataUrl: pickImg.dataset.imgUrl, galleryUrl: pickImg.dataset.galleryUrl || '' };
             const card = agentMatchResults.querySelector(`.agent-match-card[data-match-idx="${idx}"]`);
             if (card) {
               const thumb = card.querySelector('.match-thumb');
@@ -11174,7 +11194,8 @@ function initUploadAgent() {
         const matchInfo = agentAcceptedMatches[matchIdx];
         const dataUrl = matchInfo?.dataUrl || '';
         const matchedImageName = matchInfo?.imageName || '';
-        products.push({ name, brand, description, driveFolderName, dataUrl, matchedImageName });
+        const galleryUrl = matchInfo?.galleryUrl || '';
+        products.push({ name, brand, description, driveFolderName, dataUrl, matchedImageName, galleryUrl });
       });
     } else {
       const nameInput = document.getElementById('agentNameManual');
@@ -11187,7 +11208,8 @@ function initUploadAgent() {
         description: descEdit ? descEdit.value.trim() : '',
         driveFolderName: '',
         dataUrl: firstMatch?.dataUrl || '',
-        matchedImageName: firstMatch?.imageName || ''
+        matchedImageName: firstMatch?.imageName || '',
+        galleryUrl: firstMatch?.galleryUrl || ''
       });
     }
     return products;
@@ -11349,13 +11371,18 @@ function initUploadAgent() {
       agentAcceptedMatches = {};
       if (data.matches) {
         const imageMap = {};
-        (agentResultData.allImages || []).forEach(img => { imageMap[img.name] = img.dataUrl; });
+        const galleryMap = {};
+        (agentResultData.allImages || []).forEach(img => {
+          imageMap[img.name] = img.dataUrl;
+          galleryMap[img.name] = img.galleryUrl || '';
+        });
         data.matches.forEach((m, idx) => {
           const imageName = m.matchedImage?.name || '';
           agentAcceptedMatches[idx] = {
             accepted: true,
             imageName,
-            dataUrl: m.matchedImage?.dataUrl || imageMap[imageName] || ''
+            dataUrl: m.matchedImage?.dataUrl || imageMap[imageName] || '',
+            galleryUrl: galleryMap[imageName] || ''
           };
         });
       }
@@ -11408,6 +11435,7 @@ function initUploadAgent() {
         description: p.description,
         imageDataUrl: p.dataUrl || '',
         imageName: p.matchedImageName || '',
+        galleryUrl: p.galleryUrl || '',
         matchScore,
         matchType,
         sourceBatch
@@ -11481,6 +11509,7 @@ function initUploadAgent() {
           id: nextId++,
           name: product.driveFolderName || product.name,
           dataUrl: product.dataUrl,
+          galleryUrl: product.galleryUrl || '',
           desc: product.description,
           brand: product.brand,
           status: STATUS.WAIT,
@@ -11589,6 +11618,7 @@ function initUploadAgent() {
             id: nextId++,
             name: product.driveFolderName || product.name,
             dataUrl: product.dataUrl,
+            galleryUrl: product.galleryUrl || '',
             desc: product.description,
             brand: product.brand,
             status: STATUS.WAIT,
@@ -11647,6 +11677,7 @@ async function saveMatchedImagesGlobal(products, sourceBatch = 'global', sourceP
     description: p.description,
     imageDataUrl: p.dataUrl || '',
     imageName: p.matchedImageName || '',
+    galleryUrl: p.galleryUrl || '',
     matchScore: p.matchScore || 0,
     matchType: p.matchType || '',
     sourceBatch
@@ -11689,6 +11720,11 @@ function initBatchProcessor() {
   let batchResultData = null;
   let batchMatchData = null;
   let batchAcceptedMatches = {};
+  let batchMatchPage = 1;
+  const batchMatchPerPage = 10;
+  let batchMatchTotalPages = 1;
+  let batchMatchAllMatches = [];
+  let batchMatchAllImages = [];
 
   // ── PDF file selection ──
   batchPdfDropZone?.addEventListener('click', () => batchPdfInput?.click());
@@ -11833,18 +11869,37 @@ function initBatchProcessor() {
     if (!matches || !matches.length) {
       batchMatchGrid.innerHTML = '<div style="font-size:13px;color:var(--text-muted);padding:24px;text-align:center;">No matches found. Try adjusting product codes or image filenames.</div>';
       batchSubmitBtn.disabled = true;
+      document.getElementById('batchMatchPagination').style.display = 'none';
       return;
     }
 
-    const imageMap = {};
-    if (images) images.forEach(img => { imageMap[img.name] = img.dataUrl; });
+    // Store full data for pagination
+    batchMatchAllMatches = matches;
+    batchMatchAllImages = images || [];
+    batchMatchTotalPages = Math.ceil(matches.length / batchMatchPerPage);
+    if (batchMatchPage > batchMatchTotalPages) batchMatchPage = batchMatchTotalPages;
+    if (batchMatchPage < 1) batchMatchPage = 1;
 
-    const cards = matches.map((match, idx) => {
+    // Slice for current page
+    const startIdx = (batchMatchPage - 1) * batchMatchPerPage;
+    const pageMatches = matches.slice(startIdx, startIdx + batchMatchPerPage);
+
+    const imageMap = {};
+    const galleryMap = {};
+    if (images) {
+      images.forEach(img => {
+        imageMap[img.name] = img.dataUrl;
+        galleryMap[img.name] = img.galleryUrl || '';
+      });
+    }
+
+    const cards = pageMatches.map((match, pageIdx) => {
+      const globalIdx = startIdx + pageIdx;
       const product = match.product || {};
       const hasMatch = match.matchedImage !== null && match.matchedImage !== undefined;
       const matchedImage = hasMatch ? match.matchedImage : null;
       const score = match.score || 0;
-      const imageDataUrl = hasMatch ? (matchedImage.dataUrl || imageMap[matchedImage.name] || '') : '';
+      const imageDataUrl = hasMatch ? (matchedImage.dataUrl || imageMap[matchedImage.name] || galleryMap[matchedImage.name] || '') : '';
       const productCode = product.generatedCode || '';
 
       let badgeClass = 'low';
@@ -11866,17 +11921,17 @@ function initBatchProcessor() {
 
       // Only auto-accept if score >= 40 AND there's an actual matched image
       const isGoodMatch = score >= 40 && hasMatch;
-      const accepted = batchAcceptedMatches[idx] ? batchAcceptedMatches[idx].accepted : isGoodMatch;
+      const accepted = batchAcceptedMatches[globalIdx] ? batchAcceptedMatches[globalIdx].accepted : isGoodMatch;
 
       const thumbHtml = hasMatch
         ? `<img class="bmc-thumb" src="${escapeHtml(imageDataUrl)}" alt="${escapeHtml(matchedImage.name || '')}" onerror="this.style.opacity='0.3';this.src='';this.alt='Image not found'"/>`
         : `<div class="bmc-thumb" style="display:flex;align-items:center;justify-content:center;background:var(--surface-2);font-size:11px;color:var(--text-muted);text-align:center;padding:4px;">No image matched</div>`;
 
-      return `<div class="batch-match-card" data-batch-idx="${idx}">
+      return `<div class="batch-match-card" data-batch-idx="${globalIdx}">
         <div class="bmc-header">
           ${thumbHtml}
           <div class="bmc-info">
-            <div class="bmc-name">${escapeHtml(product.name || `Product ${idx + 1}`)}</div>
+            <div class="bmc-name">${escapeHtml(product.name || `Product ${globalIdx + 1}`)}</div>
             ${productCode ? `<div class="bmc-code">Code: ${escapeHtml(productCode)}</div>` : ''}
             <div class="bmc-image-name">${hasMatch ? 'Image: ' + escapeHtml(matchedImage.name || '') : 'No matching image found'}</div>
             ${verificationReason}
@@ -11887,11 +11942,11 @@ function initBatchProcessor() {
           </div>
         </div>
         <div class="bmc-actions">
-          <button class="accept ${accepted ? 'active' : ''}" data-batch-idx="${idx}" data-action="accept">✓ Accept</button>
-          <button class="reject ${!accepted ? 'active' : ''}" data-batch-idx="${idx}" data-action="reject">✗ Reject</button>
-          <button class="pick" data-batch-idx="${idx}" data-action="pick">🔄 Pick Different</button>
+          <button class="accept ${accepted ? 'active' : ''}" data-batch-idx="${globalIdx}" data-action="accept">✓ Accept</button>
+          <button class="reject ${!accepted ? 'active' : ''}" data-batch-idx="${globalIdx}" data-action="reject">✗ Reject</button>
+          <button class="pick" data-batch-idx="${globalIdx}" data-action="pick">🔄 Pick Different</button>
         </div>
-        <div class="bmc-picker" id="batchPicker-${idx}" style="display:none;"></div>
+        <div class="bmc-picker" id="batchPicker-${globalIdx}" style="display:none;"></div>
       </div>`;
     }).join('');
 
@@ -11900,10 +11955,32 @@ function initBatchProcessor() {
     batchMatchGrid.querySelectorAll('.bmc-actions button').forEach(btn => {
       btn.addEventListener('click', (e) => {
         const idx = parseInt(btn.dataset.batchIdx, 10);
-        handleBatchMatchAction(idx, btn.dataset.action, matches, images);
+        handleBatchMatchAction(idx, btn.dataset.action, batchMatchAllMatches, batchMatchAllImages);
       });
     });
+
+    // Update pagination controls
+    const paginationEl = document.getElementById('batchMatchPagination');
+    const prevBtn = document.getElementById('bmpPrevBtn');
+    const nextBtn = document.getElementById('bmpNextBtn');
+    const pageInfo = document.getElementById('bmpPageInfo');
+
+    if (batchMatchTotalPages > 1) {
+      paginationEl.style.display = 'flex';
+      pageInfo.textContent = `Page ${batchMatchPage} of ${batchMatchTotalPages} (${matches.length} total)`;
+      prevBtn.disabled = batchMatchPage <= 1;
+      nextBtn.disabled = batchMatchPage >= batchMatchTotalPages;
+    } else {
+      paginationEl.style.display = 'none';
+    }
+
     updateBatchSubmitBtn();
+  }
+
+  // ── Pagination navigation ──
+  function goToBatchMatchPage(page) {
+    batchMatchPage = page;
+    renderBatchMatchGrid(batchMatchAllMatches, batchMatchAllImages);
   }
 
   // ── Handle match card actions ──
@@ -11912,14 +11989,16 @@ function initBatchProcessor() {
     if (!match) return;
 
     if (action === 'accept') {
-      batchAcceptedMatches[idx] = { accepted: true, imageName: match.matchedImage?.name, dataUrl: match.matchedImage?.dataUrl };
+      const prev = batchAcceptedMatches[idx] || {};
+      batchAcceptedMatches[idx] = { accepted: true, imageName: match.matchedImage?.name, dataUrl: match.matchedImage?.dataUrl, galleryUrl: prev.galleryUrl || '' };
       const card = batchMatchGrid.querySelector(`.batch-match-card[data-batch-idx="${idx}"]`);
       if (card) {
         card.querySelector('.accept').classList.add('active');
         card.querySelector('.reject').classList.remove('active');
       }
     } else if (action === 'reject') {
-      batchAcceptedMatches[idx] = { accepted: false, imageName: match.matchedImage?.name, dataUrl: match.matchedImage?.dataUrl };
+      const prev = batchAcceptedMatches[idx] || {};
+      batchAcceptedMatches[idx] = { accepted: false, imageName: match.matchedImage?.name, dataUrl: match.matchedImage?.dataUrl, galleryUrl: prev.galleryUrl || '' };
       const card = batchMatchGrid.querySelector(`.batch-match-card[data-batch-idx="${idx}"]`);
       if (card) {
         card.querySelector('.reject').classList.add('active');
@@ -11931,7 +12010,8 @@ function initBatchProcessor() {
         const currentImage = batchAcceptedMatches[idx]?.imageName || match.matchedImage?.name || '';
         const pickerItems = (images || []).map(img => {
           const selected = img.name === currentImage ? 'selected' : '';
-          return `<img src="${img.dataUrl}" alt="${escapeHtml(img.name)}" class="${selected}" data-img-name="${escapeHtml(img.name)}" data-img-url="${img.dataUrl}"/>`;
+          const galleryUrl = img.galleryUrl || '';
+          return `<img src="${img.dataUrl}" alt="${escapeHtml(img.name)}" class="${selected}" data-img-name="${escapeHtml(img.name)}" data-img-url="${img.dataUrl}" data-gallery-url="${escapeHtml(galleryUrl)}"/>`;
         }).join('');
         picker.innerHTML = pickerItems;
         picker.style.display = 'grid';
@@ -11940,7 +12020,7 @@ function initBatchProcessor() {
           pickImg.addEventListener('click', () => {
             picker.querySelectorAll('img').forEach(p => p.classList.remove('selected'));
             pickImg.classList.add('selected');
-            batchAcceptedMatches[idx] = { accepted: true, imageName: pickImg.dataset.imgName, dataUrl: pickImg.dataset.imgUrl };
+            batchAcceptedMatches[idx] = { accepted: true, imageName: pickImg.dataset.imgName, dataUrl: pickImg.dataset.imgUrl, galleryUrl: pickImg.dataset.galleryUrl || '' };
             const card = batchMatchGrid.querySelector(`.batch-match-card[data-batch-idx="${idx}"]`);
             if (card) {
               const thumb = card.querySelector('.bmc-thumb');
@@ -11981,7 +12061,8 @@ function initBatchProcessor() {
       const matchInfo = batchAcceptedMatches[matchIdx];
       const dataUrl = matchInfo?.dataUrl || '';
       const matchedImageName = matchInfo?.imageName || '';
-      products.push({ name, brand, description, driveFolderName, dataUrl, matchedImageName });
+      const galleryUrl = matchInfo?.galleryUrl || '';
+      products.push({ name, brand, description, driveFolderName, dataUrl, matchedImageName, galleryUrl });
     });
     return products;
   }
@@ -12126,17 +12207,23 @@ function initBatchProcessor() {
         throw new Error(data.error || 'Matching failed');
       }
 
-      // Reset accepted matches — each product gets its OWN image
+      // Reset pagination and accepted matches
+      batchMatchPage = 1;
       batchAcceptedMatches = {};
       if (data.matches) {
         const imageMap = {};
-        (batchResultData.allImages || []).forEach(img => { imageMap[img.name] = img.dataUrl; });
+        const galleryMap = {};
+        (batchResultData.allImages || []).forEach(img => {
+          imageMap[img.name] = img.dataUrl;
+          galleryMap[img.name] = img.galleryUrl || '';
+        });
         data.matches.forEach((m, idx) => {
           const imageName = m.matchedImage?.name || '';
           batchAcceptedMatches[idx] = {
             accepted: true,
             imageName,
-            dataUrl: m.matchedImage?.dataUrl || imageMap[imageName] || ''
+            dataUrl: m.matchedImage?.dataUrl || imageMap[imageName] || '',
+            galleryUrl: galleryMap[imageName] || ''
           };
         });
       }
@@ -12172,6 +12259,14 @@ function initBatchProcessor() {
   batchBackBtn?.addEventListener('click', () => {
     batchStep2.style.display = 'block';
     batchStep3.style.display = 'none';
+  });
+
+  // ── Pagination controls ──
+  document.getElementById('bmpPrevBtn')?.addEventListener('click', () => {
+    if (batchMatchPage > 1) goToBatchMatchPage(batchMatchPage - 1);
+  });
+  document.getElementById('bmpNextBtn')?.addEventListener('click', () => {
+    if (batchMatchPage < batchMatchTotalPages) goToBatchMatchPage(batchMatchPage + 1);
   });
 
   // ── Submit button: save matched pairs to DB first, then add to pendingItems ──
@@ -12220,6 +12315,7 @@ function initBatchProcessor() {
           id: nextId++,
           name: product.driveFolderName || product.name,
           dataUrl: product.dataUrl, // Each product has its own image
+          galleryUrl: product.galleryUrl || '',
           desc: product.description,
           brand: product.brand,
           status: STATUS.WAIT,

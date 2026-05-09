@@ -43,6 +43,8 @@ import agentSaveMatchedHandler from './api/agent/save-matched.js';
 import agentMatchedImagesHandler from './api/agent/matched-images.js';
 import agentSaveMatchedPermanentHandler from './api/agent/save-matched-permanent.js';
 import agentMatchedImagesPermanentHandler from './api/agent/matched-images-permanent.js';
+import agentUploadGalleryHandler from './api/agent/upload-gallery.js';
+import { startGalleryCleanup } from './lib/upload-gallery.js';
 import renderProductHandler from './api/render/product.js';
 import renderQueueRoutes from './api/render-queue/index.js';
 import monitorHandler from './api/monitor.js';
@@ -219,6 +221,17 @@ app.get('/api/agent/matched-images-permanent', async (req, res) => {
     if (!res.headersSent) res.json(result);
   } catch (err) {
     console.error('[MATCHED-IMAGES-PERMANENT] Error:', err);
+    if (!res.headersSent) res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Upload Gallery Routes ──
+app.all('/api/agent/upload-gallery', async (req, res) => {
+  try {
+    const result = await agentUploadGalleryHandler(req, res);
+    if (!res.headersSent) res.json(result);
+  } catch (err) {
+    console.error('[UPLOAD-GALLERY] Error:', err);
     if (!res.headersSent) res.status(500).json({ error: err.message });
   }
 });
@@ -1145,4 +1158,12 @@ app.listen(PORT, '0.0.0.0', () => {
     console.error('[SERVER] Worker loop crashed:', err);
     process.exit(1);
   });
+
+  // Start upload gallery cleanup (runs every hour, deletes images >48h old)
+  startGalleryCleanup(async () => {
+    // Protected batches: none by default; could be extended to check
+    // completed batches or matched-images references
+    return new Set();
+  });
+  console.log('[SERVER] Upload gallery cleanup scheduled (every 60 min)');
 });

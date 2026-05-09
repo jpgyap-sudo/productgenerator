@@ -11,6 +11,7 @@ import multer from 'multer';
 import { extractTextFromPDF } from '../../lib/pdf-extractor.js';
 import { extractAllImagesFromZip } from '../../lib/zip-extractor.js';
 import { extractProductInfo } from '../../lib/deepseek.js';
+import { saveImagesToGallery } from '../../lib/upload-gallery.js';
 
 // Multer config — store files in memory
 const upload = multer({
@@ -111,6 +112,24 @@ export default async function handler(req, res) {
 
     console.log(`[AGENT] ZIP images extracted: ${zipResult.totalImages} images found, returning ${zipResult.images.length} for preview`);
 
+    // Step 1b: Save images to VPS upload gallery for persistent access
+    // This ensures images survive the matchmaking flow (dataUrls are stripped by match.js)
+    const batchId = `batch_${Date.now()}`;
+    try {
+      const galleryImages = await saveImagesToGallery(zipResult.images, batchId);
+      // Attach gallery URLs to each image for server-side resolution
+      const urlMap = {};
+      galleryImages.forEach(gi => { urlMap[gi.name] = gi.url; });
+      zipResult.images.forEach(img => {
+        img.galleryUrl = urlMap[img.name] || '';
+      });
+      zipResult.batchId = batchId;
+      console.log(`[AGENT] Saved ${galleryImages.length} images to gallery (batch: ${batchId})`);
+    } catch (galleryErr) {
+      console.warn('[AGENT] Gallery save failed (non-fatal):', galleryErr.message);
+      // Continue with dataUrls only — gallery is optional for preview
+    }
+
     // Step 2: Extract text from PDF
     console.log('[AGENT] Step 2: Extracting PDF text...');
     let pdfResult = { text: '', pages: 0 };
@@ -191,7 +210,8 @@ export default async function handler(req, res) {
       products,
       allImages: zipResult.images,
       rawText,
-      totalImages: zipResult.totalImages
+      totalImages: zipResult.totalImages,
+      batchId: zipResult.batchId || ''
     });
 
   } catch (err) {

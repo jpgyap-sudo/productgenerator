@@ -75,10 +75,27 @@ export default async function handler(req, res) {
         continue;
       }
 
+      // ── Duplicate prevention: check if same product + image name already saved ──
+      const normalizedImageName = (m.imageName || '').trim();
+      if (normalizedImageName) {
+        const { data: existingRows, error: dupCheckError } = await supabase
+          .from(MATCHED_IMAGES_TABLE)
+          .select('id, image_url')
+          .eq('product_name', m.productName)
+          .eq('image_name', normalizedImageName);
+
+        if (!dupCheckError && existingRows && existingRows.length > 0) {
+          console.log(`[SAVE-MATCHED] Duplicate skipped: "${m.productName}" ↔ "${normalizedImageName}" (already ID ${existingRows[0].id}, using existing image)`);
+          savedIds.push(existingRows[0].id);
+          continue;
+        }
+      }
+
       let imageUrl = '';
       let imageDataUrl = m.imageDataUrl || '';
+      const galleryUrl = m.galleryUrl || '';
 
-      // Upload image to Supabase Storage if we have a data URL
+      // Resolve image: prefer data URL upload, fall back to gallery URL
       if (imageDataUrl && imageDataUrl.startsWith('data:')) {
         try {
           const imageBuffer = dataUrlToBuffer(imageDataUrl);
@@ -95,7 +112,11 @@ export default async function handler(req, res) {
 
           if (uploadError) {
             console.warn(`[SAVE-MATCHED] Storage upload failed for index ${i}: ${uploadError.message}`);
-            // Continue with data URL only
+            // Fall back to gallery URL if available
+            if (galleryUrl) {
+              imageUrl = galleryUrl;
+              console.log(`[SAVE-MATCHED] Using gallery URL fallback for index ${i}: ${galleryUrl}`);
+            }
           } else {
             const { data: publicUrlData } = supabase.storage
               .from(BUCKET_NAME)
@@ -104,8 +125,15 @@ export default async function handler(req, res) {
           }
         } catch (uploadErr) {
           console.warn(`[SAVE-MATCHED] Storage upload error for index ${i}: ${uploadErr.message}`);
-          // Continue with data URL only
+          // Fall back to gallery URL if available
+          if (galleryUrl) {
+            imageUrl = galleryUrl;
+          }
         }
+      } else if (galleryUrl) {
+        // No data URL but gallery URL available — use it directly
+        imageUrl = galleryUrl;
+        console.log(`[SAVE-MATCHED] Using gallery URL for index ${i}: ${galleryUrl}`);
       }
 
       // Insert into matched_images table
