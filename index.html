@@ -10968,8 +10968,9 @@ function initUploadAgent() {
     agentImageCount.textContent = `(${images.length})`;
     const items = images.map((img, idx) => {
       const label = img.name || `img-${idx}`;
+      const imgSrc = img.dataUrl || img.galleryUrl || '';
       return `<div class="agent-image-gallery-item" data-img-idx="${idx}" title="${escapeHtml(label)}">
-        <img src="${img.dataUrl}" alt="${escapeHtml(label)}" loading="lazy"/>
+        <img src="${escapeHtml(imgSrc)}" alt="${escapeHtml(label)}" loading="lazy" onerror="this.style.opacity='0.3';this.src='';this.alt='Image not found'"/>
         <span class="gallery-label">${escapeHtml(label)}</span>
       </div>`;
     }).join('');
@@ -10985,7 +10986,13 @@ function initUploadAgent() {
     }
 
     const imageMap = {};
-    if (images) images.forEach(img => { imageMap[img.name] = img.dataUrl; });
+    const galleryMap = {};
+    if (images) {
+      images.forEach(img => {
+        imageMap[img.name] = img.dataUrl;
+        galleryMap[img.name] = img.galleryUrl || '';
+      });
+    }
 
     // ── Render sidebar cards (existing) ──
     const cards = matches.map((match, idx) => {
@@ -10993,7 +11000,7 @@ function initUploadAgent() {
       const matchedImage = match.matchedImage || {};
       const score = match.score || 0;
       const verified = match.verification;
-      const imageDataUrl = matchedImage.dataUrl || imageMap[matchedImage.name] || '';
+      const imageDataUrl = matchedImage.dataUrl || imageMap[matchedImage.name] || galleryMap[matchedImage.name] || '';
       const productCode = product.generatedCode || '';
 
       let badgeClass = 'low';
@@ -11013,7 +11020,7 @@ function initUploadAgent() {
 
       return `<div class="agent-match-card" data-match-idx="${idx}">
         <div class="agent-match-card-header">
-          <img class="match-thumb" src="${escapeHtml(imageDataUrl)}" alt="${escapeHtml(matchedImage.name || '')}" onerror="this.style.display='none'"/>
+          <img class="match-thumb" src="${escapeHtml(imageDataUrl)}" alt="${escapeHtml(matchedImage.name || '')}" onerror="this.style.opacity='0.3';this.src='';this.alt='Image not found'"/>
           <div class="match-info">
             <div class="match-name">${escapeHtml(product.name || `Product ${idx + 1}`)}</div>
             ${productCode ? `<div class="match-code">Code: ${escapeHtml(productCode)}</div>` : ''}
@@ -11051,7 +11058,7 @@ function initUploadAgent() {
       const product = match.product || {};
       const matchedImage = match.matchedImage || {};
       const score = match.score || 0;
-      const imageDataUrl = matchedImage.dataUrl || imageMap[matchedImage.name] || '';
+      const imageDataUrl = matchedImage.dataUrl || imageMap[matchedImage.name] || galleryMap[matchedImage.name] || '';
       const productCode = product.generatedCode || '';
       const productName = product.name || `Product ${idx + 1}`;
       const productBrand = product.brand || '';
@@ -11067,7 +11074,7 @@ function initUploadAgent() {
 
       return `<div class="bulk-match-tile" data-tile-idx="${idx}">
         <div class="bulk-match-tile-img-wrap">
-          <img src="${escapeHtml(imageDataUrl)}" alt="${escapeHtml(matchedImage.name || '')}" onerror="this.style.display='none'"/>
+          <img src="${escapeHtml(imageDataUrl)}" alt="${escapeHtml(matchedImage.name || '')}" onerror="this.style.opacity='0.3';this.src='';this.alt='Image not found'"/>
           <span class="bulk-match-tile-badge ${badgeClass}">${badgeLabel}</span>
         </div>
         <div class="bulk-match-tile-body">
@@ -11107,14 +11114,14 @@ function initUploadAgent() {
 
         if (action === 'accept') {
           const prev = agentAcceptedMatches[idx] || {};
-          agentAcceptedMatches[idx] = { accepted: true, imageName: matches[idx]?.matchedImage?.name, dataUrl: matches[idx]?.matchedImage?.dataUrl || imageMap[matches[idx]?.matchedImage?.name] || '', galleryUrl: prev.galleryUrl || '' };
+          agentAcceptedMatches[idx] = { accepted: true, imageName: matches[idx]?.matchedImage?.name, dataUrl: matches[idx]?.matchedImage?.dataUrl || imageMap[matches[idx]?.matchedImage?.name] || galleryMap[matches[idx]?.matchedImage?.name] || '', galleryUrl: prev.galleryUrl || galleryMap[matches[idx]?.matchedImage?.name] || '' };
           tile.querySelectorAll('button').forEach(b => b.classList.remove('primary'));
           tile.querySelector('[data-action="accept"]').classList.add('primary');
           tile.querySelector('[data-action="accept"]').textContent = '✓ Accepted';
           tile.querySelector('[data-action="reject"]').textContent = 'Reject';
         } else {
           const prev = agentAcceptedMatches[idx] || {};
-          agentAcceptedMatches[idx] = { accepted: false, imageName: matches[idx]?.matchedImage?.name, dataUrl: matches[idx]?.matchedImage?.dataUrl || '', galleryUrl: prev.galleryUrl || '' };
+          agentAcceptedMatches[idx] = { accepted: false, imageName: matches[idx]?.matchedImage?.name, dataUrl: matches[idx]?.matchedImage?.dataUrl || imageMap[matches[idx]?.matchedImage?.name] || '', galleryUrl: prev.galleryUrl || galleryMap[matches[idx]?.matchedImage?.name] || '' };
           tile.querySelectorAll('button').forEach(b => b.classList.remove('primary'));
           tile.querySelector('[data-action="reject"]').classList.add('primary');
           tile.querySelector('[data-action="reject"]').textContent = '✗ Rejected';
@@ -11134,9 +11141,22 @@ function initUploadAgent() {
     const match = matches[idx];
     if (!match) return;
 
+    // Build lookup maps from the images array (dataUrl is stripped from match response)
+    const imgMap = {};
+    const galMap = {};
+    if (images) {
+      images.forEach(img => {
+        imgMap[img.name] = img.dataUrl;
+        galMap[img.name] = img.galleryUrl || '';
+      });
+    }
+    const imageName = match.matchedImage?.name || '';
+    const resolvedDataUrl = match.matchedImage?.dataUrl || imgMap[imageName] || '';
+    const resolvedGalleryUrl = galMap[imageName] || '';
+
     if (action === 'accept') {
       const prev = agentAcceptedMatches[idx] || {};
-      agentAcceptedMatches[idx] = { accepted: true, imageName: match.matchedImage?.name, dataUrl: match.matchedImage?.dataUrl, galleryUrl: prev.galleryUrl || '' };
+      agentAcceptedMatches[idx] = { accepted: true, imageName, dataUrl: resolvedDataUrl, galleryUrl: prev.galleryUrl || resolvedGalleryUrl };
       const card = agentMatchResults.querySelector(`.agent-match-card[data-match-idx="${idx}"]`);
       if (card) {
         card.querySelector('.accept').classList.add('active');
@@ -11144,7 +11164,7 @@ function initUploadAgent() {
       }
     } else if (action === 'reject') {
       const prev = agentAcceptedMatches[idx] || {};
-      agentAcceptedMatches[idx] = { accepted: false, imageName: match.matchedImage?.name, dataUrl: match.matchedImage?.dataUrl, galleryUrl: prev.galleryUrl || '' };
+      agentAcceptedMatches[idx] = { accepted: false, imageName, dataUrl: resolvedDataUrl, galleryUrl: prev.galleryUrl || resolvedGalleryUrl };
       const card = agentMatchResults.querySelector(`.agent-match-card[data-match-idx="${idx}"]`);
       if (card) {
         card.querySelector('.reject').classList.add('active');
@@ -11870,8 +11890,9 @@ function initBatchProcessor() {
     batchImageCount.textContent = `(${images.length})`;
     const items = images.map((img, idx) => {
       const label = img.name || `img-${idx}`;
+      const imgSrc = img.dataUrl || img.galleryUrl || '';
       return `<div class="batch-image-gallery-item" title="${escapeHtml(label)}">
-        <img src="${img.dataUrl}" alt="${escapeHtml(label)}" loading="lazy"/>
+        <img src="${escapeHtml(imgSrc)}" alt="${escapeHtml(label)}" loading="lazy" onerror="this.style.opacity='0.3';this.src='';this.alt='Image not found'"/>
         <span class="big-label">${escapeHtml(label)}</span>
       </div>`;
     }).join('');
@@ -12002,9 +12023,22 @@ function initBatchProcessor() {
     const match = matches[idx];
     if (!match) return;
 
+    // Build lookup maps from the images array (dataUrl is stripped from match response)
+    const imgMap = {};
+    const galMap = {};
+    if (images) {
+      images.forEach(img => {
+        imgMap[img.name] = img.dataUrl;
+        galMap[img.name] = img.galleryUrl || '';
+      });
+    }
+    const imageName = match.matchedImage?.name || '';
+    const resolvedDataUrl = match.matchedImage?.dataUrl || imgMap[imageName] || '';
+    const resolvedGalleryUrl = galMap[imageName] || '';
+
     if (action === 'accept') {
       const prev = batchAcceptedMatches[idx] || {};
-      batchAcceptedMatches[idx] = { accepted: true, imageName: match.matchedImage?.name, dataUrl: match.matchedImage?.dataUrl, galleryUrl: prev.galleryUrl || '' };
+      batchAcceptedMatches[idx] = { accepted: true, imageName, dataUrl: resolvedDataUrl, galleryUrl: prev.galleryUrl || resolvedGalleryUrl };
       const card = batchMatchGrid.querySelector(`.batch-match-card[data-batch-idx="${idx}"]`);
       if (card) {
         card.querySelector('.accept').classList.add('active');
@@ -12012,7 +12046,7 @@ function initBatchProcessor() {
       }
     } else if (action === 'reject') {
       const prev = batchAcceptedMatches[idx] || {};
-      batchAcceptedMatches[idx] = { accepted: false, imageName: match.matchedImage?.name, dataUrl: match.matchedImage?.dataUrl, galleryUrl: prev.galleryUrl || '' };
+      batchAcceptedMatches[idx] = { accepted: false, imageName, dataUrl: resolvedDataUrl, galleryUrl: prev.galleryUrl || resolvedGalleryUrl };
       const card = batchMatchGrid.querySelector(`.batch-match-card[data-batch-idx="${idx}"]`);
       if (card) {
         card.querySelector('.reject').classList.add('active');
