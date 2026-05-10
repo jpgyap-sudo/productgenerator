@@ -21,11 +21,13 @@ const VIEW_TYPES = [
   { id: 4, label: 'Interior View', key: 'interior' },
 ];
 
+// Prices are per-image estimates based on gpt-image-1 medium quality OpenAI pricing.
+// 0.5K and 1K both use 1024×1024 in the API (same cost); 2K/4K use 1536px.
 const RESOLUTIONS = [
-  { label: '0.5K', price: 0.06, value: '0.5K' },
-  { label: '1K', price: 0.08, value: '1K' },
-  { label: '2K', price: 0.12, value: '2K' },
-  { label: '4K', price: 0.16, value: '4K' },
+  { label: '0.5K', price: 0.042, value: '0.5K' },
+  { label: '1K', price: 0.042, value: '1K' },
+  { label: '2K', price: 0.080, value: '2K' },
+  { label: '4K', price: 0.167, value: '4K' },
 ];
 
 const PIPELINES = [
@@ -303,7 +305,7 @@ function Sidebar({ state, dispatch, addToast }) {
           )}
         </button>
         <p>
-          Est. cost: <strong style={{ color: '#d3a64f' }}>${(RESOLUTIONS.find(r => r.value === state.resolution)?.price || 0.06) * 4}</strong>
+          Est. cost: <strong style={{ color: '#d3a64f' }}>${((RESOLUTIONS.find(r => r.value === state.resolution)?.price || 0.042) * 4).toFixed(2)}</strong>
           {' · '}Est. time: <strong>{EST_TIME[state.pipeline]?.[state.resolution] || '~1m 30s'}</strong>
         </p>
       </div>
@@ -440,14 +442,15 @@ function ViewCard({ view, index }) {
 }
 
 // ── Pipeline Progress ────────────────────────────────────────────
+// Steps reflect the real pipeline: Upload → GPT render → QA → Gemini fix → Done
+// Upscale/Delivery are removed — they don't exist in the actual pipeline.
 function PipelineProgress({ currentStep }) {
   const steps = [
-    { label: 'Uploaded', time: '12:01 PM', icon: CheckCircle2 },
-    { label: 'GPT Mini', sub: 'Rendering', icon: Sparkles },
-    { label: 'QA Check', sub: 'Passed', icon: CheckCircle2 },
-    { label: 'Gemini Fix', sub: 'Repairing', icon: Wand2 },
-    { label: 'Upscale', sub: 'Queued', icon: Clock },
-    { label: 'Delivery', sub: 'Pending', icon: Cloud },
+    { label: 'Uploaded',   icon: CheckCircle2, done: 'Uploaded', active: 'Uploading', idle: 'Waiting' },
+    { label: 'GPT Render', icon: Sparkles,     done: 'Done',     active: 'Rendering', idle: 'Pending' },
+    { label: 'QA Check',   icon: ShieldCheck,  done: 'Passed',   active: 'Checking',  idle: 'Pending' },
+    { label: 'Gemini Fix', icon: Wand2,        done: 'Applied',  active: 'Repairing', idle: 'Pending' },
+    { label: 'Complete',   icon: CheckCircle2, done: 'Ready',    active: 'Saving',    idle: 'Pending' },
   ];
 
   return (
@@ -456,11 +459,12 @@ function PipelineProgress({ currentStep }) {
         const Icon = s.icon;
         const isActive = i <= currentStep;
         const isCurrent = i === currentStep;
+        const sub = currentStep < 0 ? s.idle : isActive && !isCurrent ? s.done : isCurrent ? s.active : s.idle;
         return (
           <div key={s.label} className={`fr-step ${isActive ? 'fr-active' : ''} ${isCurrent ? 'fr-current' : ''}`}>
             <span><Icon size={18} /></span>
             <b>{s.label}</b>
-            <small>{s.sub || s.time}</small>
+            <small>{sub}</small>
           </div>
         );
       })}
@@ -651,7 +655,7 @@ function MainStudio({ state, dispatch }) {
           <p><span>Views</span><b>{state.renderResults.length > 0 ? `${doneCount}/${totalCount} done` : '4 planned'}</b></p>
           <p><span>Pipeline</span><b>{PIPELINES.find(p => p.id === state.pipeline)?.label || 'GPT Mini'}</b></p>
           <hr />
-          <p><span>Estimated Cost</span><strong style={{ color: '#d3a64f' }}>${((RESOLUTIONS.find(r => r.value === state.resolution)?.price || 0.06) * 4).toFixed(2)}</strong></p>
+          <p><span>Estimated Cost</span><strong style={{ color: '#d3a64f' }}>${((RESOLUTIONS.find(r => r.value === state.resolution)?.price || 0.042) * 4).toFixed(2)}</strong></p>
           <p><span>Estimated Time</span><strong>{EST_TIME[state.pipeline]?.[state.resolution] || '~1m 30s'}</strong></p>
         </div>
       </section>
@@ -661,14 +665,36 @@ function MainStudio({ state, dispatch }) {
 
 // ── Right Panel ──────────────────────────────────────────────────
 function RightPanel({ state, dispatch }) {
-  const activity = [
+  // Build real activity from render results when available
+  const hasResults = state.renderResults.length > 0;
+  const doneViews = state.renderResults.filter(r =>
+    r.status === 'done' || r.status === 'generated' || r.status === 'fixed' || r.status === 'fallback'
+  );
+  const failedViews = state.renderResults.filter(r => r.status === 'failed' || r.status === 'error');
+
+  const realActivity = hasResults ? [
+    ...(failedViews.length > 0 ? [['Now', 'Result', `${failedViews.length} view(s) failed — Gemini quota or API error`, 'red']] : []),
+    ...(doneViews.length > 0 ? [['Now', 'GPT Render', `${doneViews.length}/4 views generated successfully`, 'green']] : []),
+    state.file ? ['Earlier', 'Upload', `${state.file.name} uploaded`, 'gold'] : null,
+  ].filter(Boolean) : [];
+
+  const demoActivity = [
     ['12:04 PM', 'Gemini Flash', 'Repairing interior view geometry & lighting', 'purple'],
     ['12:03 PM', 'QA Check', 'Passed — no major issues detected', 'green'],
     ['12:02 PM', 'GPT Mini', 'Rendering completed, 4 views generated', 'green'],
     ['12:01 PM', 'Upload', `${state.file?.name || 'product.png'} uploaded`, 'gold'],
   ];
 
-  const activityIcons = { green: CheckCircle2, gold: Upload, purple: Wand2 };
+  const activity = hasResults ? realActivity : (state.mockMode ? demoActivity : []);
+  const activityIcons = { green: CheckCircle2, gold: Upload, purple: Wand2, red: AlertCircle };
+
+  const queueStatus = state.status === 'done'
+    ? <span className="fr-chip-success" style={{ fontSize: 11 }}>Complete</span>
+    : state.status === 'rendering' || state.status === 'queued'
+    ? <span className="fr-status-rendering">Rendering</span>
+    : state.status === 'submitting'
+    ? <span className="fr-status-rendering">Submitting</span>
+    : <span style={{ color: '#8e96a3', fontSize: 12 }}>Idle</span>;
 
   return (
     <aside className="fr-right-panel">
@@ -679,45 +705,44 @@ function RightPanel({ state, dispatch }) {
             View all
           </button>
         </h3>
-        <div className="fr-queue-item">
-          <div className="fr-thumb">
-            {state.filePreview ? (
-              <img src={state.filePreview} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-            ) : (
-              <div className="fr-sofa" />
-            )}
+        {state.file ? (
+          <div className="fr-queue-item">
+            <div className="fr-thumb">
+              {state.filePreview ? (
+                <img src={state.filePreview} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              ) : (
+                <div className="fr-sofa" />
+              )}
+            </div>
+            <div>
+              <b>{state.file.name.replace(/\.[^/.]+$/, '')}</b>
+              <p>{state.renderResults.length > 0 ? `${doneViews.length}/${state.renderResults.length} views` : `4 views`} · {state.resolution}</p>
+              {queueStatus}
+            </div>
           </div>
-          <div>
-            <b>{state.file?.name?.replace(/\.[^/.]+$/, '') || 'Product'}</b>
-            <p>4 views · {state.resolution}</p>
-            <span className="fr-status-rendering">Rendering 42%</span>
-          </div>
-        </div>
-        <div className="fr-queue-item">
-          <div className="fr-thumb fr-chair" />
-          <div>
-            <b>Next in Queue</b>
-            <p>4 views · 1K</p>
-            <span className="fr-gold-text">Queued</span>
-          </div>
-        </div>
+        ) : (
+          <div style={{ color: '#8e96a3', fontSize: 13, padding: '12px 0' }}>No product loaded</div>
+        )}
       </section>
       <section>
         <h3>
           <Info size={14} /> Activity Log
+          {!hasResults && state.mockMode && <span className="fr-demo-label">DEMO</span>}
         </h3>
-        {activity.map(([t, n, d, c]) => {
+        {activity.length > 0 ? activity.map(([t, n, d, c]) => {
           const ActIcon = activityIcons[c] || Info;
           return (
             <div className="fr-log" key={t + n}>
               <time>{t}</time>
-              <div className={`fr-${c}`}>
+              <div className={`fr-${c === 'red' ? 'red-dot' : c}`}>
                 <ActIcon size={8} style={{ color: c === 'gold' ? '#17140d' : '#fff' }} />
               </div>
               <p><b>{n}</b><span>{d}</span></p>
             </div>
           );
-        })}
+        }) : (
+          <div style={{ color: '#8e96a3', fontSize: 13 }}>No activity yet.</div>
+        )}
       </section>
     </aside>
   );

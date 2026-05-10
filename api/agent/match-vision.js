@@ -1,22 +1,24 @@
 // ═══════════════════════════════════════════════════════════════════
 //  api/agent/match-vision.js — POST /api/agent/match-vision
-//  Vision-based product-image matching using OpenAI Vision.
+//  GPT-4o Vision direct image-to-image product matching.
 //
-//  Takes PDF product rows + ZIP images, creates visual fingerprints
-//  for each image, then ranks top 3 candidates per product.
+//  Takes PDF product rows + ZIP images + PDF page images, sends the
+//  PDF product image alongside ZIP candidates to GPT-4o for TRUE
+//  visual image-to-image comparison.
 //
 //  Request body:
 //    {
 //      products: [{ name, brand, productCode, category, material, color,
 //                   dimensions, description, page }],
-//      images: [{ name, dataUrl, width, height }]
+//      images: [{ name, dataUrl, width, height }],
+//      pdfImages: [{ page, dataUrl, width, height }]  // optional PDF page images
 //    }
 //
 //  Response:
 //    {
 //      success: true,
 //      matches: [{ productIndex, product, bestMatch, secondMatch,
-//                  thirdMatch, overallConfidence, autoAccept }],
+//                  thirdMatch, overallConfidence, autoAccept, usedPdfImage }],
 //      stats: { totalProducts, totalImages, fingerprintsCreated,
 //               autoAccepted, needsReview }
 //    }
@@ -41,7 +43,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { products, images } = req.body;
+    const { products, images, pdfImages } = req.body;
 
     if (!products || !Array.isArray(products) || products.length === 0) {
       return res.status(400).json({ error: 'products array is required' });
@@ -51,10 +53,10 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'images array is required' });
     }
 
-    console.log(`[MATCH-VISION] Matching ${products.length} products to ${images.length} images using OpenAI Vision`);
+    console.log(`[MATCH-VISION] Matching ${products.length} products to ${images.length} images using GPT-4o Vision${pdfImages?.length ? ` (${pdfImages.length} PDF reference images available)` : ''}`);
 
-    // Run the vision-based matching pipeline
-    const result = await matchProductsWithVision(products, images);
+    // Run the vision-based matching pipeline with PDF images
+    const result = await matchProductsWithVision(products, images, pdfImages || []);
 
     // Strip dataUrl from response to reduce payload size
     // Client already has the images

@@ -1753,7 +1753,8 @@ html, body {
 /* ── Activity Log Dot Icons ────────────────────────────────────── */
 .fr-log div.fr-green,
 .fr-log div.fr-gold,
-.fr-log div.fr-purple {
+.fr-log div.fr-purple,
+.fr-log div.fr-red-dot {
   display: grid;
   place-items: center;
   width: 18px;
@@ -1775,6 +1776,11 @@ html, body {
 .fr-log div.fr-purple {
   background: #2a1a3a;
   border: 1px solid #6b2d8b;
+}
+
+.fr-log div.fr-red-dot {
+  background: #3a1a1a;
+  border: 1px solid #8b2d2d;
 }
 
 /* ── Responsive ────────────────────────────────────────────────── */

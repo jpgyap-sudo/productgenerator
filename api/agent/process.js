@@ -5,10 +5,12 @@
 //
 //  Phase 1 (Extract & Inspect): Returns ALL images with data URLs so
 //  the user can preview every image before matching.
+//  Also extracts PDF page images for GPT-4o visual product matching.
 // ═══════════════════════════════════════════════════════════════════
 
 import multer from 'multer';
 import { extractTextFromPDF } from '../../lib/pdf-extractor.js';
+import { extractImagesFromPDF } from '../../lib/pdf-image-extractor.js';
 import { extractAllImagesFromZip } from '../../lib/zip-extractor.js';
 import { extractProductInfo } from '../../lib/deepseek.js';
 import { saveImagesToGallery } from '../../lib/upload-gallery.js';
@@ -62,6 +64,7 @@ function multerMiddleware(req, res) {
  *     success: true,
  *     products: [{ name, brand, productCode, generatedCode, description, category }],
  *     allImages: [{ name, width, height, size, dataUrl }],  ← ALL images with data URLs
+ *     pdfImages: [{ page, dataUrl, width, height, size }],  ← PDF page images for visual matching
  *     rawText: "...",
  *     totalImages: 57
  *   }
@@ -130,8 +133,19 @@ export default async function handler(req, res) {
       // Continue with dataUrls only — gallery is optional for preview
     }
 
-    // Step 2: Extract text from PDF
-    console.log('[AGENT] Step 2: Extracting PDF text...');
+    // Step 2: Extract images from PDF pages (for GPT-4o visual matching)
+    console.log('[AGENT] Step 2: Extracting PDF page images...');
+    let pdfImages = [];
+    try {
+      pdfImages = await extractImagesFromPDF(pdfFile.buffer);
+      console.log(`[AGENT] Extracted ${pdfImages.length} PDF page images`);
+    } catch (pdfImgErr) {
+      console.warn('[AGENT] PDF image extraction failed (non-fatal):', pdfImgErr.message);
+      // Continue without PDF images — matching will use text-only fallback
+    }
+
+    // Step 3: Extract text from PDF
+    console.log('[AGENT] Step 3: Extracting PDF text...');
     let pdfResult = { text: '', pages: 0 };
 
     try {
@@ -163,8 +177,8 @@ export default async function handler(req, res) {
 
     console.log(`[AGENT] PDF text extracted: ${rawText.length} chars from ${pdfResult.pages} pages`);
 
-    // Step 3: Use DeepSeek to extract product info from PDF text
-    console.log('[AGENT] Step 3: Analyzing PDF text with DeepSeek...');
+    // Step 4: Use DeepSeek to extract product info from PDF text
+    console.log('[AGENT] Step 4: Analyzing PDF text with DeepSeek...');
     let products = [];
 
     try {
@@ -203,12 +217,13 @@ export default async function handler(req, res) {
       });
     }
 
-    // Step 4: Return results with ALL images for Phase 2 matching
+    // Step 5: Return results with ALL images + PDF page images for Phase 2 matching
     console.log('[AGENT] Analysis complete. Returning results.');
     return res.json({
       success: true,
       products,
       allImages: zipResult.images,
+      pdfImages,  // PDF page images for GPT-4o visual matching
       rawText,
       totalImages: zipResult.totalImages,
       batchId: zipResult.batchId || ''
