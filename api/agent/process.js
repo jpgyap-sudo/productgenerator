@@ -6,6 +6,14 @@
 //  Phase 1 (Extract & Inspect): Returns ALL images with data URLs so
 //  the user can preview every image before matching.
 //  Also extracts PDF page images for GPT-4o visual product matching.
+//
+//  Batch mode (optional): When `useBatchQueue=true` in the request body,
+//  the pipeline runs the full batch queue system including:
+//    - ZIP image fingerprinting (OpenAI Vision, once per image)
+//    - Fast candidate filtering (attribute-based, no AI)
+//    - OpenAI Vision verification (strict JSON, confidence scoring)
+//    - Progress tracking with ETA
+//    - Results saved to database
 // ═══════════════════════════════════════════════════════════════════
 
 import multer from 'multer';
@@ -14,6 +22,7 @@ import { extractImagesFromPDF } from '../../lib/pdf-image-extractor.js';
 import { extractAllImagesFromZip } from '../../lib/zip-extractor.js';
 import { extractProductInfo } from '../../lib/deepseek.js';
 import { saveImagesToGallery } from '../../lib/upload-gallery.js';
+import { runBatchPipeline } from '../../lib/batch-queue.js';
 
 // Multer config — store files in memory
 const upload = multer({
@@ -217,7 +226,71 @@ export default async function handler(req, res) {
       });
     }
 
-    // Step 5: Return results with ALL images + PDF page images for Phase 2 matching
+    // Step 5: Optionally run the full batch pipeline (fingerprinting + verification)
+    // Triggered by `useBatchQueue: true` in the request body.
+    // This runs the slow but accurate pipeline and saves results to the database.
+    const useBatchQueue = req.body?.useBatchQueue === true || req.body?.useBatchQueue === 'true';
+
+    if (useBatchQueue) {
+      console.log('[AGENT] Step 5: Running batch queue pipeline (fingerprinting + verification)...');
+
+      try {
+        const batchResult = await runBatchPipeline({
+          pdfBuffer: pdfFile.buffer,
+          zipBuffer: zipFile.buffer,
+          products,
+          images: zipResult.images,
+          pdfImages,
+          sourcePdf: pdfFile.originalname,
+          sourceZip: zipFile.originalname
+        });
+
+        console.log(`[AGENT] Batch pipeline complete: ${batchResult.status} (batch ID: ${batchResult.batchId})`);
+
+        return res.json({
+          success: true,
+          batchMode: true,
+          batchId: batchResult.batchId,
+          products,
+          allImages: zipResult.images,
+          pdfImages,
+          rawText,
+          totalImages: zipResult.totalImages,
+          batchStatus: batchResult.status,
+          batchStage: batchResult.stage,
+          matchStats: batchResult.stats,
+          matches: batchResult.results.map(r => ({
+            productIndex: r.productIndex,
+            product: r.product,
+            bestMatch: r.bestMatch ? {
+              imageIndex: r.bestMatch.imageIndex,
+              imageName: r.bestMatch.imageName,
+              confidence: r.bestMatch.confidence,
+              reason: r.bestMatch.reason,
+              status: r.bestMatch.status
+            } : null,
+            status: r.status,
+            reason: r.reason
+          }))
+        });
+      } catch (batchErr) {
+        console.error('[AGENT] Batch pipeline failed:', batchErr.message);
+        // Fall back to returning standard results
+        return res.json({
+          success: true,
+          batchMode: true,
+          batchError: batchErr.message,
+          products,
+          allImages: zipResult.images,
+          pdfImages,
+          rawText,
+          totalImages: zipResult.totalImages,
+          batchId: zipResult.batchId || ''
+        });
+      }
+    }
+
+    // Standard mode: Return results with ALL images + PDF page images for Phase 2 matching
     console.log('[AGENT] Analysis complete. Returning results.');
     return res.json({
       success: true,

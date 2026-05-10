@@ -60,12 +60,17 @@ export default async function handler(req, res) {
     }));
 
     // Step 1: Pattern matching (deterministic, instant)
-    // Use sequential fallback as a last resort when product codes don't match
-    // image filenames (e.g. CH-790 in PDF vs xref14 in ZIP).
-    // The sequential fallback assigns images in order as a reasonable heuristic
-    // for catalog data where products are listed in the same order as images.
+    // NOTE: Sequential fallback has been REMOVED per the batch matching system upgrade.
+    // Previously, unmatched products were assigned images in order (score: 10, matchType: 'sequential-fallback'),
+    // creating fake 10% matches. This has been eliminated.
+    // Products without a pattern match should use the new batch pipeline:
+    //   - lib/image-fingerprint.js (ZIP image fingerprinting)
+    //   - lib/candidate-filter.js (fast attribute-based filtering)
+    //   - lib/openai-verify.js (OpenAI Vision verification with confidence scoring)
+    //   - lib/batch-queue.js (full pipeline with progress tracking)
+    // See: POST /api/agent/process with useBatchQueue=true
     const matchResult = matchProductsToImages(normalizedProducts, images, {
-      useSequentialFallback: true
+      useSequentialFallback: false
     });
 
     console.log(`[MATCH] Pattern matching: ${matchResult.matchStats.matched}/${matchResult.matchStats.total} matched, ${matchResult.unmatchedImages.length} images unmatched`);
