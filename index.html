@@ -11188,6 +11188,157 @@ function initUploadAgent() {
     if (bulkMatchResultsPanel) bulkMatchResultsPanel.style.display = 'block';
   }
 
+  // ── Render batch pipeline results (inline from /api/agent/process with useBatchQueue=true) ──
+  function renderAgentBatchResults(data) {
+    const container = document.getElementById('agentMatchResults');
+    if (!container) return;
+    const matches = data.matches || [];
+    const allImages = data.allImages || [];
+    const matchStats = data.matchStats || {};
+
+    if (!matches.length) {
+      container.innerHTML = '<div style="font-size:11px;color:var(--text-muted);padding:12px;text-align:center;">No matches found from batch pipeline.</div>';
+      return;
+    }
+
+    // Build image map
+    const imageMap = {};
+    if (allImages) {
+      allImages.forEach(img => {
+        imageMap[img.name] = img.dataUrl;
+      });
+    }
+
+    // Stats bar
+    const statsHtml = `<div style="display:flex;gap:12px;padding:8px 12px;margin-bottom:8px;background:var(--surface-2);border-radius:6px;font-size:11px;flex-wrap:wrap;">
+      <span style="color:var(--text-secondary);">Auto-accepted: <strong style="color:var(--success);">${matchStats.autoAccepted || 0}</strong></span>
+      <span style="color:var(--text-secondary);">Needs review: <strong style="color:var(--warning);">${matchStats.needsReview || 0}</strong></span>
+      <span style="color:var(--text-secondary);">Rejected: <strong style="color:var(--danger);">${matchStats.rejected || 0}</strong></span>
+      <span style="color:var(--text-secondary);">Total: <strong>${matches.length}</strong></span>
+    </div>`;
+
+    const cards = matches.map((match, idx) => {
+      const product = match.product || {};
+      const bestMatch = match.bestMatch || null;
+      const status = match.status || 'needs_review';
+      const reason = match.reason || '';
+
+      let statusBadge = '';
+      let badgeClass = '';
+      if (status === 'auto_accepted') {
+        statusBadge = '<span class="match-badge verified" style="background:var(--success);color:#fff;">✓ Auto-Accepted</span>';
+        badgeClass = 'high';
+      } else if (status === 'needs_review') {
+        statusBadge = '<span class="match-badge" style="background:var(--warning);color:#fff;">⚠ Needs Review</span>';
+        badgeClass = 'medium';
+      } else {
+        statusBadge = '<span class="match-badge rejected">✗ Rejected</span>';
+        badgeClass = 'low';
+      }
+
+      const confidence = bestMatch ? bestMatch.confidence : 0;
+      const imageName = bestMatch ? bestMatch.imageName : '';
+      const imageIndex = bestMatch ? bestMatch.imageIndex : -1;
+      const imageDataUrl = (imageIndex >= 0 && allImages[imageIndex]) ? allImages[imageIndex].dataUrl : (imageMap[imageName] || '');
+
+      const productCode = product.generatedCode || '';
+
+      // Auto-accept for auto_accepted status
+      const isAccepted = status === 'auto_accepted';
+      if (isAccepted) {
+        agentAcceptedMatches[idx] = { accepted: true, imageName, dataUrl: imageDataUrl, galleryUrl: '' };
+      }
+
+      return `<div class="agent-match-card" data-match-idx="${idx}">
+        <div class="agent-match-card-header">
+          <img class="match-thumb" src="${escapeHtml(imageDataUrl)}" alt="${escapeHtml(imageName)}" onerror="this.style.opacity='0.3';this.src='';this.alt='Image not found'"/>
+          <div class="match-info">
+            <div class="match-name">${escapeHtml(product.name || `Product ${idx + 1}`)}</div>
+            ${productCode ? `<div class="match-code">Code: ${escapeHtml(productCode)}</div>` : ''}
+            <div style="font-size:10px;color:var(--text-muted);margin-top:2px;">Image: ${escapeHtml(imageName)}</div>
+            ${reason ? `<div style="font-size:10px;color:var(--text-muted);margin-top:2px;">${escapeHtml(reason)}</div>` : ''}
+          </div>
+          <span class="match-badge ${badgeClass}">${confidence}%</span>
+          ${statusBadge}
+        </div>
+        <div class="agent-match-card-actions">
+          <button class="accept ${isAccepted ? 'active' : ''}" data-match-idx="${idx}" data-action="accept">✓ Accept</button>
+          <button class="reject ${!isAccepted ? 'active' : ''}" data-match-idx="${idx}" data-action="reject">✗ Reject</button>
+          <button class="pick" data-match-idx="${idx}" data-action="pick">🔄 Pick Different</button>
+        </div>
+        <div class="agent-image-picker" id="agentPicker-${idx}" style="display:none;"></div>
+      </div>`;
+    }).join('');
+
+    container.innerHTML = statsHtml + cards;
+
+    // Wire up accept/reject/pick buttons
+    container.querySelectorAll('.agent-match-card-actions button').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const idx = parseInt(btn.dataset.matchIdx, 10);
+        const match = matches[idx];
+        if (!match) return;
+        const bestMatch = match.bestMatch || {};
+        const imageName = bestMatch.imageName || '';
+        const imageIndex = bestMatch.imageIndex || -1;
+        const imageDataUrl = (imageIndex >= 0 && allImages[imageIndex]) ? allImages[imageIndex].dataUrl : (imageMap[imageName] || '');
+
+        if (btn.dataset.action === 'accept') {
+          const prev = agentAcceptedMatches[idx] || {};
+          agentAcceptedMatches[idx] = { accepted: true, imageName, dataUrl: imageDataUrl, galleryUrl: prev.galleryUrl || '' };
+          const card = container.querySelector(`.agent-match-card[data-match-idx="${idx}"]`);
+          if (card) {
+            card.querySelector('.accept').classList.add('active');
+            card.querySelector('.reject').classList.remove('active');
+          }
+        } else if (btn.dataset.action === 'reject') {
+          const prev = agentAcceptedMatches[idx] || {};
+          agentAcceptedMatches[idx] = { accepted: false, imageName, dataUrl: imageDataUrl, galleryUrl: prev.galleryUrl || '' };
+          const card = container.querySelector(`.agent-match-card[data-match-idx="${idx}"]`);
+          if (card) {
+            card.querySelector('.reject').classList.add('active');
+            card.querySelector('.accept').classList.remove('active');
+          }
+        } else if (btn.dataset.action === 'pick') {
+          const picker = document.getElementById(`agentPicker-${idx}`);
+          if (picker.style.display === 'none' || !picker.style.display) {
+            const currentImage = agentAcceptedMatches[idx]?.imageName || imageName || '';
+            const pickerItems = (allImages || []).map(img => {
+              const selected = img.name === currentImage ? 'selected' : '';
+              return `<img src="${img.dataUrl}" alt="${escapeHtml(img.name)}" class="${selected}" data-img-name="${escapeHtml(img.name)}" data-img-url="${img.dataUrl}" data-gallery-url=""/>`;
+            }).join('');
+            picker.innerHTML = pickerItems;
+            picker.style.display = 'grid';
+            picker.querySelectorAll('img').forEach(pickImg => {
+              pickImg.addEventListener('click', () => {
+                picker.querySelectorAll('img').forEach(p => p.classList.remove('selected'));
+                pickImg.classList.add('selected');
+                agentAcceptedMatches[idx] = { accepted: true, imageName: pickImg.dataset.imgName, dataUrl: pickImg.dataset.imgUrl, galleryUrl: '' };
+                const card = container.querySelector(`.agent-match-card[data-match-idx="${idx}"]`);
+                if (card) {
+                  const thumb = card.querySelector('.match-thumb');
+                  if (thumb) { thumb.src = pickImg.dataset.imgUrl; }
+                  const infoDiv = card.querySelector('.match-info');
+                  const nameDiv = infoDiv?.querySelector('div:last-child');
+                  if (nameDiv) nameDiv.textContent = 'Image: ' + pickImg.dataset.imgName;
+                  card.querySelector('.accept').classList.add('active');
+                  card.querySelector('.reject').classList.remove('active');
+                }
+                picker.style.display = 'none';
+                updateSubmitButton();
+              });
+            });
+          } else {
+            picker.style.display = 'none';
+          }
+        }
+        updateSubmitButton();
+      });
+    });
+
+    updateSubmitButton();
+  }
+
   // ── Handle match card actions ──
   function handleMatchAction(idx, action, matches, images) {
     const match = matches[idx];
@@ -11332,8 +11483,9 @@ function initUploadAgent() {
       const formData = new FormData();
       formData.append('pdf', selectedPdfFile);
       formData.append('zip', selectedZipFile);
+      formData.append('useBatchQueue', 'true');
 
-      agentProgressText.textContent = 'Analyzing PDF with DeepSeek AI...';
+      agentProgressText.textContent = 'Running batch pipeline (DeepSeek extraction + fingerprinting + OpenAI verification)...';
 
       const res = await fetchApi('/api/agent/process', {
         method: 'POST',
@@ -11355,44 +11507,66 @@ function initUploadAgent() {
       // Display results
       agentProgress.style.display = 'none';
 
-      // ── Phase 1: Show extracted products ──
-      if (data.products && data.products.length > 0) {
-        agentProductInfo.innerHTML = renderAgentProductReview(data.products);
-      } else if (data.warning) {
-        agentProductInfo.innerHTML = `<div style="color:var(--warning);font-size:11px;">${escapeHtml(data.warning)}</div>
-          <div style="margin-top:6px;"><strong>Product Name:</strong></div>
-          <input id="agentNameManual" type="text" value="${escapeHtml((selectedPdfFile?.name || '').replace(/\.[^.]+$/, ''))}" style="width:100%;padding:4px;font-size:11px;border:1px solid var(--border-light);border-radius:4px;background:var(--bg);color:var(--text);box-sizing:border-box;" placeholder="e.g. Dining Chair HC-001"/>
-          <div style="margin-top:4px;"><strong>Brand:</strong></div>
-          <input id="agentBrandManual" type="text" style="width:100%;padding:4px;font-size:11px;border:1px solid var(--border-light);border-radius:4px;background:var(--bg);color:var(--text);box-sizing:border-box;" placeholder="e.g. Home Atelier"/>
-          <div style="margin-top:4px;"><strong>Description:</strong></div>
-          <textarea id="agentDescEdit" style="width:100%;min-height:80px;font-size:11px;padding:4px;border:1px solid var(--border-light);border-radius:4px;background:var(--bg);color:var(--text);resize:vertical;box-sizing:border-box;margin-top:2px;" placeholder="Paste or type product description here...">${escapeHtml(data.rawText?.substring(0, 2000) || '')}</textarea>`;
+      // ── Check if batch pipeline returned matches inline ──
+      if (data.batchMode && data.matches) {
+        // Batch pipeline completed — show results directly
+        if (data.products && data.products.length > 0) {
+          agentProductInfo.innerHTML = renderAgentProductReview(data.products);
+        }
+        if (data.allImages && data.allImages.length > 0) {
+          renderImageGallery(data.allImages);
+          agentImageCount.textContent = `(${data.allImages.length})`;
+        }
+        agentResult.style.display = 'block';
+        agentPhase1.style.display = 'block';
+        agentPhase2.style.display = 'none';
+        agentMatchBtn.disabled = true;
+        agentMatchBtn.textContent = 'Batch Complete';
+        agentSubmitBtn.disabled = false;
+
+        // Render batch match results
+        renderAgentBatchResults(data);
+        toast(`Batch complete: ${data.matchStats?.autoAccepted || 0} auto-accepted, ${data.matchStats?.needsReview || 0} need review`, 'success');
       } else {
-        agentProductInfo.innerHTML = `<div style="color:var(--warning);font-size:11px;">No products could be extracted. You can manually enter details below.</div>
-          <div style="margin-top:4px;"><strong>Product Name:</strong></div>
-          <input id="agentNameManual" type="text" style="width:100%;padding:4px;font-size:11px;border:1px solid var(--border-light);border-radius:4px;background:var(--bg);color:var(--text);box-sizing:border-box;" placeholder="e.g. Dining Chair HC-001"/>
-          <div style="margin-top:4px;"><strong>Brand:</strong></div>
-          <input id="agentBrandManual" type="text" style="width:100%;padding:4px;font-size:11px;border:1px solid var(--border-light);border-radius:4px;background:var(--bg);color:var(--text);box-sizing:border-box;" placeholder="e.g. Home Atelier"/>
-          <div style="margin-top:4px;"><strong>Description:</strong></div>
-          <textarea id="agentDescEdit" style="width:100%;min-height:80px;font-size:11px;padding:4px;border:1px solid var(--border-light);border-radius:4px;background:var(--bg);color:var(--text);resize:vertical;box-sizing:border-box;margin-top:2px;" placeholder="Describe the product in detail..."></textarea>`;
+        // ── Phase 1: Show extracted products ──
+        if (data.products && data.products.length > 0) {
+          agentProductInfo.innerHTML = renderAgentProductReview(data.products);
+        } else if (data.warning) {
+          agentProductInfo.innerHTML = `<div style="color:var(--warning);font-size:11px;">${escapeHtml(data.warning)}</div>
+            <div style="margin-top:6px;"><strong>Product Name:</strong></div>
+            <input id="agentNameManual" type="text" value="${escapeHtml((selectedPdfFile?.name || '').replace(/\.[^.]+$/, ''))}" style="width:100%;padding:4px;font-size:11px;border:1px solid var(--border-light);border-radius:4px;background:var(--bg);color:var(--text);box-sizing:border-box;" placeholder="e.g. Dining Chair HC-001"/>
+            <div style="margin-top:4px;"><strong>Brand:</strong></div>
+            <input id="agentBrandManual" type="text" style="width:100%;padding:4px;font-size:11px;border:1px solid var(--border-light);border-radius:4px;background:var(--bg);color:var(--text);box-sizing:border-box;" placeholder="e.g. Home Atelier"/>
+            <div style="margin-top:4px;"><strong>Description:</strong></div>
+            <textarea id="agentDescEdit" style="width:100%;min-height:80px;font-size:11px;padding:4px;border:1px solid var(--border-light);border-radius:4px;background:var(--bg);color:var(--text);resize:vertical;box-sizing:border-box;margin-top:2px;" placeholder="Paste or type product description here...">${escapeHtml(data.rawText?.substring(0, 2000) || '')}</textarea>`;
+        } else {
+          agentProductInfo.innerHTML = `<div style="color:var(--warning);font-size:11px;">No products could be extracted. You can manually enter details below.</div>
+            <div style="margin-top:4px;"><strong>Product Name:</strong></div>
+            <input id="agentNameManual" type="text" style="width:100%;padding:4px;font-size:11px;border:1px solid var(--border-light);border-radius:4px;background:var(--bg);color:var(--text);box-sizing:border-box;" placeholder="e.g. Dining Chair HC-001"/>
+            <div style="margin-top:4px;"><strong>Brand:</strong></div>
+            <input id="agentBrandManual" type="text" style="width:100%;padding:4px;font-size:11px;border:1px solid var(--border-light);border-radius:4px;background:var(--bg);color:var(--text);box-sizing:border-box;" placeholder="e.g. Home Atelier"/>
+            <div style="margin-top:4px;"><strong>Description:</strong></div>
+            <textarea id="agentDescEdit" style="width:100%;min-height:80px;font-size:11px;padding:4px;border:1px solid var(--border-light);border-radius:4px;background:var(--bg);color:var(--text);resize:vertical;box-sizing:border-box;margin-top:2px;" placeholder="Describe the product in detail..."></textarea>`;
+        }
+
+        // ── Phase 1: Show all images in gallery ──
+        if (data.allImages && data.allImages.length > 0) {
+          renderImageGallery(data.allImages);
+          agentImageCount.textContent = `(${data.allImages.length})`;
+        } else {
+          agentImageGallery.innerHTML = '<div style="font-size:11px;color:var(--text-muted);padding:8px;">No images found in ZIP.</div>';
+          agentImageCount.textContent = '(0)';
+        }
+
+        // Show Phase 1, enable match button
+        agentResult.style.display = 'block';
+        agentPhase1.style.display = 'block';
+        agentPhase2.style.display = 'none';
+        agentMatchBtn.disabled = false;
+        agentSubmitBtn.disabled = true;
+
+        toast(`Extracted ${data.products?.length || 0} product(s) and ${data.allImages?.length || 0} image(s). Click "Match Products to Images" to correlate.`, 'info');
       }
-
-      // ── Phase 1: Show all images in gallery ──
-      if (data.allImages && data.allImages.length > 0) {
-        renderImageGallery(data.allImages);
-        agentImageCount.textContent = `(${data.allImages.length})`;
-      } else {
-        agentImageGallery.innerHTML = '<div style="font-size:11px;color:var(--text-muted);padding:8px;">No images found in ZIP.</div>';
-        agentImageCount.textContent = '(0)';
-      }
-
-      // Show Phase 1, enable match button
-      agentResult.style.display = 'block';
-      agentPhase1.style.display = 'block';
-      agentPhase2.style.display = 'none';
-      agentMatchBtn.disabled = false;
-      agentSubmitBtn.disabled = true;
-
-      toast(`Extracted ${data.products?.length || 0} product(s) and ${data.allImages?.length || 0} image(s). Click "Match Products to Images" to correlate.`, 'info');
 
     } catch (err) {
       agentProgress.style.display = 'none';
@@ -11983,35 +12157,81 @@ function initBatchProcessor() {
     const cards = pageMatches.map((match, pageIdx) => {
       const globalIdx = startIdx + pageIdx;
       const product = match.product || {};
-      const hasMatch = match.matchedImage !== null && match.matchedImage !== undefined;
-      const matchedImage = hasMatch ? match.matchedImage : null;
-      const score = match.score || 0;
-      const imageDataUrl = hasMatch ? (matchedImage.dataUrl || imageMap[matchedImage.name] || galleryMap[matchedImage.name] || '') : '';
+
+      // Support both batch pipeline format (bestMatch) and legacy format (matchedImage)
+      const bestMatch = match.bestMatch || null;
+      const matchedImage = match.matchedImage || null;
+      const hasBestMatch = bestMatch !== null && bestMatch.imageName;
+      const hasLegacyMatch = matchedImage !== null && matchedImage !== undefined;
+      const hasMatch = hasBestMatch || hasLegacyMatch;
+
+      // Resolve image info from whichever format is present
+      let imageName = '';
+      let imageIndex = -1;
+      let confidence = 0;
+      let reason = '';
+      let status = '';
+
+      if (hasBestMatch) {
+        imageName = bestMatch.imageName || '';
+        imageIndex = bestMatch.imageIndex || -1;
+        confidence = bestMatch.confidence || 0;
+        reason = bestMatch.reason || '';
+        status = bestMatch.status || '';
+      } else if (hasLegacyMatch) {
+        imageName = matchedImage.name || '';
+        confidence = match.score || 0;
+        reason = match.verification?.reason || '';
+      }
+
+      // Resolve dataUrl: from bestMatch's imageIndex, or from imageMap, or from matchedImage.dataUrl
+      let imageDataUrl = '';
+      if (hasBestMatch && imageIndex >= 0 && images && images[imageIndex]) {
+        imageDataUrl = images[imageIndex].dataUrl || '';
+      }
+      if (!imageDataUrl) {
+        imageDataUrl = imageMap[imageName] || galleryMap[imageName] || '';
+      }
+      if (!imageDataUrl && hasLegacyMatch) {
+        imageDataUrl = matchedImage.dataUrl || '';
+      }
+
       const productCode = product.generatedCode || '';
 
       let badgeClass = 'low';
-      let badgeLabel = score > 0 ? `${score}%` : 'No match';
-      if (score >= 100) { badgeClass = 'exact'; badgeLabel = 'Exact'; }
-      else if (score >= 80) { badgeClass = 'high'; badgeLabel = `${score}%`; }
-      else if (score >= 40) { badgeClass = 'medium'; badgeLabel = `${score}%`; }
+      let badgeLabel = confidence > 0 ? `${confidence}%` : 'No match';
+      if (confidence >= 100) { badgeClass = 'exact'; badgeLabel = 'Exact'; }
+      else if (confidence >= 80) { badgeClass = 'high'; badgeLabel = `${confidence}%`; }
+      else if (confidence >= 40) { badgeClass = 'medium'; badgeLabel = `${confidence}%`; }
 
-      // Show visual search indicator
+      // Show status badge for batch pipeline results
+      let statusBadge = '';
+      if (status === 'auto_accepted') {
+        statusBadge = `<span class="bmc-badge" style="background:var(--success);color:#fff;font-size:10px;">✓ Auto</span>`;
+      } else if (status === 'needs_review') {
+        statusBadge = `<span class="bmc-badge" style="background:var(--warning);color:#fff;font-size:10px;">⚠ Review</span>`;
+      } else if (status === 'rejected') {
+        statusBadge = `<span class="bmc-badge" style="background:var(--danger);color:#fff;font-size:10px;">✗ Rejected</span>`;
+      }
+
+      // Show visual search indicator (legacy format only)
       const isVisualSearch = match.matchType === 'visual-search';
       const visualBadge = isVisualSearch
         ? `<span class="bmc-visual-badge" title="Matched by Gemini AI visual search">👁 Visual</span>`
         : '';
 
-      // Show verification reason if available
-      const verificationReason = match.verification?.reason
-        ? `<div class="bmc-verify-reason">${escapeHtml(match.verification.reason)}</div>`
+      // Show reason if available
+      const reasonHtml = reason
+        ? `<div class="bmc-verify-reason">${escapeHtml(reason)}</div>`
         : '';
 
-      // Only auto-accept if score >= 40 AND there's an actual matched image
-      const isGoodMatch = score >= 40 && hasMatch;
-      const accepted = batchAcceptedMatches[globalIdx] ? batchAcceptedMatches[globalIdx].accepted : isGoodMatch;
+      // Auto-accept logic: batch pipeline auto_accepted status, or legacy score >= 40
+      const isAutoAccepted = status === 'auto_accepted';
+      const isGoodMatch = (confidence >= 40 || (hasLegacyMatch && (match.score || 0) >= 40)) && hasMatch;
+      const accepted = batchAcceptedMatches[globalIdx] ? batchAcceptedMatches[globalIdx].accepted : (isAutoAccepted || isGoodMatch);
 
       const thumbHtml = hasMatch
-        ? `<img class="bmc-thumb" src="${escapeHtml(imageDataUrl)}" alt="${escapeHtml(matchedImage.name || '')}" onerror="this.style.opacity='0.3';this.src='';this.alt='Image not found'"/>`
+        ? `<img class="bmc-thumb" src="${escapeHtml(imageDataUrl)}" alt="${escapeHtml(imageName)}" onerror="this.style.opacity='0.3';this.src='';this.alt='Image not found'"/>`
         : `<div class="bmc-thumb" style="display:flex;align-items:center;justify-content:center;background:var(--surface-2);font-size:11px;color:var(--text-muted);text-align:center;padding:4px;">No image matched</div>`;
 
       return `<div class="batch-match-card" data-batch-idx="${globalIdx}">
@@ -12020,11 +12240,12 @@ function initBatchProcessor() {
           <div class="bmc-info">
             <div class="bmc-name">${escapeHtml(product.name || `Product ${globalIdx + 1}`)}</div>
             ${productCode ? `<div class="bmc-code">Code: ${escapeHtml(productCode)}</div>` : ''}
-            <div class="bmc-image-name">${hasMatch ? 'Image: ' + escapeHtml(matchedImage.name || '') : 'No matching image found'}</div>
-            ${verificationReason}
+            <div class="bmc-image-name">${hasMatch ? 'Image: ' + escapeHtml(imageName) : 'No matching image found'}</div>
+            ${reasonHtml}
           </div>
           <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
             <span class="bmc-badge ${badgeClass}">${badgeLabel}</span>
+            ${statusBadge}
             ${visualBadge}
           </div>
         </div>
@@ -12084,8 +12305,30 @@ function initBatchProcessor() {
         galMap[img.name] = img.galleryUrl || '';
       });
     }
-    const imageName = match.matchedImage?.name || '';
-    const resolvedDataUrl = match.matchedImage?.dataUrl || imgMap[imageName] || '';
+
+    // Support both batch pipeline format (bestMatch) and legacy format (matchedImage)
+    const bestMatch = match.bestMatch || null;
+    const matchedImage = match.matchedImage || null;
+    let imageName = '';
+    let imageIndex = -1;
+    if (bestMatch && bestMatch.imageName) {
+      imageName = bestMatch.imageName || '';
+      imageIndex = bestMatch.imageIndex || -1;
+    } else if (matchedImage) {
+      imageName = matchedImage.name || '';
+    }
+
+    // Resolve dataUrl: from imageIndex lookup, or from imgMap, or from matchedImage.dataUrl
+    let resolvedDataUrl = '';
+    if (imageIndex >= 0 && images && images[imageIndex]) {
+      resolvedDataUrl = images[imageIndex].dataUrl || '';
+    }
+    if (!resolvedDataUrl) {
+      resolvedDataUrl = imgMap[imageName] || '';
+    }
+    if (!resolvedDataUrl && matchedImage) {
+      resolvedDataUrl = matchedImage.dataUrl || '';
+    }
     const resolvedGalleryUrl = galMap[imageName] || '';
 
     if (action === 'accept') {
@@ -12107,7 +12350,7 @@ function initBatchProcessor() {
     } else if (action === 'pick') {
       const picker = document.getElementById(`batchPicker-${idx}`);
       if (picker.style.display === 'none' || !picker.style.display) {
-        const currentImage = batchAcceptedMatches[idx]?.imageName || match.matchedImage?.name || '';
+        const currentImage = batchAcceptedMatches[idx]?.imageName || imageName || '';
         const pickerItems = (images || []).map(img => {
           const selected = img.name === currentImage ? 'selected' : '';
           const galleryUrl = img.galleryUrl || '';
@@ -12188,8 +12431,9 @@ function initBatchProcessor() {
       const formData = new FormData();
       formData.append('pdf', batchPdfFile);
       formData.append('zip', batchZipFile);
+      formData.append('useBatchQueue', 'true');
 
-      batchProgressText.textContent = 'Analyzing PDF with DeepSeek AI...';
+      batchProgressText.textContent = 'Running batch pipeline (DeepSeek extraction + fingerprinting + OpenAI verification)...';
 
       const res = await fetchApi('/api/agent/process', {
         method: 'POST',
@@ -12210,27 +12454,70 @@ function initBatchProcessor() {
 
       batchProgress.style.display = 'none';
 
-      // Step 2: Show extracted products
-      if (data.products && data.products.length > 0) {
-        renderBatchProductGrid(data.products);
+      // ── Check if batch pipeline returned matches inline ──
+      if (data.batchMode && data.matches) {
+        // Batch pipeline completed — show results directly in Step 3
+        if (data.products && data.products.length > 0) {
+          renderBatchProductGrid(data.products);
+        }
+        if (data.allImages && data.allImages.length > 0) {
+          renderBatchImageGallery(data.allImages);
+        }
+
+        // Initialize accepted matches from batch results
+        batchAcceptedMatches = {};
+        if (data.matches) {
+          const imageMap = {};
+          (data.allImages || []).forEach(img => {
+            imageMap[img.name] = img.dataUrl;
+          });
+          data.matches.forEach((m, idx) => {
+            const bestMatch = m.bestMatch || {};
+            const imageName = bestMatch.imageName || '';
+            const imageIndex = bestMatch.imageIndex || -1;
+            const imageDataUrl = (imageIndex >= 0 && data.allImages && data.allImages[imageIndex]) ? data.allImages[imageIndex].dataUrl : (imageMap[imageName] || '');
+            const isAutoAccepted = m.status === 'auto_accepted';
+            batchAcceptedMatches[idx] = {
+              accepted: isAutoAccepted,
+              imageName,
+              dataUrl: imageDataUrl,
+              galleryUrl: ''
+            };
+          });
+        }
+
+        // Render match results in Step 3
+        renderBatchMatchGrid(data.matches || [], data.allImages || []);
+        batchStep2.style.display = 'none';
+        batchStep3.style.display = 'block';
+        batchMatchBtn.disabled = true;
+        batchMatchBtn.textContent = 'Batch Complete';
+
+        toast(`Batch complete: ${data.matchStats?.autoAccepted || 0} auto-accepted, ${data.matchStats?.needsReview || 0} need review`, 'success');
       } else {
-        batchProductGrid.innerHTML = `<div style="font-size:13px;color:var(--warning);padding:24px;text-align:center;">
-          No products could be extracted from the PDF. Try a different catalog file.
-        </div>`;
+        // ── Traditional flow: Step 2 only (extraction phase) ──
+        // Step 2: Show extracted products
+        if (data.products && data.products.length > 0) {
+          renderBatchProductGrid(data.products);
+        } else {
+          batchProductGrid.innerHTML = `<div style="font-size:13px;color:var(--warning);padding:24px;text-align:center;">
+            No products could be extracted from the PDF. Try a different catalog file.
+          </div>`;
+        }
+
+        // Step 2: Show all images
+        if (data.allImages && data.allImages.length > 0) {
+          renderBatchImageGallery(data.allImages);
+        } else {
+          batchImageGallery.innerHTML = '<div style="font-size:13px;color:var(--text-muted);padding:24px;text-align:center;">No images found in ZIP.</div>';
+          batchImageCount.textContent = '(0)';
+        }
+
+        batchStep2.style.display = 'block';
+        batchMatchBtn.disabled = false;
+
+        toast(`Extracted ${data.products?.length || 0} product(s) and ${data.allImages?.length || 0} image(s). Review and click "Match Products to Images".`, 'info');
       }
-
-      // Step 2: Show all images
-      if (data.allImages && data.allImages.length > 0) {
-        renderBatchImageGallery(data.allImages);
-      } else {
-        batchImageGallery.innerHTML = '<div style="font-size:13px;color:var(--text-muted);padding:24px;text-align:center;">No images found in ZIP.</div>';
-        batchImageCount.textContent = '(0)';
-      }
-
-      batchStep2.style.display = 'block';
-      batchMatchBtn.disabled = false;
-
-      toast(`Extracted ${data.products?.length || 0} product(s) and ${data.allImages?.length || 0} image(s). Review and click "Match Products to Images".`, 'info');
 
     } catch (err) {
       batchProgress.style.display = 'none';
