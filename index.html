@@ -12410,6 +12410,131 @@ function initBatchProcessor() {
     return products;
   }
 
+  // ── Render batch results from completed pipeline data ──
+  function renderBatchResultsFromData(data) {
+    if (data.products && data.products.length > 0) {
+      renderBatchProductGrid(data.products);
+    }
+    if (data.allImages && data.allImages.length > 0) {
+      renderBatchImageGallery(data.allImages);
+    }
+
+    // Initialize accepted matches from batch results
+    batchAcceptedMatches = {};
+    if (data.matches) {
+      const imageMap = {};
+      (data.allImages || []).forEach(img => {
+        imageMap[img.name] = img.dataUrl;
+      });
+      data.matches.forEach((m, idx) => {
+        const bestMatch = m.bestMatch || {};
+        const imageName = bestMatch.imageName || '';
+        const imageIndex = bestMatch.imageIndex || -1;
+        const imageDataUrl = (imageIndex >= 0 && data.allImages && data.allImages[imageIndex]) ? data.allImages[imageIndex].dataUrl : (imageMap[imageName] || '');
+        const isAutoAccepted = m.status === 'auto_accepted';
+        batchAcceptedMatches[idx] = {
+          accepted: isAutoAccepted,
+          imageName,
+          dataUrl: imageDataUrl,
+          galleryUrl: ''
+        };
+      });
+    }
+
+    // Render match results in Step 3
+    renderBatchMatchGrid(data.matches || [], data.allImages || []);
+    batchStep2.style.display = 'none';
+    batchStep3.style.display = 'block';
+    batchMatchBtn.disabled = true;
+    batchMatchBtn.textContent = 'Batch Complete';
+
+    const stats = data.matchStats || {};
+    toast(`Batch complete: ${stats.autoAccepted || 0} auto-accepted, ${stats.needsReview || 0} need review`, 'success');
+  }
+
+  // ── Poll batch status until pipeline completes ──
+  let batchPollTimer = null;
+
+  function startBatchPolling(batchId, initialData) {
+    // Clear any existing poll timer
+    if (batchPollTimer) {
+      clearInterval(batchPollTimer);
+      batchPollTimer = null;
+    }
+
+    const pollStage = document.getElementById('batchPollStage');
+    const pollBar = document.getElementById('batchPollBar');
+    const pollProgressText = document.getElementById('batchPollProgressText');
+    const pollEta = document.getElementById('batchPollEta');
+
+    const poll = async () => {
+      try {
+        const res = await fetchApi(`/api/agent/batch-status/${batchId}`);
+        if (!res.ok) return;
+
+        const state = await res.json();
+        if (!state.success) return;
+
+        // Update progress UI
+        const pct = state.progress_percent || 0;
+        if (pollStage) pollStage.textContent = state.stage || state.status || 'processing';
+        if (pollBar) pollBar.style.width = pct + '%';
+        if (pollProgressText) pollProgressText.textContent = pct + '%';
+        if (pollEta && state.estimated_seconds_remaining) {
+          const mins = Math.ceil(state.estimated_seconds_remaining / 60);
+          pollEta.textContent = `~${mins} min remaining`;
+        } else if (pollEta) {
+          pollEta.textContent = '—';
+        }
+
+        // Check if pipeline is complete
+        const isComplete = state.status === 'completed' || state.status === 'partial' || state.status === 'failed';
+
+        if (isComplete) {
+          // Stop polling
+          if (batchPollTimer) {
+            clearInterval(batchPollTimer);
+            batchPollTimer = null;
+          }
+
+          // Remove progress indicator
+          const pollProgressEl = document.getElementById('batchPollProgress');
+          if (pollProgressEl) pollProgressEl.style.display = 'none';
+
+          if (state.status === 'failed') {
+            toast(`Batch pipeline failed: ${state.last_error || 'Unknown error'}`, 'error');
+            batchMatchBtn.disabled = false;
+            batchMatchBtn.textContent = 'Match Products to Images';
+            return;
+          }
+
+          // If matches are included in the state response, render them
+          if (state.matches && state.matches.length > 0) {
+            // Build a data object similar to what renderBatchResultsFromData expects
+            const resultData = {
+              products: initialData.products || [],
+              allImages: initialData.allImages || [],
+              matches: state.matches,
+              matchStats: state.matchStats || { autoAccepted: 0, needsReview: 0, rejected: 0 }
+            };
+            renderBatchResultsFromData(resultData);
+          } else {
+            // No matches — fall back to manual matching
+            toast('Batch pipeline completed but no matches found. You can match manually.', 'info');
+            batchMatchBtn.disabled = false;
+            batchMatchBtn.textContent = 'Match Products to Images';
+          }
+        }
+      } catch (err) {
+        console.error('[Batch Poll] Error:', err);
+      }
+    };
+
+    // Poll immediately, then every 5 seconds
+    poll();
+    batchPollTimer = setInterval(poll, 5000);
+  }
+
   // ── Analyze button: Step 1 → Step 2 ──
   batchAnalyzeBtn?.addEventListener('click', async () => {
     if (!batchPdfFile || !batchZipFile) return;
@@ -12455,45 +12580,56 @@ function initBatchProcessor() {
       batchProgress.style.display = 'none';
 
       // ── Check if batch pipeline returned matches inline ──
-      if (data.batchMode && data.matches) {
-        // Batch pipeline completed — show results directly in Step 3
+      if (data.batchMode && data.matches && data.matches.length > 0) {
+        // Batch pipeline completed synchronously — show results directly in Step 3
+        renderBatchResultsFromData(data);
+      } else if (data.batchMode && data.batchId) {
+        // ── Batch pipeline is running asynchronously — start polling ──
+        const batchId = data.batchId;
+
+        // Show products and images immediately (from extraction phase)
         if (data.products && data.products.length > 0) {
           renderBatchProductGrid(data.products);
+        } else {
+          batchProductGrid.innerHTML = `<div style="font-size:13px;color:var(--warning);padding:24px;text-align:center;">
+            No products could be extracted from the PDF. Try a different catalog file.
+          </div>`;
         }
         if (data.allImages && data.allImages.length > 0) {
           renderBatchImageGallery(data.allImages);
+        } else {
+          batchImageGallery.innerHTML = '<div style="font-size:13px;color:var(--text-muted);padding:24px;text-align:center;">No images found in ZIP.</div>';
+          batchImageCount.textContent = '(0)';
         }
 
-        // Initialize accepted matches from batch results
-        batchAcceptedMatches = {};
-        if (data.matches) {
-          const imageMap = {};
-          (data.allImages || []).forEach(img => {
-            imageMap[img.name] = img.dataUrl;
-          });
-          data.matches.forEach((m, idx) => {
-            const bestMatch = m.bestMatch || {};
-            const imageName = bestMatch.imageName || '';
-            const imageIndex = bestMatch.imageIndex || -1;
-            const imageDataUrl = (imageIndex >= 0 && data.allImages && data.allImages[imageIndex]) ? data.allImages[imageIndex].dataUrl : (imageMap[imageName] || '');
-            const isAutoAccepted = m.status === 'auto_accepted';
-            batchAcceptedMatches[idx] = {
-              accepted: isAutoAccepted,
-              imageName,
-              dataUrl: imageDataUrl,
-              galleryUrl: ''
-            };
-          });
-        }
-
-        // Render match results in Step 3
-        renderBatchMatchGrid(data.matches || [], data.allImages || []);
-        batchStep2.style.display = 'none';
-        batchStep3.style.display = 'block';
+        // Show Step 2 with a progress bar for the pipeline
+        batchStep2.style.display = 'block';
         batchMatchBtn.disabled = true;
-        batchMatchBtn.textContent = 'Batch Complete';
+        batchMatchBtn.textContent = 'Pipeline Running...';
 
-        toast(`Batch complete: ${data.matchStats?.autoAccepted || 0} auto-accepted, ${data.matchStats?.needsReview || 0} need review`, 'success');
+        // Show polling progress indicator
+        let pollProgressEl = document.getElementById('batchPollProgress');
+        if (!pollProgressEl) {
+          pollProgressEl = document.createElement('div');
+          pollProgressEl.id = 'batchPollProgress';
+          pollProgressEl.style.cssText = 'margin-top:12px;padding:12px 16px;background:var(--surface-2);border-radius:8px;font-size:13px;';
+          batchStep2.appendChild(pollProgressEl);
+        }
+        pollProgressEl.style.display = 'block';
+        pollProgressEl.innerHTML = `<div style="display:flex;align-items:center;gap:10px;">
+          <div class="spinner" style="width:18px;height:18px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin 0.8s linear infinite;"></div>
+          <span>Batch pipeline running — fingerprinting images + verifying matches... <span id="batchPollStage">queued</span></span>
+        </div>
+        <div style="margin-top:8px;height:6px;background:var(--border);border-radius:3px;overflow:hidden;">
+          <div id="batchPollBar" style="height:100%;width:0%;background:var(--accent);border-radius:3px;transition:width 1s ease;"></div>
+        </div>
+        <div style="margin-top:6px;display:flex;justify-content:space-between;font-size:11px;color:var(--text-muted);">
+          <span id="batchPollProgressText">0%</span>
+          <span id="batchPollEta">—</span>
+        </div>`;
+
+        // Start polling
+        startBatchPolling(batchId, data);
       } else {
         // ── Traditional flow: Step 2 only (extraction phase) ──
         // Step 2: Show extracted products

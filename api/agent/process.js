@@ -22,7 +22,7 @@ import { extractImagesFromPDF } from '../../lib/pdf-image-extractor.js';
 import { extractAllImagesFromZip } from '../../lib/zip-extractor.js';
 import { extractProductInfo } from '../../lib/deepseek.js';
 import { saveImagesToGallery } from '../../lib/upload-gallery.js';
-import { runBatchPipeline } from '../../lib/batch-queue.js';
+import { runBatchPipeline, createBatchJob } from '../../lib/batch-queue.js';
 
 // Multer config — store files in memory
 const upload = multer({
@@ -96,6 +96,9 @@ export default async function handler(req, res) {
 
     // Parse multipart form data
     await multerMiddleware(req, res);
+
+    console.log('[AGENT] req.body keys:', Object.keys(req.body || {}));
+    console.log('[AGENT] req.body.useBatchQueue:', req.body?.useBatchQueue, '(type:', typeof req.body?.useBatchQueue, ')');
 
     const pdfFile = req.files?.pdf?.[0];
     const zipFile = req.files?.zip?.[0];
@@ -229,65 +232,54 @@ export default async function handler(req, res) {
     // Step 5: Optionally run the full batch pipeline (fingerprinting + verification)
     // Triggered by `useBatchQueue: true` in the request body.
     // This runs the slow but accurate pipeline and saves results to the database.
+    // IMPORTANT: The pipeline runs ASYNCHRONOUSLY (not awaited) to avoid Nginx
+    // 504 Gateway Timeout. The UI polls GET /api/agent/batch-status/:batchId
+    // for progress and final results.
     const useBatchQueue = req.body?.useBatchQueue === true || req.body?.useBatchQueue === 'true';
 
     if (useBatchQueue) {
-      console.log('[AGENT] Step 5: Running batch queue pipeline (fingerprinting + verification)...');
+      console.log('[AGENT] Step 5: Launching batch queue pipeline asynchronously...');
 
-      try {
-        const batchResult = await runBatchPipeline({
-          pdfBuffer: pdfFile.buffer,
-          zipBuffer: zipFile.buffer,
-          products,
-          images: zipResult.images,
-          pdfImages,
-          sourcePdf: pdfFile.originalname,
-          sourceZip: zipFile.originalname
-        });
+      // Create the batch job first to get a batchId
+      const batchJob = await createBatchJob({
+        sourcePdf: pdfFile.originalname,
+        sourceZip: zipFile.originalname,
+        totalProducts: products.length,
+        totalImages: zipResult.images.length
+      });
+      const batchId = batchJob.id;
 
-        console.log(`[AGENT] Batch pipeline complete: ${batchResult.status} (batch ID: ${batchResult.batchId})`);
+      // Fire the pipeline in the background (no await) — it saves results to DB
+      runBatchPipeline({
+        pdfBuffer: pdfFile.buffer,
+        zipBuffer: zipFile.buffer,
+        products,
+        images: zipResult.images,
+        pdfImages,
+        sourcePdf: pdfFile.originalname,
+        sourceZip: zipFile.originalname,
+        existingBatchId: batchId
+      }).then(result => {
+        console.log(`[AGENT] Batch pipeline complete: ${result.status} (batch ID: ${batchId})`);
+      }).catch(err => {
+        console.error(`[AGENT] Batch pipeline failed (batch ID: ${batchId}):`, err.message);
+      });
 
-        return res.json({
-          success: true,
-          batchMode: true,
-          batchId: batchResult.batchId,
-          products,
-          allImages: zipResult.images,
-          pdfImages,
-          rawText,
-          totalImages: zipResult.totalImages,
-          batchStatus: batchResult.status,
-          batchStage: batchResult.stage,
-          matchStats: batchResult.stats,
-          matches: batchResult.results.map(r => ({
-            productIndex: r.productIndex,
-            product: r.product,
-            bestMatch: r.bestMatch ? {
-              imageIndex: r.bestMatch.imageIndex,
-              imageName: r.bestMatch.imageName,
-              confidence: r.bestMatch.confidence,
-              reason: r.bestMatch.reason,
-              status: r.bestMatch.status
-            } : null,
-            status: r.status,
-            reason: r.reason
-          }))
-        });
-      } catch (batchErr) {
-        console.error('[AGENT] Batch pipeline failed:', batchErr.message);
-        // Fall back to returning standard results
-        return res.json({
-          success: true,
-          batchMode: true,
-          batchError: batchErr.message,
-          products,
-          allImages: zipResult.images,
-          pdfImages,
-          rawText,
-          totalImages: zipResult.totalImages,
-          batchId: zipResult.batchId || ''
-        });
-      }
+      // Return immediately — UI will poll for results
+      return res.json({
+        success: true,
+        batchMode: true,
+        batchId,
+        products,
+        allImages: zipResult.images,
+        pdfImages,
+        rawText,
+        totalImages: zipResult.totalImages,
+        batchStatus: 'queued',
+        batchStage: 'Starting pipeline...',
+        matchStats: { autoAccepted: 0, needsReview: 0, rejected: 0, retryNeeded: 0 },
+        matches: []
+      });
     }
 
     // Standard mode: Return results with ALL images + PDF page images for Phase 2 matching

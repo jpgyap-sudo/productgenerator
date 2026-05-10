@@ -2,7 +2,7 @@
 //  api/agent/batch-status.js — GET /api/agent/batch-status/:batchId
 //  Returns the current state of a batch job for UI polling.
 //
-//  Response:
+//  Response (processing):
 //    {
 //      success: true,
 //      batchId: "...",
@@ -16,9 +16,13 @@
 //      last_error: null,
 //      activity_log: [...]
 //    }
+//
+//  Response (completed):
+//    Same fields + matches[] array with final results
 // ═══════════════════════════════════════════════════════════════════
 
 import { getBatchState } from '../../lib/batch-queue.js';
+import { supabase, PRODUCT_MATCHES_TABLE } from '../../lib/supabase.js';
 
 /**
  * GET /api/agent/batch-status/:batchId
@@ -51,7 +55,10 @@ export default async function handler(req, res) {
       return res.status(404).json({ error: 'Batch not found', batchId });
     }
 
-    return res.json({
+    const isComplete = state.status === 'completed' || state.status === 'partial' || state.status === 'failed';
+
+    // Build response
+    const response = {
       success: true,
       batchId: state.id,
       status: state.status,
@@ -63,7 +70,55 @@ export default async function handler(req, res) {
       estimated_seconds_remaining: state.estimated_seconds_remaining || null,
       last_error: state.last_error || null,
       activity_log: state.activity_log || []
-    });
+    };
+
+    // If batch is complete, also fetch match results from product_matches table
+    if (isComplete) {
+      const { data: matches, error: matchError } = await supabase
+        .from(PRODUCT_MATCHES_TABLE)
+        .select('*')
+        .eq('batch_id', batchId)
+        .order('id', { ascending: true });
+
+      if (!matchError && matches) {
+        response.matches = matches.map(m => {
+          let topCandidates = [];
+          if (m.top_candidates) {
+            try {
+              topCandidates = typeof m.top_candidates === 'string'
+                ? JSON.parse(m.top_candidates)
+                : m.top_candidates;
+            } catch { /* ignore parse errors */ }
+          }
+          return {
+            productIndex: m.id,
+            product: {
+              productCode: m.product_code,
+              name: m.product_name,
+              description: m.product_description
+            },
+            bestMatch: m.selected_image_name ? {
+              imageIndex: m.selected_image_id !== null ? parseInt(m.selected_image_id, 10) : -1,
+              imageName: m.selected_image_name,
+              confidence: m.confidence || 0,
+              reason: m.reason || '',
+              status: m.status
+            } : null,
+            status: m.status,
+            reason: m.reason || '',
+            allResults: topCandidates
+          };
+        });
+
+        // Compute stats
+        const autoAccepted = matches.filter(m => m.status === 'auto_accepted').length;
+        const needsReview = matches.filter(m => m.status === 'needs_review' || m.status === 'review').length;
+        const rejected = matches.filter(m => m.status === 'rejected').length;
+        response.matchStats = { autoAccepted, needsReview, rejected, retryNeeded: 0 };
+      }
+    }
+
+    return res.json(response);
 
   } catch (err) {
     console.error('[BATCH-STATUS] Error:', err.message);
