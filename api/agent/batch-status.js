@@ -1,6 +1,7 @@
 // ═══════════════════════════════════════════════════════════════════
 //  api/agent/batch-status.js — GET /api/agent/batch-status/:batchId
 //  Returns the current state of a batch job for UI polling.
+//  Also supports POST /pause and POST /resume sub-routes.
 //
 //  Response (processing):
 //    {
@@ -14,37 +15,118 @@
 //      total_images: 57,
 //      estimated_seconds_remaining: 120,
 //      last_error: null,
-//      activity_log: [...]
+//      activity_log: [...],
+//      canPause: true/false,
+//      canResume: true/false
 //    }
 //
 //  Response (completed):
 //    Same fields + matches[] array with final results
 // ═══════════════════════════════════════════════════════════════════
 
-import { getBatchState } from '../../lib/batch-queue.js';
+import { getBatchState, pauseBatch, resumeBatch } from '../../lib/batch-queue.js';
 import { supabase, PRODUCT_MATCHES_TABLE } from '../../lib/supabase.js';
 
 /**
+ * Determine if a batch can be paused based on its status.
+ */
+function canPause(status) {
+  return ['extracting_pdf', 'fingerprinting_zip', 'filtering_candidates', 'verifying_with_openai', 'retrying_failed'].includes(status);
+}
+
+/**
+ * Determine if a batch can be resumed based on its status.
+ */
+function canResume(status) {
+  return status === 'paused';
+}
+
+/**
  * GET /api/agent/batch-status/:batchId
+ * POST /api/agent/batch-status/:batchId/pause
+ * POST /api/agent/batch-status/:batchId/resume
  */
 export default async function handler(req, res) {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
     return res.status(204).end();
   }
 
-  if (req.method !== 'GET') {
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
-
   try {
-    const batchId = req.query?.batchId || req.params?.batchId || req.url?.split('/').pop();
+    // Parse batchId from URL: /api/agent/batch-status/:batchId[/pause|/resume]
+    const urlPath = req.url || '';
+    const parts = urlPath.split('/').filter(Boolean);
+    // parts = ['api', 'agent', 'batch-status', '<batchId>'] or ['api', 'agent', 'batch-status', '<batchId>', 'pause']
+    const batchIdIndex = parts.findIndex(p => p === 'batch-status') + 1;
+    const batchId = parts[batchIdIndex];
+    const action = parts[batchIdIndex + 1] || null; // 'pause' or 'resume' or null
 
     if (!batchId) {
       return res.status(400).json({ error: 'batchId parameter is required' });
+    }
+
+    // ── Handle pause action ────────────────────────────────────────
+    if (action === 'pause') {
+      if (req.method !== 'POST') {
+        return res.status(405).json({ error: 'Use POST to pause a batch' });
+      }
+
+      console.log(`[BATCH-STATUS] Pausing batch: ${batchId}`);
+      try {
+        const updatedState = await pauseBatch(batchId);
+        return res.json({
+          success: true,
+          batchId,
+          status: 'paused',
+          message: 'Batch pipeline paused',
+          state: {
+            status: updatedState.status,
+            stage: updatedState.stage,
+            progress_percent: updatedState.progress_percent || 0
+          }
+        });
+      } catch (err) {
+        return res.status(400).json({
+          error: err.message,
+          batchId
+        });
+      }
+    }
+
+    // ── Handle resume action ───────────────────────────────────────
+    if (action === 'resume') {
+      if (req.method !== 'POST') {
+        return res.status(405).json({ error: 'Use POST to resume a batch' });
+      }
+
+      console.log(`[BATCH-STATUS] Resuming batch: ${batchId}`);
+      try {
+        const updatedState = await resumeBatch(batchId);
+        return res.json({
+          success: true,
+          batchId,
+          status: updatedState.status,
+          message: 'Batch pipeline resumed',
+          state: {
+            status: updatedState.status,
+            stage: updatedState.stage,
+            progress_percent: updatedState.progress_percent || 0
+          }
+        });
+      } catch (err) {
+        return res.status(400).json({
+          error: err.message,
+          batchId
+        });
+      }
+    }
+
+    // ── Default: GET batch status ──────────────────────────────────
+    if (req.method !== 'GET') {
+      return res.status(405).json({ error: 'Method not allowed' });
     }
 
     console.log(`[BATCH-STATUS] Fetching state for batch: ${batchId}`);
@@ -69,7 +151,9 @@ export default async function handler(req, res) {
       total_images: state.total_images || 0,
       estimated_seconds_remaining: state.estimated_seconds_remaining || null,
       last_error: state.last_error || null,
-      activity_log: state.activity_log || []
+      activity_log: state.activity_log || [],
+      canPause: canPause(state.status),
+      canResume: canResume(state.status)
     };
 
     // If batch is complete, also fetch match results from product_matches table

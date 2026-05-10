@@ -12454,6 +12454,65 @@ function initBatchProcessor() {
 
   // ── Poll batch status until pipeline completes ──
   let batchPollTimer = null;
+  let batchPollStallCount = 0;
+  let batchPollLastPct = -1;
+
+  // ── Pause a running batch ──
+  async function pauseBatchPipeline(batchId) {
+    try {
+      const res = await fetchApi(`/api/agent/batch-status/${batchId}/pause`, {
+        method: 'POST'
+      });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        toast(`Failed to pause: ${errData.error || res.statusText}`, 'error');
+        return;
+      }
+      const data = await res.json();
+      if (data.success) {
+        toast('Batch pipeline paused', 'info');
+        // Update button states
+        const pauseBtn = document.getElementById('batchPauseBtn');
+        const resumeBtn = document.getElementById('batchResumeBtn');
+        if (pauseBtn) pauseBtn.style.display = 'none';
+        if (resumeBtn) resumeBtn.style.display = 'inline-flex';
+        const pollStage = document.getElementById('batchPollStage');
+        if (pollStage) pollStage.textContent = 'Paused';
+      }
+    } catch (err) {
+      console.error('[Batch Pause] Error:', err);
+      toast('Failed to pause batch', 'error');
+    }
+  }
+
+  // ── Resume a paused batch ──
+  async function resumeBatchPipeline(batchId) {
+    try {
+      const res = await fetchApi(`/api/agent/batch-status/${batchId}/resume`, {
+        method: 'POST'
+      });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        toast(`Failed to resume: ${errData.error || res.statusText}`, 'error');
+        return;
+      }
+      const data = await res.json();
+      if (data.success) {
+        toast('Batch pipeline resumed', 'success');
+        // Update button states
+        const pauseBtn = document.getElementById('batchPauseBtn');
+        const resumeBtn = document.getElementById('batchResumeBtn');
+        if (pauseBtn) pauseBtn.style.display = 'inline-flex';
+        if (resumeBtn) resumeBtn.style.display = 'none';
+        // Reset stall counter
+        batchPollStallCount = 0;
+        batchPollLastPct = -1;
+      }
+    } catch (err) {
+      console.error('[Batch Resume] Error:', err);
+      toast('Failed to resume batch', 'error');
+    }
+  }
 
   function startBatchPolling(batchId, initialData) {
     // Clear any existing poll timer
@@ -12461,11 +12520,15 @@ function initBatchProcessor() {
       clearInterval(batchPollTimer);
       batchPollTimer = null;
     }
+    batchPollStallCount = 0;
+    batchPollLastPct = -1;
 
     const pollStage = document.getElementById('batchPollStage');
     const pollBar = document.getElementById('batchPollBar');
     const pollProgressText = document.getElementById('batchPollProgressText');
     const pollEta = document.getElementById('batchPollEta');
+    const pauseBtn = document.getElementById('batchPauseBtn');
+    const resumeBtn = document.getElementById('batchResumeBtn');
 
     const poll = async () => {
       try {
@@ -12485,6 +12548,35 @@ function initBatchProcessor() {
           pollEta.textContent = `~${mins} min remaining`;
         } else if (pollEta) {
           pollEta.textContent = '—';
+        }
+
+        // ── Update pause/resume button visibility ──
+        if (pauseBtn) pauseBtn.style.display = state.canPause ? 'inline-flex' : 'none';
+        if (resumeBtn) resumeBtn.style.display = state.canResume ? 'inline-flex' : 'none';
+
+        // ── Auto-resume fallback: detect stalled pipeline ──
+        // If progress hasn't changed for 12 consecutive polls (~60 seconds),
+        // and the batch is in a processing state (not paused/completed/failed),
+        // auto-resume by pausing and resuming to trigger the in-memory resolver.
+        if (state.canPause || state.canResume) {
+          if (pct === batchPollLastPct) {
+            batchPollStallCount++;
+          } else {
+            batchPollStallCount = 0;
+            batchPollLastPct = pct;
+          }
+
+          // After ~60 seconds of no progress (12 polls × 5s), auto-resume
+          if (batchPollStallCount >= 12 && state.canResume) {
+            console.log('[Batch Poll] Pipeline stalled for ~60s — auto-resuming');
+            batchPollStallCount = 0;
+            await resumeBatchPipeline(batchId);
+            return;
+          }
+        } else {
+          // Reset stall counter if not in a processing state
+          batchPollStallCount = 0;
+          batchPollLastPct = -1;
         }
 
         // Check if pipeline is complete
@@ -12626,6 +12718,10 @@ function initBatchProcessor() {
         <div style="margin-top:6px;display:flex;justify-content:space-between;font-size:11px;color:var(--text-muted);">
           <span id="batchPollProgressText">0%</span>
           <span id="batchPollEta">—</span>
+        </div>
+        <div style="margin-top:10px;display:flex;gap:8px;justify-content:center;">
+          <button id="batchPauseBtn" class="batch-btn secondary" style="display:none;padding:6px 16px;font-size:12px;" onclick="pauseBatchPipeline('${batchId}')">⏸ Pause</button>
+          <button id="batchResumeBtn" class="batch-btn" style="display:none;padding:6px 16px;font-size:12px;background:var(--accent);color:#fff;" onclick="resumeBatchPipeline('${batchId}')">▶ Resume</button>
         </div>`;
 
         // Start polling

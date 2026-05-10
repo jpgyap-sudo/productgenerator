@@ -22,7 +22,7 @@ import { extractImagesFromPDF } from '../../lib/pdf-image-extractor.js';
 import { extractAllImagesFromZip } from '../../lib/zip-extractor.js';
 import { extractProductInfo } from '../../lib/deepseek.js';
 import { saveImagesToGallery } from '../../lib/upload-gallery.js';
-import { runBatchPipeline, createBatchJob } from '../../lib/batch-queue.js';
+import { runBatchPipeline, createBatchJob, autoResumePausedBatches } from '../../lib/batch-queue.js';
 
 // Multer config — store files in memory
 const upload = multer({
@@ -239,6 +239,9 @@ export default async function handler(req, res) {
 
     if (useBatchQueue) {
       console.log('[AGENT] Step 5: Launching batch queue pipeline asynchronously...');
+
+      // Auto-resume any paused batches from previous server sessions
+      autoResumePausedBatches().catch(() => {});
 
       // Create the batch job first to get a batchId
       const batchJob = await createBatchJob({
