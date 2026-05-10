@@ -165,6 +165,13 @@ function Sidebar({ state, dispatch, addToast }) {
       addToast('Please upload a product image first', 'error');
       return;
     }
+    dispatch({ type: 'SET_PENDING_JOB', payload: {
+      productName: state.file.name.replace(/\.[^/.]+$/, ''),
+      filePreview: state.filePreview,
+      brand: state.brand,
+      resolution: state.resolution,
+      pipeline: state.pipeline,
+    }});
     dispatch({ type: 'SET_STATUS', payload: 'submitting' });
     try {
       const formData = new FormData();
@@ -766,38 +773,121 @@ function QueuePanel({ state, dispatch }) {
   );
 }
 
+// ── Completed Job Card ───────────────────────────────────────────
+function CompletedJobCard({ job, dispatch }) {
+  const pipelineLabel = PIPELINES.find(p => p.id === job.pipeline)?.label || job.pipeline || 'GPT Mini';
+  const date = new Date(job.completedAt);
+  const dateStr = date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
+    + ' · ' + date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+
+  const downloadAll = () => {
+    job.views.forEach(v => {
+      if (v.imageUrl) {
+        const a = document.createElement('a');
+        a.href = v.imageUrl;
+        a.download = `${job.productName}-${v.view || 'view'}.png`;
+        a.target = '_blank';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      }
+    });
+  };
+
+  return (
+    <div className="fr-completed-job-card">
+      <div className="fr-completed-job-header">
+        <div className="fr-completed-job-meta">
+          {job.filePreview && (
+            <img src={job.filePreview} alt="" className="fr-completed-job-thumb" />
+          )}
+          <div>
+            <strong>{job.productName}</strong>
+            <div className="fr-completed-job-tags">
+              <span>{job.resolution}</span>
+              <span>{pipelineLabel}</span>
+              {job.brand && <span>{job.brand}</span>}
+              <span className="fr-chip-success" style={{ padding: '2px 8px', fontSize: 11 }}>
+                {job.views.length}/4 views
+              </span>
+            </div>
+            <small style={{ color: '#6b7280', fontSize: 11 }}>{dateStr}</small>
+          </div>
+        </div>
+        <div className="fr-completed-job-actions">
+          <button className="fr-icon-btn" onClick={downloadAll} title="Download all views">
+            <Download size={14} />
+          </button>
+          <button className="fr-icon-btn fr-danger" title="Remove"
+            onClick={() => dispatch({ type: 'REMOVE_COMPLETED_JOB', payload: job.id })}>
+            <Trash2 size={14} />
+          </button>
+        </div>
+      </div>
+      <div className="fr-completed-views-row">
+        {job.views.map((v, i) => {
+          const label = VIEW_TYPES.find(vt => vt.key === v.view)?.label
+            || VIEW_TYPES[v.viewId ? v.viewId - 1 : i]?.label
+            || v.view || `View ${i + 1}`;
+          return (
+            <div key={i} className="fr-completed-view-item">
+              {v.imageUrl ? (
+                <a href={v.imageUrl} target="_blank" rel="noopener noreferrer" title={`Open ${label}`}>
+                  <img src={v.imageUrl} alt={label} />
+                  <div className="fr-completed-view-label">{label}</div>
+                </a>
+              ) : (
+                <div className="fr-completed-view-empty">
+                  <ImageOff size={16} />
+                  <span>{label}</span>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // ── Completed Panel ──────────────────────────────────────────────
 function CompletedPanel({ state, dispatch }) {
-  return (
-    <div className="fr-panel-page">
-      <h2><CheckCircle2 size={20} /> Completed Renders</h2>
-      <p className="fr-panel-sub">History of all completed render jobs</p>
-      {state.renderResults.length > 0 ? (
-        <div className="fr-completed-grid">
-          {state.renderResults.map((r, i) => (
-            <div key={i} className="fr-completed-item">
-              {r.imageUrl ? (
-                <img src={r.imageUrl} alt={`Render ${i + 1}`} className="fr-completed-thumb" />
-              ) : (
-                <div className="fr-completed-placeholder" />
-              )}
-              <div className="fr-completed-info">
-                <strong>{VIEW_TYPES[r.viewId ? r.viewId - 1 : i]?.label || `View ${i + 1}`}</strong>
-                <span className="fr-chip-success">Complete</span>
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : (
+  const { completedJobs } = state;
+
+  if (completedJobs.length === 0) {
+    return (
+      <div className="fr-panel-page">
+        <h2><CheckCircle2 size={20} /> Completed Renders</h2>
+        <p className="fr-panel-sub">History of all completed render jobs</p>
         <div className="fr-empty-state">
           <CheckCircle2 size={48} />
-          <p>No completed renders yet.</p>
+          <p>No completed renders yet. Renders will appear here automatically after finishing.</p>
           <button className="fr-primary" style={{ width: 'auto', padding: '10px 24px', marginTop: 8 }}
             onClick={() => dispatch({ type: 'SET_ACTIVE_TAB', payload: 'studio' })}>
             <Plus size={16} /> Start a Render
           </button>
         </div>
-      )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="fr-panel-page">
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+        <h2><CheckCircle2 size={20} /> Completed Renders</h2>
+        <button
+          style={{ background: 'transparent', border: '1px solid #2a2d36', color: '#8e96a3', padding: '6px 14px', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontFamily: 'inherit' }}
+          onClick={() => dispatch({ type: 'CLEAR_COMPLETED' })}
+        >
+          Clear All
+        </button>
+      </div>
+      <p className="fr-panel-sub">{completedJobs.length} job{completedJobs.length !== 1 ? 's' : ''} · click any image to open full size</p>
+      <div className="fr-completed-jobs">
+        {completedJobs.map(job => (
+          <CompletedJobCard key={job.id} job={job} dispatch={dispatch} />
+        ))}
+      </div>
     </div>
   );
 }
@@ -821,19 +911,25 @@ function TemplatesPanel({ dispatch }) {
 }
 
 // ── App State ────────────────────────────────────────────────────
+const savedCompletedJobs = (() => {
+  try { return JSON.parse(localStorage.getItem('fr_completedJobs') || '[]'); } catch { return []; }
+})();
+
 const initialState = {
-  file: null,        // File object
-  filePreview: null, // data URL string
+  file: null,
+  filePreview: null,
   brand: '',
   description: '',
   resolution: '0.5K',
   pipeline: 'gpt-mini',
   autoQueue: true,
-  status: 'idle', // idle | submitting | queued | rendering | done | error
+  status: 'idle',
   queueId: null,
-  renderResults: [], // Array of { view, status, imageUrl, qaScore, ... }
-  mockMode: true, // Show demo data
+  renderResults: [],
+  mockMode: true,
   activeTab: 'studio',
+  completedJobs: savedCompletedJobs,
+  pendingJobMeta: null,
 };
 
 function reducer(state, action) {
@@ -856,8 +952,41 @@ function reducer(state, action) {
       return { ...state, status: action.payload };
     case 'SET_QUEUE_ID':
       return { ...state, queueId: action.payload };
-    case 'SET_RENDER_RESULTS':
-      return { ...state, renderResults: action.payload, status: 'done' };
+    case 'SET_PENDING_JOB':
+      return { ...state, pendingJobMeta: action.payload };
+    case 'SET_RENDER_RESULTS': {
+      const results = action.payload;
+      const successViews = results.filter(r =>
+        r.status === 'done' || r.status === 'generated' || r.status === 'fixed' || r.status === 'fallback'
+      );
+      if (state.pendingJobMeta && successViews.length > 0) {
+        const newJob = {
+          id: Date.now(),
+          ...state.pendingJobMeta,
+          completedAt: new Date().toISOString(),
+          views: successViews,
+        };
+        const completedJobs = [newJob, ...state.completedJobs].slice(0, 50);
+        try {
+          // Persist without filePreview data URLs to avoid localStorage quota
+          const toSave = completedJobs.map(({ filePreview: _fp, ...j }) => j);
+          localStorage.setItem('fr_completedJobs', JSON.stringify(toSave));
+        } catch (e) {}
+        return { ...state, renderResults: results, status: 'done', completedJobs, pendingJobMeta: null };
+      }
+      return { ...state, renderResults: results, status: 'done', pendingJobMeta: null };
+    }
+    case 'REMOVE_COMPLETED_JOB': {
+      const completedJobs = state.completedJobs.filter(j => j.id !== action.payload);
+      try {
+        const toSave = completedJobs.map(({ filePreview: _fp, ...j }) => j);
+        localStorage.setItem('fr_completedJobs', JSON.stringify(toSave));
+      } catch (e) {}
+      return { ...state, completedJobs };
+    }
+    case 'CLEAR_COMPLETED':
+      try { localStorage.removeItem('fr_completedJobs'); } catch (e) {}
+      return { ...state, completedJobs: [] };
     case 'SET_ACTIVE_TAB':
       return { ...state, activeTab: action.payload };
     case 'TOGGLE_MOCK':
@@ -935,10 +1064,6 @@ function App() {
     }
   };
 
-  const doneCount = state.renderResults.filter(r =>
-    r.status === 'done' || r.status === 'generated' || r.status === 'fixed' || r.status === 'fallback'
-  ).length;
-
   return (
     <div className="fr-app">
       <Sidebar state={state} dispatch={dispatch} addToast={addToast} />
@@ -947,7 +1072,7 @@ function App() {
           activeTab={state.activeTab}
           setActiveTab={(tab) => dispatch({ type: 'SET_ACTIVE_TAB', payload: tab })}
           queueCount={state.queueId ? 1 : 0}
-          completedCount={doneCount}
+          completedCount={state.completedJobs.length}
         />
         {renderContent()}
       </div>

@@ -1,15 +1,13 @@
 // ═══════════════════════════════════════════════════════════════════
-//  BatchPanel.jsx — Vision-based PDF+ZIP matching tab
-//                  with Gemini fallback for unmatched products
+//  BatchPanel.jsx — PDF+ZIP batch matching with batch pipeline
 //
 //  Workflow:
-//    1. Upload PDF → extract product rows
-//    2. Upload ZIP → extract images
-//    3. Run vision matching (OpenAI fingerprints + ranking)
-//    4. Gemini fallback for low/none confidence products
-//    5. Display top 3 candidates per product
-//    6. User confirms or changes selection
-//    7. Submit confirmed matches to render queue
+//    1. Upload PDF + ZIP → server extracts products & images
+//    2. Server runs batch pipeline (fingerprinting → candidate filter → verify)
+//    3. Results returned with confidence scores, no separate match call needed
+//    4. Display top candidates per product
+//    5. User confirms or changes selection
+//    6. Submit confirmed matches to render queue
 //
 //  Key rules:
 //    - Never depend on ZIP order
@@ -22,7 +20,7 @@ import {
   Upload, FileImage, ImagePlus, CheckCircle2, AlertCircle, Info,
   Loader2, Zap, X, ChevronDown, ChevronUp, Sparkles, Eye,
   Download, RefreshCw, Check, Clock, FileText, Archive, Search,
-  ThumbsUp, ThumbsDown, ArrowRight, Layers
+  ThumbsUp, ThumbsDown, ArrowRight, Layers, BarChart3
 } from 'lucide-react';
 
 const API_BASE = window.location.origin;
@@ -44,6 +42,19 @@ const STATUS = {
   SUBMITTING: 'submitting',
   SUBMIT_DONE: 'submit_done',
   SUBMIT_ERROR: 'submit_error',
+};
+
+// ── Batch pipeline stage labels ───────────────────────────────────
+const STAGE_LABELS = {
+  queued: 'Queued',
+  extracting_pdf: 'Extracting PDF pages...',
+  fingerprinting_zip: 'Fingerprinting ZIP images (one-time AI)...',
+  filtering_candidates: 'Filtering candidates (attribute scoring)...',
+  verifying_with_openai: 'Verifying matches with AI...',
+  retrying_failed: 'Retrying failed verifications...',
+  needs_review: 'Matches need review',
+  completed: 'Complete!',
+  failed: 'Failed'
 };
 
 // ── Confidence badge color ────────────────────────────────────────
@@ -300,6 +311,67 @@ function StatsBar({ stats }) {
   );
 }
 
+// ── Batch Progress Bar ────────────────────────────────────────────
+function BatchProgressBar({ batchId, status, setStatus, setProgressMsg, addToast }) {
+  const POLL_INTERVAL = 3000; // 3 seconds
+
+  useEffect(() => {
+    if (!batchId) return;
+    if (status === STATUS.MATCH_DONE || status === STATUS.MATCH_ERROR) return;
+
+    let cancelled = false;
+
+    const poll = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/agent/batch-status/${batchId}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        if (cancelled) return;
+
+        if (data.error) {
+          console.warn('[BatchProgress] Poll error:', data.error);
+          return;
+        }
+
+        const stage = data.stage || '';
+        const progress = data.progress_percent || 0;
+        const eta = data.estimated_seconds_remaining
+          ? ` (~${Math.round(data.estimated_seconds_remaining / 60)}m ${data.estimated_seconds_remaining % 60}s)`
+          : '';
+        const stageLabel = STAGE_LABELS[stage] || stage;
+        const completed = data.completed_products || 0;
+        const total = data.total_products || 0;
+
+        setProgressMsg(`${stageLabel} ${completed}/${total}${eta}`);
+
+        // If completed or failed, stop polling
+        if (data.status === 'completed' || data.status === 'failed') {
+          setStatus(data.status === 'completed' ? STATUS.MATCH_DONE : STATUS.MATCH_ERROR);
+          if (data.status === 'completed') {
+            addToast('Batch pipeline completed!', 'success');
+          } else {
+            addToast(`Batch failed: ${data.last_error || 'Unknown error'}`, 'error');
+          }
+          return;
+        }
+      } catch (err) {
+        if (!cancelled) {
+          console.warn('[BatchProgress] Poll fetch error:', err.message);
+        }
+      }
+    };
+
+    // Initial delay then poll
+    const timer = setInterval(poll, POLL_INTERVAL);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [batchId, status, setStatus, setProgressMsg, addToast]);
+
+  return null; // Renders nothing — just drives polling
+}
+
 // ── Main BatchPanel Component ─────────────────────────────────────
 export default function BatchPanel({ addToast }) {
   const [status, setStatus] = useState(STATUS.IDLE);
@@ -311,6 +383,7 @@ export default function BatchPanel({ addToast }) {
   const [stats, setStats] = useState(null);
   const [error, setError] = useState(null);
   const [progressMsg, setProgressMsg] = useState('');
+  const [batchId, setBatchId] = useState(null);
 
   // ── Handle PDF upload ───────────────────────────────────────────
   const handlePdfUpload = useCallback(async (file) => {
@@ -343,6 +416,9 @@ export default function BatchPanel({ addToast }) {
   }, [addToast, pdfFile]);
 
   // ── Process both PDF + ZIP via multipart upload ─────────────────
+  //     Sends useBatchQueue=true so the server runs the full batch
+  //     pipeline (fingerprinting → candidate filter → verify) and
+  //     returns matches directly — no separate match-vision call needed.
   const handleProcessBoth = useCallback(async (pdf, zip) => {
     setError(null);
     setStatus(STATUS.PDF_UPLOADING);
@@ -352,6 +428,7 @@ export default function BatchPanel({ addToast }) {
       const formData = new FormData();
       formData.append('pdf', pdf);
       formData.append('zip', zip);
+      formData.append('useBatchQueue', 'true');
 
       setProgressMsg('Extracting products and images...');
       setStatus(STATUS.PDF_EXTRACTING);
@@ -377,8 +454,63 @@ export default function BatchPanel({ addToast }) {
 
       setProducts(extractedProducts);
       setImages(extractedImages);
-      setStatus(STATUS.ZIP_DONE);
-      addToast(`Extracted ${extractedProducts.length} products and ${extractedImages.length} images`, 'success');
+
+      // ── Batch pipeline response ──────────────────────────────────
+      // If the server ran the batch pipeline, matches are returned inline.
+      if (data.batchMode && data.matches) {
+        // Enrich matches with image data URLs for display
+        const enrichedMatches = data.matches.map(m => {
+          const bestImg = m.bestMatch && extractedImages[m.bestMatch.imageIndex];
+          return {
+            productIndex: m.productIndex,
+            product: m.product,
+            bestMatch: bestImg ? {
+              imageIndex: m.bestMatch.imageIndex,
+              imageName: m.bestMatch.imageName,
+              confidence: m.bestMatch.confidence,
+              reason: m.bestMatch.reason,
+              status: m.bestMatch.status,
+              dataUrl: bestImg.dataUrl
+            } : null,
+            secondMatch: null,
+            thirdMatch: null,
+            overallConfidence: m.bestMatch?.confidence >= 90 ? 'high'
+              : m.bestMatch?.confidence >= 70 ? 'medium'
+              : m.bestMatch?.confidence ? 'low' : 'none',
+            overallReason: m.reason || m.bestMatch?.reason || '',
+            selectedImageIndex: 0,
+            confirmed: m.bestMatch?.status === 'auto_accepted',
+            batchStatus: m.status
+          };
+        });
+
+        setMatches(enrichedMatches);
+        setBatchId(data.batchId || null);
+        setStats(data.matchStats || {
+          totalProducts: extractedProducts.length,
+          totalImages: extractedImages.length,
+          fingerprintsCreated: 0,
+          autoAccepted: enrichedMatches.filter(m => m.confirmed).length,
+          needsReview: enrichedMatches.filter(m => !m.confirmed).length
+        });
+        setStatus(STATUS.MATCH_DONE);
+
+        const autoCount = enrichedMatches.filter(m => m.confirmed).length;
+        addToast(
+          `Batch complete: ${autoCount} auto-accepted, ${enrichedMatches.length - autoCount} need review`,
+          autoCount > 0 ? 'success' : 'info'
+        );
+      } else if (data.batchMode && data.batchId && !data.matches) {
+        // Batch pipeline is still running — set up polling
+        setBatchId(data.batchId);
+        setStatus(STATUS.MATCHING);
+        setProgressMsg('Batch pipeline running...');
+        addToast('Batch pipeline started. Processing...', 'info');
+      } else {
+        // Standard mode (no batch pipeline) — show products/images, user clicks "Run Matching"
+        setStatus(STATUS.ZIP_DONE);
+        addToast(`Extracted ${extractedProducts.length} products and ${extractedImages.length} images`, 'success');
+      }
     } catch (err) {
       setError(err.message);
       setStatus(STATUS.PDF_ERROR);
@@ -517,6 +649,7 @@ export default function BatchPanel({ addToast }) {
     setStats(null);
     setError(null);
     setProgressMsg('');
+    setBatchId(null);
   }, []);
 
   // ── Determine if matching can run ───────────────────────────────
@@ -565,6 +698,15 @@ export default function BatchPanel({ addToast }) {
           currentFile={zipFile}
         />
       </div>
+
+      {/* ── Batch Progress Bar (polling) ─────────────────────────── */}
+      <BatchProgressBar
+        batchId={batchId}
+        status={status}
+        setStatus={setStatus}
+        setProgressMsg={setProgressMsg}
+        addToast={addToast}
+      />
 
       {/* ── Progress / Error ────────────────────────────────────── */}
       {(status === STATUS.PDF_UPLOADING || status === STATUS.PDF_EXTRACTING ||

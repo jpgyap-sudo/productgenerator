@@ -2538,6 +2538,163 @@ html, body {
   margin-top: 16px;
 }
 
+/* ── Completed Jobs History ─────────────────────────────────────── */
+.fr-completed-jobs {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.fr-completed-job-card {
+  border: 1px solid #252c38;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #151a22, #10141b);
+  overflow: hidden;
+  transition: border-color 0.2s;
+  animation: fr-fade-in 0.3s ease;
+}
+
+.fr-completed-job-card:hover {
+  border-color: #2d3645;
+}
+
+.fr-completed-job-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 18px;
+  border-bottom: 1px solid #1e2630;
+}
+
+.fr-completed-job-meta {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+
+.fr-completed-job-thumb {
+  width: 52px;
+  height: 52px;
+  border-radius: 8px;
+  object-fit: cover;
+  border: 1px solid #2a3340;
+  flex-shrink: 0;
+  background: #1a202c;
+}
+
+.fr-completed-job-meta strong {
+  display: block;
+  font-size: 14px;
+  color: #f4f0e8;
+  margin-bottom: 5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fr-completed-job-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-bottom: 5px;
+}
+
+.fr-completed-job-tags span {
+  font-size: 10px;
+  padding: 2px 8px;
+  background: #1e2630;
+  border: 1px solid #2a3340;
+  border-radius: 50px;
+  color: #9aa2ad;
+}
+
+.fr-completed-job-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+  margin-left: 16px;
+}
+
+.fr-icon-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: 1px solid #2a3340;
+  background: transparent;
+  color: #8e96a3;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  transition: border-color 0.2s, color 0.2s, background 0.2s;
+}
+
+.fr-icon-btn:hover {
+  border-color: #d3a64f;
+  color: #d3a64f;
+  background: rgba(211, 166, 79, 0.06);
+}
+
+.fr-icon-btn.fr-danger:hover {
+  border-color: #ff5555;
+  color: #ff5555;
+  background: rgba(255, 85, 85, 0.06);
+}
+
+.fr-completed-views-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1px;
+  background: #1e2630;
+}
+
+.fr-completed-view-item {
+  background: #10141b;
+  position: relative;
+  overflow: hidden;
+}
+
+.fr-completed-view-item a {
+  display: block;
+  text-decoration: none;
+}
+
+.fr-completed-view-item img {
+  width: 100%;
+  height: 150px;
+  object-fit: cover;
+  display: block;
+  transition: transform 0.3s;
+}
+
+.fr-completed-view-item:hover img {
+  transform: scale(1.05);
+}
+
+.fr-completed-view-label {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 20px 10px 8px;
+  background: linear-gradient(transparent, rgba(0, 0, 0, 0.72));
+  font-size: 11px;
+  color: #e7e1d8;
+  font-weight: 500;
+}
+
+.fr-completed-view-empty {
+  height: 150px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  color: #4a5260;
+  font-size: 11px;
+  background: #0d1118;
+}
+
 /* ── Responsive ─────────────────────────────────────────────────── */
 @media (max-width: 800px) {
   .vm-upload-section {

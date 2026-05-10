@@ -47,6 +47,7 @@ import agentMatchedImagesHandler from './api/agent/matched-images.js';
 import agentSaveMatchedPermanentHandler from './api/agent/save-matched-permanent.js';
 import agentMatchedImagesPermanentHandler from './api/agent/matched-images-permanent.js';
 import agentUploadGalleryHandler from './api/agent/upload-gallery.js';
+import agentBatchStatusHandler from './api/agent/batch-status.js';
 import { startGalleryCleanup } from './lib/upload-gallery.js';
 import renderProductHandler from './api/render/product.js';
 import renderQueueRoutes from './api/render-queue/index.js';
@@ -246,6 +247,17 @@ app.all('/api/agent/upload-gallery', async (req, res) => {
     if (!res.headersSent) res.json(result);
   } catch (err) {
     console.error('[UPLOAD-GALLERY] Error:', err);
+    if (!res.headersSent) res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Batch Status Polling ──
+app.get('/api/agent/batch-status/:batchId', async (req, res) => {
+  try {
+    const result = await agentBatchStatusHandler(req, res);
+    if (!res.headersSent) res.json(result);
+  } catch (err) {
+    console.error('[BATCH-STATUS] Error:', err);
     if (!res.headersSent) res.status(500).json({ error: err.message });
   }
 });
