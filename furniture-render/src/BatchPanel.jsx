@@ -319,49 +319,13 @@ export default function BatchPanel({ addToast }) {
       return;
     }
     setPdfFile(file);
-    setError(null);
-    setStatus(STATUS.PDF_UPLOADING);
-    setProgressMsg('Uploading PDF...');
-
-    try {
-      // Read PDF as base64
-      const reader = new FileReader();
-      const dataUrl = await new Promise((resolve, reject) => {
-        reader.onload = () => resolve(reader.result);
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-      });
-
-      setProgressMsg('Extracting product rows from PDF...');
-      setStatus(STATUS.PDF_EXTRACTING);
-
-      // Call the PDF extraction endpoint
-      const res = await fetch(`${API_BASE}/api/agent/process`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          pdfDataUrl: dataUrl,
-          fileName: file.name
-        })
-      });
-
-      const data = await res.json();
-      if (data.error) throw new Error(data.error);
-
-      const extractedProducts = data.products || data.items || [];
-      if (extractedProducts.length === 0) {
-        throw new Error('No products found in PDF');
-      }
-
-      setProducts(extractedProducts);
-      setStatus(STATUS.PDF_DONE);
-      addToast(`Extracted ${extractedProducts.length} products from PDF`, 'success');
-    } catch (err) {
-      setError(err.message);
-      setStatus(STATUS.PDF_ERROR);
-      addToast(`PDF extraction failed: ${err.message}`, 'error');
+    // If ZIP is already selected, auto-process both
+    if (zipFile) {
+      await handleProcessBoth(file, zipFile);
+    } else {
+      addToast('PDF selected. Now upload the ZIP file to begin processing.', 'info');
     }
-  }, [addToast]);
+  }, [addToast, zipFile]);
 
   // ── Handle ZIP upload ───────────────────────────────────────────
   const handleZipUpload = useCallback(async (file) => {
@@ -370,46 +334,55 @@ export default function BatchPanel({ addToast }) {
       return;
     }
     setZipFile(file);
+    // If PDF is already selected, auto-process both
+    if (pdfFile) {
+      await handleProcessBoth(pdfFile, file);
+    } else {
+      addToast('ZIP selected. Now upload the PDF file to begin processing.', 'info');
+    }
+  }, [addToast, pdfFile]);
+
+  // ── Process both PDF + ZIP via multipart upload ─────────────────
+  const handleProcessBoth = useCallback(async (pdf, zip) => {
     setError(null);
-    setStatus(STATUS.ZIP_UPLOADING);
-    setProgressMsg('Uploading ZIP...');
+    setStatus(STATUS.PDF_UPLOADING);
+    setProgressMsg('Uploading PDF and ZIP...');
 
     try {
-      const reader = new FileReader();
-      const dataUrl = await new Promise((resolve, reject) => {
-        reader.onload = () => resolve(reader.result);
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-      });
+      const formData = new FormData();
+      formData.append('pdf', pdf);
+      formData.append('zip', zip);
 
-      setProgressMsg('Extracting images from ZIP...');
-      setStatus(STATUS.ZIP_EXTRACTING);
+      setProgressMsg('Extracting products and images...');
+      setStatus(STATUS.PDF_EXTRACTING);
 
-      // Call the ZIP extraction endpoint
-      const res = await fetch(`${API_BASE}/api/queue/download-zip`, {
+      const res = await fetch(`${API_BASE}/api/agent/process`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          zipDataUrl: dataUrl,
-          fileName: file.name
-        })
+        body: formData
+        // No Content-Type header — browser sets multipart boundary automatically
       });
 
       const data = await res.json();
       if (data.error) throw new Error(data.error);
 
-      const extractedImages = data.images || [];
+      const extractedProducts = data.products || data.items || [];
+      const extractedImages = data.allImages || [];
+
+      if (extractedProducts.length === 0) {
+        throw new Error(data.warning || 'No products found in PDF');
+      }
       if (extractedImages.length === 0) {
         throw new Error('No images found in ZIP');
       }
 
+      setProducts(extractedProducts);
       setImages(extractedImages);
       setStatus(STATUS.ZIP_DONE);
-      addToast(`Extracted ${extractedImages.length} images from ZIP`, 'success');
+      addToast(`Extracted ${extractedProducts.length} products and ${extractedImages.length} images`, 'success');
     } catch (err) {
       setError(err.message);
-      setStatus(STATUS.ZIP_ERROR);
-      addToast(`ZIP extraction failed: ${err.message}`, 'error');
+      setStatus(STATUS.PDF_ERROR);
+      addToast(`Processing failed: ${err.message}`, 'error');
     }
   }, [addToast]);
 

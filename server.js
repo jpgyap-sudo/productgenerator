@@ -40,6 +40,7 @@ import uploadDriveHandler from './api/queue/upload-drive.js';
 import saveStateHandler from './api/queue/save-state.js';
 import agentProcessHandler from './api/agent/process.js';
 import agentMatchHandler from './api/agent/match.js';
+import agentMatchVisionHandler from './api/agent/match-vision.js';
 import agentSubmitHandler from './api/agent/submit.js';
 import agentSaveMatchedHandler from './api/agent/save-matched.js';
 import agentMatchedImagesHandler from './api/agent/matched-images.js';
@@ -171,6 +172,17 @@ app.post('/api/agent/match', async (req, res) => {
     if (!res.headersSent) res.json(result);
   } catch (err) {
     console.error('[AGENT-MATCH] Error:', err);
+    if (!res.headersSent) res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Vision-based Batch Matching ──
+app.post('/api/agent/match-vision', async (req, res) => {
+  try {
+    const result = await agentMatchVisionHandler(req, res);
+    if (!res.headersSent) res.json(result);
+  } catch (err) {
+    console.error('[AGENT-MATCH-VISION] Error:', err);
     if (!res.headersSent) res.status(500).json({ error: err.message });
   }
 });
