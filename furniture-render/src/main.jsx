@@ -1,11 +1,13 @@
 import React, { useMemo, useState, useRef, useEffect, useCallback, useReducer, Component } from 'react';
 import { createRoot } from 'react-dom/client';
+import { createPortal } from 'react-dom';
 import {
   Box, CheckCircle2, ChevronDown, Cloud, Download, Eye, ImagePlus, Pencil,
   Plus, Share2, Sparkles, Upload, Clock, Zap, ShieldCheck, Wand2, X, RefreshCw,
   AlertCircle, FileImage, Settings, Sliders, Layers, Maximize2, Minimize2,
   ChevronRight, ChevronLeft, Info, Check, Loader2, ImageOff, Trash2, ZoomIn
 } from 'lucide-react';
+import BatchPanel from './BatchPanel.jsx';
 import './styles.css';
 
 // ── API Configuration ────────────────────────────────────────────
@@ -32,6 +34,13 @@ const PIPELINES = [
   { id: 'stability', label: 'Stability AI', desc: 'SDXL Turbo pipeline', icon: '🎨' },
   { id: 'hybrid', label: 'Hybrid (GPT → Gemini)', desc: 'GPT renders, Gemini repairs', icon: '🔄' },
 ];
+
+const EST_TIME = {
+  'gpt-mini':  { '0.5K': '~1m', '1K': '~1m 30s', '2K': '~2m', '4K': '~3m' },
+  'gemini':    { '0.5K': '~1m 30s', '1K': '~2m', '2K': '~3m', '4K': '~4m' },
+  'stability': { '0.5K': '~45s', '1K': '~1m', '2K': '~2m', '4K': '~3m' },
+  'hybrid':    { '0.5K': '~2m', '1K': '~3m', '2K': '~4m', '4K': '~6m' },
+};
 
 // ── Helper: format time ──────────────────────────────────────────
 function formatTime(d) {
@@ -295,7 +304,7 @@ function Sidebar({ state, dispatch, addToast }) {
         </button>
         <p>
           Est. cost: <strong style={{ color: '#d3a64f' }}>${(RESOLUTIONS.find(r => r.value === state.resolution)?.price || 0.06) * 4}</strong>
-          {' · '}Est. time: <strong>~1m 30s</strong>
+          {' · '}Est. time: <strong>{EST_TIME[state.pipeline]?.[state.resolution] || '~1m 30s'}</strong>
         </p>
       </div>
     </aside>
@@ -315,6 +324,9 @@ function TopNav({ activeTab, setActiveTab, queueCount, completedCount }) {
       <nav>
         <a className={activeTab === 'studio' ? 'fr-active' : ''} onClick={() => setActiveTab('studio')}>
           <Box size={16} /> Studio
+        </a>
+        <a className={activeTab === 'batch' ? 'fr-active' : ''} onClick={() => setActiveTab('batch')}>
+          <Layers size={16} /> Batch
         </a>
         <a className={activeTab === 'queue' ? 'fr-active' : ''} onClick={() => setActiveTab('queue')}>
           <Clock size={16} /> Queue <span>{queueCount}</span>
@@ -402,8 +414,8 @@ function ViewCard({ view, index }) {
         <small>{view.tag}</small>
       </div>
 
-      {/* Lightbox */}
-      {lightboxOpen && hasImage && (
+      {/* Lightbox — rendered via portal so .fr-view's CSS transform doesn't clip it */}
+      {lightboxOpen && hasImage && createPortal(
         <div className="fr-lightbox" onClick={() => setLightboxOpen(false)}>
           <div className="fr-lightbox-content" onClick={(e) => e.stopPropagation()}>
             <button className="fr-lightbox-close" onClick={() => setLightboxOpen(false)}>
@@ -420,7 +432,8 @@ function ViewCard({ view, index }) {
               </a>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
@@ -490,6 +503,13 @@ function MainStudio({ state, dispatch }) {
   const doneCount = generatedViews.filter(v => v.status === 'Complete').length;
   const totalCount = generatedViews.length;
 
+  // Real QA scores from API results (qaScore is 0–100)
+  const scoredResults = state.renderResults.filter(r => r.qaScore != null);
+  const avgQaScore = scoredResults.length > 0
+    ? Math.round(scoredResults.reduce((sum, r) => sum + r.qaScore, 0) / scoredResults.length)
+    : null;
+  const hasRealScores = !state.mockMode && avgQaScore !== null;
+
   return (
     <main className="fr-studio">
       <div className="fr-title-row">
@@ -533,7 +553,10 @@ function MainStudio({ state, dispatch }) {
           </div>
         </div>
         <div className="fr-ai-detected">
-          <h3><Sparkles size={14} /> AI Detected</h3>
+          <h3>
+            <Sparkles size={14} /> AI Detected
+            <span className="fr-demo-label" style={{ marginLeft: 'auto' }}>DEMO</span>
+          </h3>
           {[
             ['Category', state.brand ? `${state.brand} Furniture` : 'Product'],
             ['Style', 'Modern'],
@@ -569,7 +592,13 @@ function MainStudio({ state, dispatch }) {
       <section className="fr-bottom-grid">
         <div className="fr-progress-card">
           <h3><Zap size={14} /> Pipeline Progress</h3>
-          <PipelineProgress currentStep={state.mockMode ? 3 : 0} />
+          <PipelineProgress currentStep={
+            state.mockMode ? 3
+            : state.status === 'done' ? 5
+            : state.status === 'rendering' || state.status === 'queued' ? 1
+            : state.status === 'submitting' ? 0
+            : -1
+          } />
           <div className="fr-note">
             <Sparkles size={16} />
             {state.mockMode
@@ -580,29 +609,50 @@ function MainStudio({ state, dispatch }) {
           </div>
         </div>
         <div className="fr-score-card">
-          <h3><ShieldCheck size={14} /> Scene Consistency Score</h3>
-          {[
-            ['Identity Match', '94%'],
-            ['Geometry', '98%'],
-            ['Material Accuracy', '91%'],
-            ['Brand Style Match', '89%'],
-          ].map(([a, b]) => (
-            <p key={a}>
-              <span>{a}</span>
-              <meter min="0" max="100" value={parseInt(b)} />
-              <strong>{b}</strong>
-            </p>
-          ))}
-          <h2>93% <small>Excellent</small></h2>
+          <h3>
+            <ShieldCheck size={14} /> Scene Consistency Score
+            {!hasRealScores && <span className="fr-demo-label">DEMO</span>}
+          </h3>
+          {hasRealScores ? (
+            <>
+              {scoredResults.map(r => (
+                <p key={r.view}>
+                  <span style={{ textTransform: 'capitalize' }}>{r.view} View</span>
+                  <meter min="0" max="100" value={r.qaScore} />
+                  <strong>{r.qaScore}%</strong>
+                </p>
+              ))}
+            </>
+          ) : (
+            [
+              ['Identity Match', '94%'],
+              ['Geometry', '98%'],
+              ['Material Accuracy', '91%'],
+              ['Brand Style Match', '89%'],
+            ].map(([a, b]) => (
+              <p key={a}>
+                <span>{a}</span>
+                <meter min="0" max="100" value={parseInt(b)} />
+                <strong>{b}</strong>
+              </p>
+            ))
+          )}
+          {hasRealScores ? (
+            <h2 style={{ color: avgQaScore >= 90 ? '#64d675' : avgQaScore >= 75 ? '#d3a64f' : '#ff5555' }}>
+              {avgQaScore}% <small>{avgQaScore >= 90 ? 'Excellent' : avgQaScore >= 75 ? 'Good' : 'Needs Work'}</small>
+            </h2>
+          ) : (
+            <h2>93% <small>Excellent</small></h2>
+          )}
         </div>
         <div className="fr-estimate-card">
           <h3><Sliders size={14} /> Estimate</h3>
           <p><span>Resolution</span><b>{state.resolution}</b></p>
-          <p><span>Views</span><b>4</b></p>
+          <p><span>Views</span><b>{state.renderResults.length > 0 ? `${doneCount}/${totalCount} done` : '4 planned'}</b></p>
           <p><span>Pipeline</span><b>{PIPELINES.find(p => p.id === state.pipeline)?.label || 'GPT Mini'}</b></p>
           <hr />
-          <p><span>Estimated Cost</span><strong style={{ color: '#d3a64f' }}>${(RESOLUTIONS.find(r => r.value === state.resolution)?.price || 0.06) * 4}</strong></p>
-          <p><span>Estimated Time</span><strong>~1m 30s</strong></p>
+          <p><span>Estimated Cost</span><strong style={{ color: '#d3a64f' }}>${((RESOLUTIONS.find(r => r.value === state.resolution)?.price || 0.06) * 4).toFixed(2)}</strong></p>
+          <p><span>Estimated Time</span><strong>{EST_TIME[state.pipeline]?.[state.resolution] || '~1m 30s'}</strong></p>
         </div>
       </section>
     </main>
@@ -842,6 +892,8 @@ function App() {
 
   const renderContent = () => {
     switch (state.activeTab) {
+      case 'batch':
+        return <BatchPanel addToast={addToast} />;
       case 'queue':
         return <QueuePanel state={state} dispatch={dispatch} />;
       case 'completed':
