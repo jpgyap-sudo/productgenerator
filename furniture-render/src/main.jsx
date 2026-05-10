@@ -3,7 +3,8 @@ import { createRoot } from 'react-dom/client';
 import {
   Box, CheckCircle2, ChevronDown, Cloud, Download, Eye, ImagePlus, Pencil,
   Plus, Share2, Sparkles, Upload, Clock, Zap, ShieldCheck, Wand2, X, RefreshCw,
-  AlertCircle, FileImage, Settings, Sliders, Layers, Maximize2, Minimize2
+  AlertCircle, FileImage, Settings, Sliders, Layers, Maximize2, Minimize2,
+  ChevronRight, ChevronLeft, Info, Check, Loader2, ImageOff, Trash2, ZoomIn
 } from 'lucide-react';
 import './styles.css';
 
@@ -52,18 +53,30 @@ function useToast() {
   return { toasts, addToast };
 }
 
+const toastIcons = {
+  success: CheckCircle2,
+  error: AlertCircle,
+  info: Info,
+};
+
 function ToastContainer({ toasts }) {
   return (
     <div className="fr-toast-container">
-      {toasts.map(t => (
-        <div key={t.id} className={`fr-toast fr-toast-${t.type}`}>{t.msg}</div>
-      ))}
+      {toasts.map(t => {
+        const Icon = toastIcons[t.type] || Info;
+        return (
+          <div key={t.id} className={`fr-toast fr-toast-${t.type}`}>
+            <Icon size={16} />
+            <span>{t.msg}</span>
+          </div>
+        );
+      })}
     </div>
   );
 }
 
 // ── Upload Card ──────────────────────────────────────────────────
-function UploadCard({ file, onRemove, onUpload }) {
+function UploadCard({ file, filePreview, onRemove, onUpload }) {
   const fileInputRef = useRef(null);
   const [dragOver, setDragOver] = useState(false);
 
@@ -80,11 +93,20 @@ function UploadCard({ file, onRemove, onUpload }) {
     <div>
       {file ? (
         <div className="fr-upload-card">
-          <div className="fr-thumb fr-sofa" />
-          <div>
-            <strong>{file.name}</strong>
+          <div className="fr-thumb">
+            {filePreview ? (
+              <img src={filePreview} alt={file.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            ) : (
+              <div className="fr-sofa" />
+            )}
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <strong title={file.name}>{file.name}</strong>
             <p>{(file.size / 1024 / 1024).toFixed(1)} MB</p>
-            <button className="fr-link-btn" onClick={onRemove}>Remove</button>
+            <button className="fr-link-btn" onClick={onRemove}>
+              <Trash2 size={12} style={{ marginRight: 4, verticalAlign: 'middle' }} />
+              Remove
+            </button>
           </div>
         </div>
       ) : (
@@ -95,8 +117,12 @@ function UploadCard({ file, onRemove, onUpload }) {
           onDrop={handleDrop}
           onClick={() => fileInputRef.current?.click()}
         >
-          <Upload size={20} /> or drag & drop image here
-          <br /><small>PNG · JPG · WEBP · Max 10MB</small>
+          <div style={{ fontSize: 28, marginBottom: 8, opacity: 0.6 }}>
+            <Upload size={28} />
+          </div>
+          <span style={{ fontWeight: 600 }}>Drop image here or click to browse</span>
+          <br />
+          <small>PNG · JPG · WEBP · Max 10MB</small>
           <input
             ref={fileInputRef}
             type="file"
@@ -173,16 +199,17 @@ function Sidebar({ state, dispatch, addToast }) {
       </div>
 
       <section>
-        <h3>1. Upload Product</h3>
+        <h3><span className="fr-step-number">1</span> Upload Product</h3>
         <UploadCard
           file={state.file}
+          filePreview={state.filePreview}
           onRemove={() => dispatch({ type: 'CLEAR_FILE' })}
           onUpload={handleFileUpload}
         />
       </section>
 
       <section>
-        <h3>2. Furniture Brand <em>(optional)</em></h3>
+        <h3><span className="fr-step-number">2</span> Furniture Brand <em>(optional)</em></h3>
         <input
           value={state.brand}
           onChange={(e) => dispatch({ type: 'SET_BRAND', payload: e.target.value })}
@@ -192,17 +219,17 @@ function Sidebar({ state, dispatch, addToast }) {
       </section>
 
       <section>
-        <h3>3. Description <em>(optional)</em></h3>
+        <h3><span className="fr-step-number">3</span> Description <em>(optional)</em></h3>
         <textarea
           value={state.description}
           onChange={(e) => dispatch({ type: 'SET_DESC', payload: e.target.value })}
-          placeholder="Describe materials, colors, style..."
+          placeholder="Describe materials, colors, style, or scene context..."
           rows={3}
         />
       </section>
 
       <section>
-        <h3>4. Resolution</h3>
+        <h3><span className="fr-step-number">4</span> Resolution</h3>
         <div className="fr-resolution-grid">
           {RESOLUTIONS.map((r) => (
             <button
@@ -219,7 +246,7 @@ function Sidebar({ state, dispatch, addToast }) {
       </section>
 
       <section>
-        <h3>5. Render Pipeline</h3>
+        <h3><span className="fr-step-number">5</span> Render Pipeline</h3>
         <div className="fr-pipeline-grid">
           {PIPELINES.map((p) => (
             <button
@@ -239,9 +266,14 @@ function Sidebar({ state, dispatch, addToast }) {
       </section>
 
       <section>
-        <h3>6. Auto-Queue</h3>
+        <h3><span className="fr-step-number">6</span> Auto-Queue</h3>
         <div className="fr-toggle-row">
-          <span>Enabled</span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            {state.autoQueue ? 'Auto-submit enabled' : 'Manual mode'}
+            <span style={{ fontSize: 11, color: '#8e96a3' }}>
+              {state.autoQueue ? '(renders start immediately)' : '(click to submit)'}
+            </span>
+          </span>
           <span
             className={`fr-toggle ${state.autoQueue ? 'fr-on' : ''}`}
             onClick={() => dispatch({ type: 'TOGGLE_AUTO_QUEUE' })}
@@ -256,12 +288,15 @@ function Sidebar({ state, dispatch, addToast }) {
           disabled={state.status === 'submitting' || !state.file}
         >
           {state.status === 'submitting' ? (
-            <><RefreshCw size={16} className="fr-spin" /> Submitting...</>
+            <><Loader2 size={16} className="fr-spin" /> Submitting...</>
           ) : (
-            <><Plus size={16} /> Add to Queue</>
+            <><Zap size={16} /> Add to Queue</>
           )}
         </button>
-        <p>Est. cost: ${(RESOLUTIONS.find(r => r.value === state.resolution)?.price || 0.06) * 4} · Est. time: ~1m 30s</p>
+        <p>
+          Est. cost: <strong style={{ color: '#d3a64f' }}>${(RESOLUTIONS.find(r => r.value === state.resolution)?.price || 0.06) * 4}</strong>
+          {' · '}Est. time: <strong>~1m 30s</strong>
+        </p>
       </div>
     </aside>
   );
@@ -271,8 +306,16 @@ function Sidebar({ state, dispatch, addToast }) {
 function TopNav({ activeTab, setActiveTab, queueCount, completedCount }) {
   return (
     <header className="fr-topbar">
-      <div />
+      <div className="fr-topbar-left">
+        <span className="fr-topbar-title">
+          <Sparkles size={16} style={{ color: '#d3a64f' }} />
+          Furniture Render Studio
+        </span>
+      </div>
       <nav>
+        <a className={activeTab === 'studio' ? 'fr-active' : ''} onClick={() => setActiveTab('studio')}>
+          <Box size={16} /> Studio
+        </a>
         <a className={activeTab === 'queue' ? 'fr-active' : ''} onClick={() => setActiveTab('queue')}>
           <Clock size={16} /> Queue <span>{queueCount}</span>
         </a>
@@ -282,9 +325,9 @@ function TopNav({ activeTab, setActiveTab, queueCount, completedCount }) {
         <a className={activeTab === 'templates' ? 'fr-active' : ''} onClick={() => setActiveTab('templates')}>
           <ImagePlus size={16} /> Templates
         </a>
-        <a className="fr-sync"><Cloud size={16} /> Drive Sync · Connected</a>
+        <div className="fr-nav-divider" />
+        <a className="fr-sync"><Cloud size={16} /> Drive Sync</a>
         <button className="fr-avatar">AK</button>
-        <ChevronDown size={16} />
       </nav>
     </header>
   );
@@ -292,6 +335,9 @@ function TopNav({ activeTab, setActiveTab, queueCount, completedCount }) {
 
 // ── Generated View Card ──────────────────────────────────────────
 function ViewCard({ view, index }) {
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [imgError, setImgError] = useState(false);
+
   const gradients = [
     'linear-gradient(135deg,#e9dfcf,#9d9284)',
     'linear-gradient(135deg,#d8c8b1,#7e7366)',
@@ -299,21 +345,21 @@ function ViewCard({ view, index }) {
     'linear-gradient(135deg,#eee4d5,#8f887e)',
   ];
 
-  const statusColor = view.status === 'Complete' ? '#65d579'
-    : view.status === 'failed' ? '#ff5555'
-    : view.status.includes('Gemini') ? '#b46cff'
-    : view.status.includes('Generating') ? '#d3a64f'
-    : '#8f97a3';
+  const statusConfig = view.status === 'Complete' ? { color: '#65d579', label: 'Complete', icon: CheckCircle2 }
+    : view.status === 'failed' ? { color: '#ff5555', label: 'Failed', icon: AlertCircle }
+    : view.status.includes('Gemini') ? { color: '#b46cff', label: view.status, icon: Wand2 }
+    : view.status.includes('Generating') ? { color: '#d3a64f', label: view.status, icon: Loader2 }
+    : { color: '#8f97a3', label: view.status, icon: Clock };
 
-  const hasImage = !!view.imageUrl;
+  const StatusIcon = statusConfig.icon;
+  const hasImage = !!view.imageUrl && !imgError;
 
   return (
     <div className="fr-view">
       <div
         className="fr-view-img"
         style={{
-          background: hasImage ? 'none' : gradients[index % gradients.length],
-          backgroundColor: hasImage ? '#000' : undefined,
+          background: hasImage ? '#000' : gradients[index % gradients.length],
         }}
       >
         {hasImage ? (
@@ -321,38 +367,61 @@ function ViewCard({ view, index }) {
             src={view.imageUrl}
             alt={view.title}
             className="fr-render-img"
-            onError={(e) => {
-              e.target.style.display = 'none';
-              e.target.parentElement.style.background = gradients[index % gradients.length];
-            }}
+            onError={() => setImgError(true)}
+            onClick={() => setLightboxOpen(true)}
+            style={{ cursor: 'pointer' }}
           />
         ) : (
           <div className="fr-mini-sofa" />
         )}
-        {(view.status.includes('Generating') || view.status === 'rendering') && (
+        {!hasImage && (view.status.includes('Generating') || view.status === 'rendering') && (
           <div className="fr-view-spinner"><RefreshCw size={20} className="fr-spin" /></div>
         )}
-        {view.status === 'failed' && (
+        {!hasImage && view.status === 'failed' && (
           <div className="fr-view-error"><AlertCircle size={24} /></div>
+        )}
+        {hasImage && (
+          <div className="fr-view-actions-overlay">
+            <button onClick={() => setLightboxOpen(true)} title="Zoom">
+              <ZoomIn size={14} />
+            </button>
+            <a href={view.imageUrl} download={`${view.title}.png`} title="Download">
+              <Download size={14} />
+            </a>
+          </div>
         )}
       </div>
       <div className="fr-view-meta">
-        <strong>{view.title}</strong>
-        <small>{view.tag}</small>
-        <span style={{ color: statusColor }}>{view.status}</span>
-        <div>
-          {hasImage && (
-            <a href={view.imageUrl} download={`${view.title}.png`} style={{ color: 'inherit', display: 'inline-flex' }}>
-              <Download size={15} />
-            </a>
-          )}
-          {hasImage && (
-            <a href={view.imageUrl} target="_blank" rel="noopener noreferrer" style={{ color: 'inherit', display: 'inline-flex' }}>
-              <Eye size={15} />
-            </a>
-          )}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <strong>{view.title}</strong>
+          <span className="fr-view-status-badge" style={{ backgroundColor: statusConfig.color + '22', color: statusConfig.color, border: `1px solid ${statusConfig.color}44` }}>
+            <StatusIcon size={10} />
+            {statusConfig.label}
+          </span>
         </div>
+        <small>{view.tag}</small>
       </div>
+
+      {/* Lightbox */}
+      {lightboxOpen && hasImage && (
+        <div className="fr-lightbox" onClick={() => setLightboxOpen(false)}>
+          <div className="fr-lightbox-content" onClick={(e) => e.stopPropagation()}>
+            <button className="fr-lightbox-close" onClick={() => setLightboxOpen(false)}>
+              <X size={20} />
+            </button>
+            <img src={view.imageUrl} alt={view.title} className="fr-lightbox-img" />
+            <div className="fr-lightbox-info">
+              <strong>{view.title}</strong>
+              <a href={view.imageUrl} download={`${view.title}.png`} className="fr-lightbox-download">
+                <Download size={14} /> Download
+              </a>
+              <a href={view.imageUrl} target="_blank" rel="noopener noreferrer" className="fr-lightbox-download">
+                <Eye size={14} /> Open in new tab
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -418,6 +487,9 @@ function MainStudio({ state, dispatch }) {
         { title: 'Interior View', status: 'Queued', tag: state.resolution, imageUrl: null },
       ];
 
+  const doneCount = generatedViews.filter(v => v.status === 'Complete').length;
+  const totalCount = generatedViews.length;
+
   return (
     <main className="fr-studio">
       <div className="fr-title-row">
@@ -431,17 +503,27 @@ function MainStudio({ state, dispatch }) {
             <span>{state.brand || 'Unknown Brand'}</span>
             <span>{state.resolution}</span>
             <span>{PIPELINES.find(p => p.id === state.pipeline)?.label || 'GPT Mini'}</span>
+            {state.status === 'done' && <span className="fr-chip-success">Render Complete</span>}
+            {state.status === 'rendering' && <span className="fr-chip-progress">Rendering...</span>}
           </div>
         </div>
         <div className="fr-actions">
-          <button><Share2 size={16} /> Share</button>
-          <button className="fr-gold"><Plus size={16} /> New Render</button>
+          <button onClick={() => dispatch({ type: 'SET_ACTIVE_TAB', payload: 'queue' })}>
+            <Clock size={16} /> View Queue
+          </button>
+          <button className="fr-gold" onClick={() => { dispatch({ type: 'CLEAR_FILE' }); }}>
+            <Plus size={16} /> New Render
+          </button>
         </div>
       </div>
 
       <section className="fr-hero-card">
         <div className="fr-hero-main">
-          <h3>Original Product Image <span>Uploaded</span></h3>
+          <h3>
+            <FileImage size={14} />
+            Original Product Image
+            {state.filePreview && <span>Uploaded</span>}
+          </h3>
           <div className="fr-product-preview">
             {state.filePreview ? (
               <img src={state.filePreview} alt="Product" className="fr-product-img" />
@@ -451,7 +533,7 @@ function MainStudio({ state, dispatch }) {
           </div>
         </div>
         <div className="fr-ai-detected">
-          <h3>AI Detected</h3>
+          <h3><Sparkles size={14} /> AI Detected</h3>
           {[
             ['Category', state.brand ? `${state.brand} Furniture` : 'Product'],
             ['Style', 'Modern'],
@@ -467,29 +549,38 @@ function MainStudio({ state, dispatch }) {
 
       <section className="fr-views-card">
         <h3>
-          Generated Views (4/4)
-          <button>View Full Size</button>
+          <span>
+            Generated Views
+            <span className="fr-view-count">{doneCount}/{totalCount}</span>
+          </span>
+          <button onClick={() => {
+            document.querySelector('.fr-view-grid')?.scrollIntoView({ behavior: 'smooth' });
+          }}>
+            <Maximize2 size={12} /> View All
+          </button>
         </h3>
         <div className="fr-view-grid">
           {generatedViews.map((view, i) => (
-            <ViewCard key={view.title} view={view} index={i} />
+            <ViewCard key={view.title + i} view={view} index={i} />
           ))}
         </div>
       </section>
 
       <section className="fr-bottom-grid">
         <div className="fr-progress-card">
-          <h3>Pipeline Progress</h3>
+          <h3><Zap size={14} /> Pipeline Progress</h3>
           <PipelineProgress currentStep={state.mockMode ? 3 : 0} />
           <div className="fr-note">
             <Sparkles size={16} />
             {state.mockMode
               ? 'Gemini is repairing geometry and lighting on the interior view...'
+              : state.status === 'done'
+              ? 'All views generated successfully! Download your renders below.'
               : 'Upload a product and add to queue to start rendering.'}
           </div>
         </div>
         <div className="fr-score-card">
-          <h3>Scene Consistency Score <ShieldCheck size={16} /></h3>
+          <h3><ShieldCheck size={14} /> Scene Consistency Score</h3>
           {[
             ['Identity Match', '94%'],
             ['Geometry', '98%'],
@@ -505,12 +596,12 @@ function MainStudio({ state, dispatch }) {
           <h2>93% <small>Excellent</small></h2>
         </div>
         <div className="fr-estimate-card">
-          <h3>Estimate</h3>
+          <h3><Sliders size={14} /> Estimate</h3>
           <p><span>Resolution</span><b>{state.resolution}</b></p>
           <p><span>Views</span><b>4</b></p>
           <p><span>Pipeline</span><b>{PIPELINES.find(p => p.id === state.pipeline)?.label || 'GPT Mini'}</b></p>
           <hr />
-          <p><span>Estimated Cost</span><strong>${(RESOLUTIONS.find(r => r.value === state.resolution)?.price || 0.06) * 4}</strong></p>
+          <p><span>Estimated Cost</span><strong style={{ color: '#d3a64f' }}>${(RESOLUTIONS.find(r => r.value === state.resolution)?.price || 0.06) * 4}</strong></p>
           <p><span>Estimated Time</span><strong>~1m 30s</strong></p>
         </div>
       </section>
@@ -519,7 +610,7 @@ function MainStudio({ state, dispatch }) {
 }
 
 // ── Right Panel ──────────────────────────────────────────────────
-function RightPanel({ state }) {
+function RightPanel({ state, dispatch }) {
   const activity = [
     ['12:04 PM', 'Gemini Flash', 'Repairing interior view geometry & lighting', 'purple'],
     ['12:03 PM', 'QA Check', 'Passed — no major issues detected', 'green'],
@@ -527,16 +618,29 @@ function RightPanel({ state }) {
     ['12:01 PM', 'Upload', `${state.file?.name || 'product.png'} uploaded`, 'gold'],
   ];
 
+  const activityIcons = { green: CheckCircle2, gold: Upload, purple: Wand2 };
+
   return (
     <aside className="fr-right-panel">
       <section>
-        <h3>Queue (2) <button>View all</button></h3>
+        <h3>
+          <Clock size={14} /> Queue
+          <button onClick={() => dispatch({ type: 'SET_ACTIVE_TAB', payload: 'queue' })}>
+            View all
+          </button>
+        </h3>
         <div className="fr-queue-item">
-          <div className="fr-thumb fr-sofa" />
+          <div className="fr-thumb">
+            {state.filePreview ? (
+              <img src={state.filePreview} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            ) : (
+              <div className="fr-sofa" />
+            )}
+          </div>
           <div>
             <b>{state.file?.name?.replace(/\.[^/.]+$/, '') || 'Product'}</b>
             <p>4 views · {state.resolution}</p>
-            <span>Rendering 42%</span>
+            <span className="fr-status-rendering">Rendering 42%</span>
           </div>
         </div>
         <div className="fr-queue-item">
@@ -549,21 +653,28 @@ function RightPanel({ state }) {
         </div>
       </section>
       <section>
-        <h3>Activity Log</h3>
-        {activity.map(([t, n, d, c]) => (
-          <div className="fr-log" key={t + n}>
-            <time>{t}</time>
-            <div className={`fr-${c}`} />
-            <p><b>{n}</b><span>{d}</span></p>
-          </div>
-        ))}
+        <h3>
+          <Info size={14} /> Activity Log
+        </h3>
+        {activity.map(([t, n, d, c]) => {
+          const ActIcon = activityIcons[c] || Info;
+          return (
+            <div className="fr-log" key={t + n}>
+              <time>{t}</time>
+              <div className={`fr-${c}`}>
+                <ActIcon size={8} style={{ color: c === 'gold' ? '#17140d' : '#fff' }} />
+              </div>
+              <p><b>{n}</b><span>{d}</span></p>
+            </div>
+          );
+        })}
       </section>
     </aside>
   );
 }
 
 // ── Queue Panel ──────────────────────────────────────────────────
-function QueuePanel({ state }) {
+function QueuePanel({ state, dispatch }) {
   return (
     <div className="fr-panel-page">
       <h2><Clock size={20} /> Render Queue</h2>
@@ -571,27 +682,53 @@ function QueuePanel({ state }) {
       <div className="fr-empty-state">
         <FileImage size={48} />
         <p>No items in queue. Upload a product and add to queue.</p>
+        <button className="fr-primary" style={{ width: 'auto', padding: '10px 24px', marginTop: 8 }}
+          onClick={() => dispatch({ type: 'SET_ACTIVE_TAB', payload: 'studio' })}>
+          <Plus size={16} /> Go to Studio
+        </button>
       </div>
     </div>
   );
 }
 
 // ── Completed Panel ──────────────────────────────────────────────
-function CompletedPanel({ state }) {
+function CompletedPanel({ state, dispatch }) {
   return (
     <div className="fr-panel-page">
       <h2><CheckCircle2 size={20} /> Completed Renders</h2>
       <p className="fr-panel-sub">History of all completed render jobs</p>
-      <div className="fr-empty-state">
-        <CheckCircle2 size={48} />
-        <p>No completed renders yet.</p>
-      </div>
+      {state.renderResults.length > 0 ? (
+        <div className="fr-completed-grid">
+          {state.renderResults.map((r, i) => (
+            <div key={i} className="fr-completed-item">
+              {r.imageUrl ? (
+                <img src={r.imageUrl} alt={`Render ${i + 1}`} className="fr-completed-thumb" />
+              ) : (
+                <div className="fr-completed-placeholder" />
+              )}
+              <div className="fr-completed-info">
+                <strong>{VIEW_TYPES[r.viewId ? r.viewId - 1 : i]?.label || `View ${i + 1}`}</strong>
+                <span className="fr-chip-success">Complete</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="fr-empty-state">
+          <CheckCircle2 size={48} />
+          <p>No completed renders yet.</p>
+          <button className="fr-primary" style={{ width: 'auto', padding: '10px 24px', marginTop: 8 }}
+            onClick={() => dispatch({ type: 'SET_ACTIVE_TAB', payload: 'studio' })}>
+            <Plus size={16} /> Start a Render
+          </button>
+        </div>
+      )}
     </div>
   );
 }
 
 // ── Templates Panel ──────────────────────────────────────────────
-function TemplatesPanel() {
+function TemplatesPanel({ dispatch }) {
   return (
     <div className="fr-panel-page">
       <h2><ImagePlus size={20} /> Templates</h2>
@@ -599,6 +736,10 @@ function TemplatesPanel() {
       <div className="fr-empty-state">
         <Layers size={48} />
         <p>No templates saved yet.</p>
+        <button className="fr-primary" style={{ width: 'auto', padding: '10px 24px', marginTop: 8 }}
+          onClick={() => dispatch({ type: 'SET_ACTIVE_TAB', payload: 'studio' })}>
+          <Plus size={16} /> Create New Render
+        </button>
       </div>
     </div>
   );
@@ -702,20 +843,24 @@ function App() {
   const renderContent = () => {
     switch (state.activeTab) {
       case 'queue':
-        return <QueuePanel state={state} />;
+        return <QueuePanel state={state} dispatch={dispatch} />;
       case 'completed':
-        return <CompletedPanel state={state} />;
+        return <CompletedPanel state={state} dispatch={dispatch} />;
       case 'templates':
-        return <TemplatesPanel />;
+        return <TemplatesPanel dispatch={dispatch} />;
       default:
         return (
           <div className="fr-workspace">
             <MainStudio state={state} dispatch={dispatch} />
-            <RightPanel state={state} />
+            <RightPanel state={state} dispatch={dispatch} />
           </div>
         );
     }
   };
+
+  const doneCount = state.renderResults.filter(r =>
+    r.status === 'done' || r.status === 'generated' || r.status === 'fixed' || r.status === 'fallback'
+  ).length;
 
   return (
     <div className="fr-app">
@@ -724,8 +869,8 @@ function App() {
         <TopNav
           activeTab={state.activeTab}
           setActiveTab={(tab) => dispatch({ type: 'SET_ACTIVE_TAB', payload: tab })}
-          queueCount={2}
-          completedCount={18}
+          queueCount={state.queueId ? 1 : 0}
+          completedCount={doneCount}
         />
         {renderContent()}
       </div>
