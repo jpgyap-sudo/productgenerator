@@ -24,12 +24,35 @@ FROM node:20-slim AS runner
 WORKDIR /app
 
 # Install tini for proper signal handling (SIGTERM → Node.js)
-# Install LibreOffice for .et (WPS Spreadsheet) to .xlsx conversion
+# Install LibreOffice for .et (WPS Spreadsheet) to .xlsx/.pdf conversion
+# Install Chromium + deps for Playwright PDF screenshotting
 RUN apt-get update -qq && apt-get install -y -qq --no-install-recommends \
     tini \
     libreoffice-calc \
     libreoffice-common \
+    chromium \
+    chromium-sandbox \
+    fonts-liberation \
+    libnss3 \
+    libnspr4 \
+    libatk1.0-0 \
+    libatk-bridge2.0-0 \
+    libcups2 \
+    libdrm2 \
+    libdbus-1-3 \
+    libxkbcommon0 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxrandr2 \
+    libgbm1 \
+    libpango-1.0-0 \
+    libcairo2 \
+    libasound2 \
     && rm -rf /var/lib/apt/lists/*
+
+# Set Playwright to use system Chromium
+ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
+ENV PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium
 
 # Copy node_modules from deps stage
 COPY --from=deps /app/node_modules ./node_modules
