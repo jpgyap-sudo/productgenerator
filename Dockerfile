@@ -38,6 +38,7 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY package.json ecosystem.config.cjs ./
 COPY lib/ ./lib/
 COPY api/ ./api/
+COPY workers/ ./workers/
 COPY index.html ./
 COPY server.js ./
 
