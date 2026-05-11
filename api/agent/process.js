@@ -24,10 +24,12 @@
 // ═══════════════════════════════════════════════════════════════════
 
 import multer from 'multer';
+import os from 'os';
+import path from 'path';
 import { extractTextFromPDF } from '../../lib/pdf-extractor.js';
 import { extractImagesFromPDF } from '../../lib/pdf-image-extractor.js';
 import { extractTextFromET } from '../../lib/et-extractor.js';
-import { extractETImagesAndData } from '../../lib/et-image-extractor.js';
+import { extractETImagesAndData, verifyEtMatchesWithAI } from '../../lib/et-image-extractor.js';
 import { extractAllImagesFromZip } from '../../lib/zip-extractor.js';
 import { extractProductInfo } from '../../lib/deepseek.js';
 import { saveImagesToGallery } from '../../lib/upload-gallery.js';
@@ -324,9 +326,8 @@ export default async function handler(req, res) {
     if (hasEtEmbeddedImages) {
       // Use pre-extracted products from .et image extractor
       // These already have productCode, description, brand, and image mappings
-      // No AI needed — data is parsed directly from spreadsheet cells
       if (zipResult.etProducts && zipResult.etProducts.length > 0) {
-        products = zipResult.etProducts.map(p => ({
+        const rawProducts = zipResult.etProducts.map(p => ({
           name: p.name || '',
           brand: p.brand || '',
           productCode: p.productCode || '',
@@ -336,9 +337,75 @@ export default async function handler(req, res) {
           // Preserve image mapping info for the UI
           row: p.row,
           hasPreMappedImage: p.hasPreMappedImage,
-          imageName: p.imageName || ''
+          imageName: p.imageName || '',
+          dataUrl: p.dataUrl || ''
         }));
-        console.log(`[AGENT] Step 3: Using ${products.length} pre-extracted products from .et embedded images (no AI needed)`);
+        console.log(`[AGENT] Step 3: ${rawProducts.length} pre-extracted products from .et, running AI verification...`);
+
+        // ── AI Verification: Use OpenAI GPT-4o Vision to verify each product-image pair ──
+        // The positional mapping (DISPIMG row order → image anchor row order) can be
+        // inaccurate after LibreOffice conversion. AI verification catches misalignments.
+        // Uses batch-by-batch processing (2 at a time) with 3s delay between batches,
+        // retry with exponential backoff, and pause/resume via file-based state.
+        try {
+          const verifiedProducts = await verifyEtMatchesWithAI(rawProducts, zipResult.images, {
+            resumeDir: tempDir, // Enable pause/resume via file-based state
+            onProgress: (progress) => {
+              // Update the progress store so the UI can show AI verification progress
+              const batchId = zipResult.batchId || `et_${Date.now()}`;
+              etProgressStore.set(batchId, {
+                percent: progress.percent,
+                stage: progress.stage,
+                detail: progress.detail || ''
+              });
+            }
+          });
+
+          // Map verified products back to the standard format
+          products = verifiedProducts.map(p => ({
+            name: p.name || '',
+            brand: p.brand || '',
+            productCode: p.productCode || '',
+            generatedCode: p.generatedCode || (p.productCode ? `HA${p.productCode}R` : ''),
+            description: p.description || '',
+            category: p.category || '',
+            row: p.row,
+            hasPreMappedImage: p.hasPreMappedImage,
+            imageName: p.imageName || '',
+            // AI verification results
+            aiVerified: p.aiVerified,
+            aiConfidence: p.aiConfidence,
+            aiReason: p.aiReason,
+            aiMatchStatus: p.aiMatchStatus
+          }));
+
+          const autoAccepted = products.filter(p => p.aiMatchStatus === 'auto_accepted').length;
+          const needsReview = products.filter(p => p.aiMatchStatus === 'needs_review').length;
+          const rejected = products.filter(p => p.aiMatchStatus === 'rejected').length;
+          console.log(`[AGENT] Step 3: AI verification complete — ${autoAccepted} auto-accepted, ${needsReview} needs review, ${rejected} rejected`);
+
+          // Clear progress store
+          const batchId = zipResult.batchId || `et_${Date.now()}`;
+          etProgressStore.delete(batchId);
+        } catch (aiVerifyErr) {
+          // AI verification failed — fall back to positional mapping (no AI)
+          console.warn('[AGENT] Step 3: AI verification failed, falling back to positional mapping:', aiVerifyErr.message);
+          products = rawProducts.map(p => ({
+            name: p.name || '',
+            brand: p.brand || '',
+            productCode: p.productCode || '',
+            generatedCode: p.generatedCode || (p.productCode ? `HA${p.productCode}R` : ''),
+            description: p.description || '',
+            category: p.category || '',
+            row: p.row,
+            hasPreMappedImage: p.hasPreMappedImage,
+            imageName: p.imageName || '',
+            aiVerified: false,
+            aiConfidence: 100,
+            aiReason: `AI verification unavailable: ${aiVerifyErr.message}`,
+            aiMatchStatus: 'needs_review'
+          }));
+        }
       } else {
         // Embedded images found but no products could be parsed from rows.
         // This happens when the column structure doesn't match expected patterns.
@@ -406,13 +473,18 @@ export default async function handler(req, res) {
 
     if (isStandalone) {
       if (hasEtEmbeddedImages) {
-        // .et with embedded images — return products with pre-mapped images
-        // No AI matching needed — images are already mapped to rows
-        console.log('[AGENT] .et embedded image mode complete. Returning products + pre-mapped images.');
+        // .et with embedded images — return products with AI-verified image matches
+        // Products now have aiConfidence, aiMatchStatus from Gemini verification
+        const autoAccepted = products.filter(p => p.aiMatchStatus === 'auto_accepted').length;
+        const needsReview = products.filter(p => p.aiMatchStatus === 'needs_review').length;
+        const rejected = products.filter(p => p.aiMatchStatus === 'rejected').length;
+        console.log(`[AGENT] .et embedded image mode complete. ${products.length} products (${autoAccepted} auto, ${needsReview} review, ${rejected} rejected).`);
         return res.json({
           success: true,
           isPdfOnly: false,
           hasEmbeddedImages: true,
+          aiVerified: true,
+          aiStats: { autoAccepted, needsReview, rejected },
           products,
           allImages: zipResult.images,
           pdfImages: [],

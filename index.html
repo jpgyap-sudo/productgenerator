@@ -12294,7 +12294,7 @@ function initBatchProcessor() {
       batchProgress.style.display = 'none';
 
       // ── .et with embedded images ──
-      // Server returns hasEmbeddedImages: true with pre-mapped products + images
+      // Server returns hasEmbeddedImages: true with AI-verified products + images
       if (data.hasEmbeddedImages) {
         const extractedProducts = data.products || [];
         const extractedImages = data.allImages || [];
@@ -12306,7 +12306,8 @@ function initBatchProcessor() {
           throw new Error('No embedded images could be extracted from the .et file');
         }
 
-        // Create direct matches from pre-mapped data (no AI needed)
+        // Create matches using AI-verified confidence scores from server
+        // Products now have aiConfidence, aiMatchStatus from Gemini verification
         const directMatches = extractedProducts.map((product, idx) => {
           const matchedImage = product.hasPreMappedImage && product.imageName
             ? extractedImages.findIndex(img => img.name === product.imageName)
@@ -12314,26 +12315,36 @@ function initBatchProcessor() {
           const imageIndex = matchedImage >= 0 ? matchedImage : (idx < extractedImages.length ? idx : 0);
           const bestImg = extractedImages[imageIndex];
 
+          // Use AI confidence if available, otherwise fall back to positional mapping
+          const aiConfidence = product.aiConfidence !== undefined ? product.aiConfidence : 100;
+          const aiMatchStatus = product.aiMatchStatus || 'auto_accepted';
+          const aiReason = product.aiReason || 'Pre-mapped from .et spreadsheet cell';
+          const isConfirmed = aiMatchStatus === 'auto_accepted';
+          const overallConf = aiConfidence >= 90 ? 'high' : (aiConfidence >= 70 ? 'medium' : 'low');
+
           return {
             productIndex: idx,
             product,
             bestMatch: bestImg ? {
               imageIndex,
               imageName: bestImg.name,
-              confidence: 100,
-              reason: 'Pre-mapped from .et spreadsheet cell',
-              status: 'auto_accepted',
+              confidence: aiConfidence,
+              reason: aiReason,
+              status: aiMatchStatus,
               dataUrl: bestImg.dataUrl
             } : null,
             secondMatch: null,
             thirdMatch: null,
-            overallConfidence: 'high',
-            overallReason: 'Image extracted from .et spreadsheet cell',
+            overallConfidence: overallConf,
+            overallReason: aiReason,
             selectedImageIndex: 0,
-            confirmed: true,
-            batchStatus: 'completed'
+            confirmed: isConfirmed,
+            batchStatus: isConfirmed ? 'completed' : 'pending'
           };
         });
+
+        const autoAccepted = directMatches.filter(m => m.confirmed).length;
+        const needsReview = directMatches.filter(m => !m.confirmed).length;
 
         // Build result data in the format renderBatchResultsFromData expects
         const resultData = {
@@ -12343,13 +12354,15 @@ function initBatchProcessor() {
           matchStats: {
             totalProducts: extractedProducts.length,
             totalImages: extractedImages.length,
-            autoAccepted: directMatches.filter(m => m.confirmed).length,
-            needsReview: 0
+            autoAccepted,
+            needsReview
           }
         };
 
         renderBatchResultsFromData(resultData);
-        toast(`.et processed: ${extractedProducts.length} products with ${extractedImages.length} embedded images`, 'success');
+
+        const aiLabel = data.aiVerified ? 'AI-verified' : 'positional-mapped';
+        toast(`.et processed: ${extractedProducts.length} products with ${extractedImages.length} embedded images (${aiLabel}: ${autoAccepted} auto, ${needsReview} review)`, needsReview > 0 ? 'warning' : 'success');
       } else if (data.products && data.products.length > 0) {
         // Standard extraction (no embedded images) — show products in Step 2
         if (data.products && data.products.length > 0) {
@@ -12655,6 +12668,12 @@ function initBatchProcessor() {
         ? `<span class="bmc-visual-badge" title="Matched by Gemini AI visual search">👁 Visual</span>`
         : '';
 
+      // Show AI verification badge for .et matches with AI confidence
+      const isAiVerified = product.aiVerified === true || (status && status !== '' && match.bestMatch?.status);
+      const aiBadge = isAiVerified && status
+        ? `<span class="bmc-badge" style="background:var(--accent);color:#fff;font-size:9px;padding:2px 5px;" title="AI-verified by Gemini Vision">🤖 AI</span>`
+        : '';
+
       // Show reason if available
       const reasonHtml = reason
         ? `<div class="bmc-verify-reason">${escapeHtml(reason)}</div>`
@@ -12682,6 +12701,7 @@ function initBatchProcessor() {
             <span class="bmc-badge ${badgeClass}">${badgeLabel}</span>
             ${statusBadge}
             ${visualBadge}
+            ${aiBadge}
           </div>
         </div>
         <div class="bmc-actions">
