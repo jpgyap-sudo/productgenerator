@@ -197,7 +197,7 @@ ${color(C.bold, 'Config:')}
       ok(`Committed: "${commitMsg}"`);
     } catch (e) {
       if (e.message.includes('nothing to commit')) {
-        warn('Nothing to commit.');
+        warn('Nothing to commit — continuing with deploy.');
       } else {
         fail(`Commit failed: ${e.message}`);
         process.exit(1);
