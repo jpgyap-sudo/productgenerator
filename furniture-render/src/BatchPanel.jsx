@@ -56,6 +56,8 @@ const STATUS = {
   PDF_ONLY_MATCHING: 'pdf_only_matching',
   PDF_ONLY_DONE: 'pdf_only_done',
   PDF_ONLY_ERROR: 'pdf_only_error',
+  // .et extraction status (with progress bar)
+  ET_EXTRACTING: 'et_extracting',
 };
 
 // ── Batch pipeline stage labels ───────────────────────────────────
@@ -77,6 +79,20 @@ const PDF_ONLY_LABELS = {
   matching: 'AI is matching each product to its page image...',
   complete: 'AI per-row matching complete!',
   error: 'PDF-only matching failed'
+};
+
+// ── .et extraction stage labels ────────────────────────────────────
+const ET_EXTRACT_LABELS = {
+  'Initializing': 'Initializing...',
+  'Checking LibreOffice': 'Checking LibreOffice...',
+  'Preparing temp directory': 'Preparing temp directory...',
+  'Converting .et to .xlsx': 'Converting .et to .xlsx via LibreOffice...',
+  'Retrying conversion': 'Retrying LibreOffice conversion...',
+  'Extracting embedded images': 'Extracting embedded images from spreadsheet...',
+  'Extracting product data': 'Extracting product data from rows...',
+  'Building image data URLs': 'Building image previews...',
+  'Complete': 'Extraction complete!',
+  'Failed': 'Extraction failed'
 };
 
 // ── Confidence badge color ────────────────────────────────────────
@@ -394,6 +410,56 @@ function BatchProgressBar({ batchId, status, setStatus, setProgressMsg, addToast
   return null; // Renders nothing — just drives polling
 }
 
+// ── ET Extraction Progress Bar ────────────────────────────────────
+// Polls /api/agent/et-progress/:batchId during .et file extraction
+// to show a real-time progress bar with stage labels.
+function EtProgressBar({ batchId, status, setStatus, setProgressMsg, addToast, etProgress, setEtProgress }) {
+  const POLL_INTERVAL = 1000; // 1 second
+
+  useEffect(() => {
+    if (!batchId) return;
+    if (status !== STATUS.ET_EXTRACTING) return;
+
+    let cancelled = false;
+
+    const poll = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/agent/et-progress/${batchId}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        if (cancelled) return;
+
+        if (data.exists) {
+          setEtProgress({ percent: data.percent, stage: data.stage, detail: data.detail });
+
+          // Map stage to user-friendly label
+          const stageLabel = ET_EXTRACT_LABELS[data.stage] || data.stage;
+          const detailText = data.detail ? ` — ${data.detail}` : '';
+          setProgressMsg(`${stageLabel}${detailText}`);
+
+          // If complete or failed, stop polling
+          if (data.stage === 'Complete' || data.stage === 'Failed') {
+            // Don't change status here — the main fetch response will handle it
+          }
+        }
+      } catch (err) {
+        if (!cancelled) {
+          console.warn('[EtProgress] Poll fetch error:', err.message);
+        }
+      }
+    };
+
+    // Initial delay then poll
+    const timer = setInterval(poll, POLL_INTERVAL);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [batchId, status, setStatus, setProgressMsg, addToast, setEtProgress]);
+
+  return null; // Renders nothing — just drives polling
+}
+
 // ── Main BatchPanel Component ─────────────────────────────────────
 export default function BatchPanel({ addToast }) {
   const [status, setStatus] = useState(STATUS.IDLE);
@@ -408,6 +474,7 @@ export default function BatchPanel({ addToast }) {
   const [batchId, setBatchId] = useState(null);
   const [isPdfOnlyMode, setIsPdfOnlyMode] = useState(false);
   const [pdfOnlyPaused, setPdfOnlyPaused] = useState(false);
+  const [etProgress, setEtProgress] = useState({ percent: 0, stage: '', detail: '' });
   const pdfOnlyAbortRef = useRef(null);
 
   // ── Handle PDF upload ───────────────────────────────────────────
@@ -559,20 +626,29 @@ export default function BatchPanel({ addToast }) {
     setError(null);
     setIsPdfOnlyMode(true);
     setZipFile(null); // Clear any ZIP reference
-    setStatus(STATUS.PDF_ONLY_EXTRACTING);
-    setProgressMsg(PDF_ONLY_LABELS.extracting);
     setMatches([]);
     setProducts([]);
     setImages([]);
 
+    const isEtFile = pdfFile.name.toLowerCase().endsWith('.et');
+
+    if (isEtFile) {
+      // .et files: Set ET_EXTRACTING status and a temporary batchId so the
+      // EtProgressBar component starts polling immediately for progress updates.
+      // The server stores progress in a global Map keyed by batchId.
+      const tempBatchId = `et_${Date.now()}`;
+      setBatchId(tempBatchId);
+      setEtProgress({ percent: 0, stage: 'Initializing', detail: '' });
+      setStatus(STATUS.ET_EXTRACTING);
+      setProgressMsg('Initializing .et extraction...');
+    } else {
+      setStatus(STATUS.PDF_ONLY_EXTRACTING);
+      setProgressMsg(PDF_ONLY_LABELS.extracting);
+    }
+
     try {
       const formData = new FormData();
       formData.append('pdf', pdfFile);
-
-      const isEtFile = pdfFile.name.toLowerCase().endsWith('.et');
-      setProgressMsg(isEtFile
-        ? 'Extracting products and embedded images from .et spreadsheet...'
-        : 'Extracting products and page images from PDF...');
 
       const res = await fetch(`${API_BASE}/api/agent/process`, {
         method: 'POST',
@@ -638,6 +714,7 @@ export default function BatchPanel({ addToast }) {
           needsReview: 0
         });
         setStatus(STATUS.PDF_ONLY_DONE);
+        setEtProgress({ percent: 100, stage: 'Complete', detail: '' });
 
         addToast(
           `.et processed: ${extractedProducts.length} products with ${extractedImages.length} embedded images`,
@@ -669,7 +746,13 @@ export default function BatchPanel({ addToast }) {
 
     } catch (err) {
       setError(err.message);
-      setStatus(STATUS.PDF_ONLY_ERROR);
+      // If we were in ET_EXTRACTING mode, set error status appropriately
+      if (isEtFile) {
+        setEtProgress({ percent: 0, stage: 'Failed', detail: err.message });
+        setStatus(STATUS.PDF_ONLY_ERROR);
+      } else {
+        setStatus(STATUS.PDF_ONLY_ERROR);
+      }
       addToast(`Processing failed: ${err.message}`, 'error');
     }
   }, [pdfFile, addToast]);
@@ -953,11 +1036,12 @@ export default function BatchPanel({ addToast }) {
       <div className="vm-upload-section">
         <DropZone
           label="Upload PDF / WPS / ET Catalog"
-          accept=".pdf,.wps,.et,application/pdf"
+          accept=".pdf,.wps,.et,.xls,.xlsx,application/pdf,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
           icon={FileText}
           onFile={handlePdfUpload}
           disabled={status === STATUS.MATCHING || status === STATUS.SUBMITTING ||
-            status === STATUS.PDF_ONLY_EXTRACTING || status === STATUS.PDF_ONLY_MATCHING}
+            status === STATUS.PDF_ONLY_EXTRACTING || status === STATUS.PDF_ONLY_MATCHING ||
+            status === STATUS.ET_EXTRACTING}
           currentFile={pdfFile}
         />
         <div className="vm-upload-arrow">
@@ -1016,14 +1100,44 @@ export default function BatchPanel({ addToast }) {
         addToast={addToast}
       />
 
+      {/* ── ET Extraction Progress Bar (polling) ─────────────────── */}
+      <EtProgressBar
+        batchId={batchId}
+        status={status}
+        setStatus={setStatus}
+        setProgressMsg={setProgressMsg}
+        addToast={addToast}
+        etProgress={etProgress}
+        setEtProgress={setEtProgress}
+      />
+
       {/* ── Progress / Error ────────────────────────────────────── */}
       {(status === STATUS.PDF_UPLOADING || status === STATUS.PDF_EXTRACTING ||
         status === STATUS.ZIP_UPLOADING || status === STATUS.ZIP_EXTRACTING ||
         status === STATUS.MATCHING || status === STATUS.SUBMITTING ||
-        status === STATUS.PDF_ONLY_EXTRACTING || status === STATUS.PDF_ONLY_MATCHING) && (
+        status === STATUS.PDF_ONLY_EXTRACTING || status === STATUS.PDF_ONLY_MATCHING ||
+        status === STATUS.ET_EXTRACTING) && (
         <div className="vm-progress">
-          <Loader2 size={18} className="fr-spin" />
-          <span>{progressMsg}</span>
+          {status === STATUS.ET_EXTRACTING ? (
+            <>
+              {/* Progress bar for .et extraction */}
+              <div className="vm-et-progress-bar-wrap">
+                <div className="vm-et-progress-bar">
+                  <div
+                    className="vm-et-progress-fill"
+                    style={{ width: `${etProgress.percent || 0}%` }}
+                  />
+                </div>
+                <span className="vm-et-progress-pct">{etProgress.percent || 0}%</span>
+              </div>
+              <span className="vm-et-progress-msg">{progressMsg}</span>
+            </>
+          ) : (
+            <>
+              <Loader2 size={18} className="fr-spin" />
+              <span>{progressMsg}</span>
+            </>
+          )}
           {/* Pause button during PDF-only matching */}
           {status === STATUS.PDF_ONLY_MATCHING && !pdfOnlyPaused && (
             <button

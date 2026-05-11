@@ -33,6 +33,11 @@ import { extractProductInfo } from '../../lib/deepseek.js';
 import { saveImagesToGallery } from '../../lib/upload-gallery.js';
 import { runBatchPipeline, createBatchJob, autoResumePausedBatches } from '../../lib/batch-queue.js';
 
+// ── ET extraction progress store ────────────────────────────────────
+// Global Map<batchId, { percent, stage, detail }> for .et extraction progress.
+// The UI polls GET /api/agent/et-progress/:batchId to show a progress bar.
+export const etProgressStore = new Map();
+
 // Multer config — store files in memory
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -213,10 +218,27 @@ export default async function handler(req, res) {
         // The extractor converts .et → .xlsx (LibreOffice), extracts images + cell anchors (exceljs),
         // and parses row data (SheetJS) — all without AI.
         console.log('[AGENT] Step 1 (standalone): .et spreadsheet — extracting embedded images + row data...');
-        zipResult.batchId = `batch_${Date.now()}`;
+        const etBatchId = `et_${Date.now()}`;
+        zipResult.batchId = etBatchId;
+
+        // Initialize progress store for this extraction
+        etProgressStore.set(etBatchId, { percent: 0, stage: 'Starting', detail: '' });
 
         try {
-          const etImageResult = await extractETImagesAndData(pdfFile.buffer);
+          const etImageResult = await extractETImagesAndData(pdfFile.buffer, {
+            onProgress: (progress) => {
+              // Update the global progress store so the UI can poll it
+              etProgressStore.set(etBatchId, {
+                percent: progress.percent,
+                stage: progress.stage,
+                detail: progress.detail || ''
+              });
+            }
+          });
+
+          // Clear progress store after completion
+          etProgressStore.delete(etBatchId);
+
           if (etImageResult.hasEmbeddedImages && etImageResult.allImages.length > 0) {
             // Embedded images found! Store them for the UI
             zipResult.images = etImageResult.allImages;
@@ -234,6 +256,8 @@ export default async function handler(req, res) {
             });
           }
         } catch (etImgErr) {
+          // Clear progress store on error
+          etProgressStore.delete(etBatchId);
           console.error('[AGENT] .et embedded image extraction failed:', etImgErr.message);
           return res.status(400).json({
             error: `Failed to extract images from .et file: ${etImgErr.message}`,

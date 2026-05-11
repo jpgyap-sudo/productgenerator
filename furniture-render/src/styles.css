@@ -1994,6 +1994,45 @@ html, body {
   margin-bottom: 20px;
 }
 
+/* ── ET Extraction Progress Bar ──────────────────────────────────── */
+.vm-et-progress-bar-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+}
+
+.vm-et-progress-bar {
+  flex: 1;
+  height: 8px;
+  background: #1e2733;
+  border-radius: 4px;
+  overflow: hidden;
+  min-width: 120px;
+}
+
+.vm-et-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #3b82f6, #5bd46c);
+  border-radius: 4px;
+  transition: width 0.5s ease;
+}
+
+.vm-et-progress-pct {
+  font-size: 12px;
+  font-weight: 600;
+  color: #8e96a3;
+  min-width: 36px;
+  text-align: right;
+}
+
+.vm-et-progress-msg {
+  font-size: 12px;
+  color: #8e96a3;
+  margin-left: 4px;
+  flex-shrink: 0;
+}
+
 .vm-error {
   display: flex;
   align-items: center;

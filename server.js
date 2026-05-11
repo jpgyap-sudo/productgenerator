@@ -38,7 +38,7 @@ import completedHandler from './api/queue/completed.js';
 import downloadZipHandler from './api/queue/download-zip.js';
 import uploadDriveHandler from './api/queue/upload-drive.js';
 import saveStateHandler from './api/queue/save-state.js';
-import agentProcessHandler from './api/agent/process.js';
+import agentProcessHandler, { etProgressStore } from './api/agent/process.js';
 import agentMatchHandler from './api/agent/match.js';
 import agentMatchVisionHandler from './api/agent/match-vision.js';
 import agentSubmitHandler from './api/agent/submit.js';
@@ -166,6 +166,18 @@ app.post('/api/agent/process', async (req, res) => {
     console.error('[AGENT-PROCESS] Error:', err);
     if (!res.headersSent) res.status(500).json({ error: err.message });
   }
+});
+
+// ET extraction progress polling endpoint
+// The UI polls this during .et file extraction to show a progress bar.
+// Progress is stored in a global Map (etProgressStore) keyed by batchId.
+app.get('/api/agent/et-progress/:batchId', (req, res) => {
+  const { batchId } = req.params;
+  if (!etProgressStore || !etProgressStore.has(batchId)) {
+    return res.json({ percent: 0, stage: 'unknown', detail: '', exists: false });
+  }
+  const progress = etProgressStore.get(batchId);
+  res.json({ ...progress, exists: true });
 });
 
 app.post('/api/agent/match', async (req, res) => {
