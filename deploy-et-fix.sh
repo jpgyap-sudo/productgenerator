@@ -49,7 +49,7 @@ echo "  ✓ Docker container started"
 echo ""
 echo "[4/4] Verifying health..."
 sleep 5
-curl -s http://localhost:3001/health
+curl -s http://localhost:3002/health
 echo ""
 echo "  ✓ Health check complete"
 

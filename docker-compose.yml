@@ -33,9 +33,9 @@ services:
           memory: 384M
 
     # ── Port Mapping ─────────────────────────────────────────────
-    # Expose port 3001 (SuperRoo Cloud Dashboard uses port 3000)
+    # Expose port 3002 (SuperRoo Cloud Dashboard uses ports 3000 + 3001)
     ports:
-      - "0.0.0.0:3001:3000"
+      - "0.0.0.0:3002:3000"
 
     # ── Environment ──────────────────────────────────────────────
     # Loaded from .env file (create it with your API keys)

@@ -89,7 +89,7 @@ fi
 # ── Step 5: Health check ──
 echo -e "\n${YELLOW}[5/5] Running health check...${NC}"
 sleep 3
-HEALTH=$(ssh ${SSH_OPTS} "${VPS_USER}" "curl -s -o /dev/null -w '%{http_code}' http://localhost:3001/health 2>&1" || echo "failed")
+HEALTH=$(ssh ${SSH_OPTS} "${VPS_USER}" "curl -s -o /dev/null -w '%{http_code}' http://localhost:3002/health 2>&1" || echo "failed")
 
 if [ "${HEALTH}" = "200" ]; then
   echo -e "${GREEN}  ✓ Health check passed (HTTP ${HEALTH})${NC}"
