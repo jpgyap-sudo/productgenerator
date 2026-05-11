@@ -1882,6 +1882,21 @@ html, body {
   align-items: center;
 }
 
+/* ── .et Upload Row ──────────────────────────────────────────────── */
+.vm-et-upload-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+.vm-et-upload-row .vm-drop-zone {
+  flex: 1;
+  max-width: 320px;
+}
+.vm-et-go-btn {
+  flex: 0 0 auto;
+}
+
 .vm-drop-zone {
   padding: 28px 20px;
   border: 1px dashed #2a3340;

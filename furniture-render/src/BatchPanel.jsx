@@ -29,7 +29,7 @@ import {
   Upload, FileImage, ImagePlus, CheckCircle2, AlertCircle, Info,
   Loader2, Zap, X, ChevronDown, ChevronUp, Sparkles, Eye,
   Download, RefreshCw, Check, Clock, FileText, Archive, Search,
-  ThumbsUp, ThumbsDown, ArrowRight, Layers, BarChart3, File
+  ThumbsUp, ThumbsDown, ArrowRight, Layers, BarChart3, File, Table
 } from 'lucide-react';
 
 const API_BASE = window.location.origin;
@@ -477,13 +477,12 @@ export default function BatchPanel({ addToast }) {
   const [etProgress, setEtProgress] = useState({ percent: 0, stage: '', detail: '' });
   const pdfOnlyAbortRef = useRef(null);
 
-  // ── Handle PDF upload ───────────────────────────────────────────
+  // ── Handle PDF/WPS upload ──────────────────────────────────────
   const handlePdfUpload = useCallback(async (file) => {
     const isPdf = file.name.toLowerCase().endsWith('.pdf');
     const isWps = file.name.toLowerCase().endsWith('.wps');
-    const isEt = file.name.toLowerCase().endsWith('.et');
-    if (!isPdf && !isWps && !isEt) {
-      addToast('Please select a PDF, WPS, or .et file', 'error');
+    if (!isPdf && !isWps) {
+      addToast('Please select a PDF or WPS file', 'error');
       return;
     }
     setPdfFile(file);
@@ -496,6 +495,18 @@ export default function BatchPanel({ addToast }) {
       addToast('PDF selected. Upload a ZIP for standard matching, or click "Run AI Per-Row Matching" for PDF-only mode.', 'info');
     }
   }, [addToast, zipFile]);
+
+  // ── Handle .et file upload (dedicated button) ──────────────────
+  const handleEtUpload = useCallback(async (file) => {
+    if (!file.name.toLowerCase().endsWith('.et')) {
+      addToast('Please select a .et (WPS Spreadsheet) file', 'error');
+      return;
+    }
+    setPdfFile(file);
+    setZipFile(null);
+    setIsPdfOnlyMode(true);
+    addToast('.et file selected. Click "Extract .et Products & Images" to start.', 'info');
+  }, [addToast]);
 
   // ── Handle ZIP upload ───────────────────────────────────────────
   const handleZipUpload = useCallback(async (file) => {
@@ -1035,14 +1046,14 @@ export default function BatchPanel({ addToast }) {
       {/* ── Upload Section ──────────────────────────────────────── */}
       <div className="vm-upload-section">
         <DropZone
-          label="Upload PDF / WPS / ET Catalog"
-          accept=".pdf,.wps,.et,.xls,.xlsx,application/pdf,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+          label="Upload PDF / WPS Catalog"
+          accept=".pdf,.wps,application/pdf"
           icon={FileText}
           onFile={handlePdfUpload}
           disabled={status === STATUS.MATCHING || status === STATUS.SUBMITTING ||
             status === STATUS.PDF_ONLY_EXTRACTING || status === STATUS.PDF_ONLY_MATCHING ||
             status === STATUS.ET_EXTRACTING}
-          currentFile={pdfFile}
+          currentFile={pdfFile && !pdfFile.name.toLowerCase().endsWith('.et') ? pdfFile : null}
         />
         <div className="vm-upload-arrow">
           <ArrowRight size={24} />
@@ -1058,35 +1069,48 @@ export default function BatchPanel({ addToast }) {
         />
       </div>
 
-      {/* ── PDF-only / .et-only mode indicator ──────────────────── */}
-      {pdfFile && !zipFile && status === STATUS.IDLE && (
+      {/* ── .et Spreadsheet Upload (dedicated) ──────────────────── */}
+      <div className="vm-et-upload-row">
+        <DropZone
+          label="Upload .et Spreadsheet (WPS)"
+          accept=".et,.xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+          icon={Table}
+          onFile={handleEtUpload}
+          disabled={status === STATUS.MATCHING || status === STATUS.SUBMITTING ||
+            status === STATUS.PDF_ONLY_EXTRACTING || status === STATUS.PDF_ONLY_MATCHING ||
+            status === STATUS.ET_EXTRACTING}
+          currentFile={pdfFile && pdfFile.name.toLowerCase().endsWith('.et') ? pdfFile : null}
+        />
+        {pdfFile && pdfFile.name.toLowerCase().endsWith('.et') && status === STATUS.IDLE && (
+          <button className="vm-pdf-only-btn vm-et-go-btn" onClick={handlePdfOnlyProcess}>
+            <Sparkles size={14} />
+            Extract .et Products & Images
+            <small>Extract product data + embedded images from spreadsheet cells</small>
+          </button>
+        )}
+      </div>
+
+      {/* ── PDF-only mode indicator ─────────────────────────────── */}
+      {pdfFile && !zipFile && status === STATUS.IDLE && !pdfFile.name.toLowerCase().endsWith('.et') && (
         <div className="vm-pdf-only-prompt">
           <div className="vm-pdf-only-info">
             <File size={16} />
             <span>
-              {pdfFile.name.toLowerCase().endsWith('.et')
-                ? 'Only a .et spreadsheet selected. Click below to extract products and embedded images.'
-                : 'Only a PDF file selected. You can either:'}
+              Only a PDF file selected. You can either:
             </span>
           </div>
           <div className="vm-pdf-only-actions">
             <button className="vm-pdf-only-btn" onClick={handlePdfOnlyProcess}>
               <Sparkles size={14} />
-              {pdfFile.name.toLowerCase().endsWith('.et') ? 'Extract .et Products & Images' : 'Run AI Per-Row Matching'}
+              Run AI Per-Row Matching
               <small>
-                {pdfFile.name.toLowerCase().endsWith('.et')
-                  ? 'Extract product data + embedded images from spreadsheet cells'
-                  : 'Extract products + page images, AI matches each row'}
+                Extract products + page images, AI matches each row
               </small>
             </button>
-            {!pdfFile.name.toLowerCase().endsWith('.et') && (
-              <>
-                <span className="vm-pdf-only-or">or</span>
-                <span className="vm-pdf-only-hint">
-                  Upload a ZIP file for standard image matching
-                </span>
-              </>
-            )}
+            <span className="vm-pdf-only-or">or</span>
+            <span className="vm-pdf-only-hint">
+              Upload a ZIP file for standard image matching
+            </span>
           </div>
         </div>
       )}
