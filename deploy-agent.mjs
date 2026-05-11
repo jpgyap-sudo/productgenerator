@@ -23,8 +23,8 @@ import { existsSync } from 'fs';
 
 // ── Configuration ──────────────────────────────────────────────────
 const CONFIG = {
-  // VPS connection — uses SSH host alias from ~/.ssh/config
-  sshHost: 'superroo-vps',       // SSH host alias (see ~/.ssh/config)
+  // VPS connection — uses Tailscale IP (public IP port 22 is firewalled)
+  sshHost: '100.64.175.88',      // Tailscale IP (public IP port 22 is firewalled)
   vpsPath: '/root/productgenerator',
   pm2ProcessName: 'product-image-studio',
 
