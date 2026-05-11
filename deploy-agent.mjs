@@ -296,8 +296,10 @@ ${color(C.bold, 'Config:')}
     if (!flags.dryRun) {
       try {
         if (existsSync('.env')) {
-          const scpCmd = `scp -i "${CONFIG.sshIdentityFile}" -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new .env superroo@${CONFIG.sshHost}:${CONFIG.vpsPath}/.env`;
-          run(scpCmd, { silent: true });
+          // Use type + ssh sudo tee because files in /root/ are owned by root
+          const identityArg = CONFIG.sshIdentityFile ? `-i "${CONFIG.sshIdentityFile}"` : '';
+          const pipeCmd = `type .env | ssh ${identityArg} -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new superroo@${CONFIG.sshHost} "sudo tee ${CONFIG.vpsPath}/.env > /dev/null && sudo chmod 600 ${CONFIG.vpsPath}/.env"`;
+          run(pipeCmd, { silent: true });
           ok('.env file synced to VPS');
         } else {
           warn('No local .env file found; keeping existing remote .env');
