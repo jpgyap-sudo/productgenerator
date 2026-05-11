@@ -29,7 +29,7 @@ const CONFIG = {
   sshUser: 'superroo',
   sshIdentityFile: 'C:\\Users\\User\\.ssh\\id_superroo_vps',
   vpsPath: '/root/productgenerator',
-  healthEndpoint: 'http://localhost:3001/health',
+  healthEndpoint: 'http://localhost:3002/health',
   maxLoops: 50,           // Safety limit
   loopDelayMs: 5000,      // Delay between loop iterations
   e2eTestScript: 'test-et-ai-e2e.mjs',
