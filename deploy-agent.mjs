@@ -298,7 +298,7 @@ ${color(C.bold, 'Config:')}
         if (existsSync('.env')) {
           // Use type + ssh sudo tee because files in /root/ are owned by root
           const identityArg = CONFIG.sshIdentityFile ? `-i "${CONFIG.sshIdentityFile}"` : '';
-          const pipeCmd = `type .env | ssh ${identityArg} -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new superroo@${CONFIG.sshHost} "sudo tee ${CONFIG.vpsPath}/.env > /dev/null && sudo chmod 600 ${CONFIG.vpsPath}/.env"`;
+          const pipeCmd = `type .env | ssh ${identityArg} -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new superroo@${CONFIG.sshHost} "sudo tee ${CONFIG.vpsPath}/.env > /dev/null && sudo chmod 600 ${CONFIG.vpsPath}/.env && sudo chown superroo:superroo ${CONFIG.vpsPath}/.env"`;
           run(pipeCmd, { silent: true });
           ok('.env file synced to VPS');
         } else {
