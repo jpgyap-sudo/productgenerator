@@ -292,6 +292,21 @@ ${color(C.bold, 'Config:')}
       ok(`Would rsync to ${CONFIG.sshHost}:${CONFIG.vpsPath}`);
     }
 
+    // ── Sync .env file (not in git, needed for Docker) ──
+    if (!flags.dryRun) {
+      try {
+        if (existsSync('.env')) {
+          const scpCmd = `scp -i "${CONFIG.sshIdentityFile}" -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new .env superroo@${CONFIG.sshHost}:${CONFIG.vpsPath}/.env`;
+          run(scpCmd, { silent: true });
+          ok('.env file synced to VPS');
+        } else {
+          warn('No local .env file found; keeping existing remote .env');
+        }
+      } catch (e) {
+        warn(`Failed to sync .env: ${e.message}`);
+      }
+    }
+
     // ── Step 5 (or 4): Restart process + health check ──
     const healthStep = deployStepOffset + 2;
     step(healthStep, TOTAL_STEPS, 'Restarting application and running health check...');
