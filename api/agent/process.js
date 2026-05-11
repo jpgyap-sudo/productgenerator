@@ -247,12 +247,16 @@ export default async function handler(req, res) {
     // For .et files with embedded images, data is already extracted in Step 1.
     // For PDF/WPS files, extract text via pdf-parse.
     let textResult = { text: '', pages: 0, rows: 0 };
-    const hasEtEmbeddedImages = zipResult.hasEmbeddedImages && zipResult.etProducts && zipResult.etProducts.length > 0;
+    // hasEtEmbeddedImages is true when the .et extractor found embedded images,
+    // regardless of whether products were successfully parsed from rows.
+    // Even with 0 products, we still have images to work with.
+    const hasEtEmbeddedImages = zipResult.hasEmbeddedImages === true;
 
     if (hasEtEmbeddedImages) {
       // .et files with embedded images: data already extracted in Step 1
       // Skip text extraction — products are already structured with row data
-      console.log(`[AGENT] Step 2: Skipping text extraction — .et embedded image data already extracted (${zipResult.etProducts.length} products)`);
+      const productCount = (zipResult.etProducts && zipResult.etProducts.length) || 0;
+      console.log(`[AGENT] Step 2: Skipping text extraction — .et embedded image data already extracted (${productCount} products, ${zipResult.totalImages || 0} images)`);
     } else {
       // PDF/WPS files: Extract text via pdf-parse
       console.log('[AGENT] Step 2: Extracting document text...');
@@ -297,19 +301,38 @@ export default async function handler(req, res) {
       // Use pre-extracted products from .et image extractor
       // These already have productCode, description, brand, and image mappings
       // No AI needed — data is parsed directly from spreadsheet cells
-      products = zipResult.etProducts.map(p => ({
-        name: p.name || '',
-        brand: p.brand || '',
-        productCode: p.productCode || '',
-        generatedCode: p.generatedCode || (p.productCode ? `HA${p.productCode}R` : ''),
-        description: p.description || '',
-        category: p.category || '',
-        // Preserve image mapping info for the UI
-        row: p.row,
-        hasPreMappedImage: p.hasPreMappedImage,
-        imageName: p.imageName || ''
-      }));
-      console.log(`[AGENT] Step 3: Using ${products.length} pre-extracted products from .et embedded images (no AI needed)`);
+      if (zipResult.etProducts && zipResult.etProducts.length > 0) {
+        products = zipResult.etProducts.map(p => ({
+          name: p.name || '',
+          brand: p.brand || '',
+          productCode: p.productCode || '',
+          generatedCode: p.generatedCode || (p.productCode ? `HA${p.productCode}R` : ''),
+          description: p.description || '',
+          category: p.category || '',
+          // Preserve image mapping info for the UI
+          row: p.row,
+          hasPreMappedImage: p.hasPreMappedImage,
+          imageName: p.imageName || ''
+        }));
+        console.log(`[AGENT] Step 3: Using ${products.length} pre-extracted products from .et embedded images (no AI needed)`);
+      } else {
+        // Embedded images found but no products could be parsed from rows.
+        // This happens when the column structure doesn't match expected patterns.
+        // Return the images anyway so the user can manually enter product data.
+        console.log('[AGENT] Step 3: .et embedded images found but 0 products parsed — returning images for manual entry');
+        return res.json({
+          success: true,
+          isPdfOnly: false,
+          hasEmbeddedImages: true,
+          products: [],
+          allImages: zipResult.images,
+          pdfImages: [],
+          rawText: '',
+          totalImages: zipResult.totalImages,
+          batchId: zipResult.batchId || `et_${Date.now()}`,
+          warning: 'Extracted images from the .et file but could not parse product data from spreadsheet rows. You can manually enter product details below.'
+        });
+      }
     } else {
       // PDF/WPS: Use DeepSeek AI to extract structured products from raw text
       console.log('[AGENT] Step 3: Analyzing text with DeepSeek AI...');
@@ -339,7 +362,7 @@ export default async function handler(req, res) {
       }
     }
 
-    if (products.length === 0) {
+    if (products.length === 0 && !hasEtEmbeddedImages) {
       return res.json({
         success: true,
         products: [],
