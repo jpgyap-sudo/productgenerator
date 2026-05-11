@@ -196,7 +196,9 @@ ${color(C.bold, 'Config:')}
       run(`git commit -m "${commitMsg.replace(/"/g, '\\"')}"`);
       ok(`Committed: "${commitMsg}"`);
     } catch (e) {
-      if (e.message.includes('nothing to commit')) {
+      // Check if the error is just "nothing to commit" — continue with deploy
+      const commitOutput = runCapture(`git status --porcelain`);
+      if (commitOutput === '') {
         warn('Nothing to commit — continuing with deploy.');
       } else {
         fail(`Commit failed: ${e.message}`);
