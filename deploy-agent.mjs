@@ -19,6 +19,7 @@
 import { execSync } from 'child_process';
 import { createInterface } from 'readline';
 import { setTimeout as sleep } from 'timers/promises';
+import { existsSync } from 'fs';
 
 // ── Configuration ──────────────────────────────────────────────────
 const CONFIG = {
@@ -151,7 +152,7 @@ ${color(C.bold, 'Config:')}
   // Extract commit message from args (filter out flags)
   let commitMsg = args.filter(a => !a.startsWith('--')).join(' ') || '';
 
-  const TOTAL_STEPS = flags.noDeploy ? 3 : 5;
+  const TOTAL_STEPS = flags.noDeploy ? 3 : 6;
 
   console.log(color(C.cyan, '═══════════════════════════════════════════════════════════════'));
   console.log(color(C.cyan, `  ${color(C.bold, 'Deploy Agent')} — Commit → Push → Deploy`));
@@ -237,8 +238,30 @@ ${color(C.bold, 'Config:')}
   if (!flags.noDeploy) {
     const deployStepOffset = flags.noPush ? 3 : 4;
 
+    // ── Build frontend before syncing ──
+    const frontendStep = deployStepOffset;
+    step(frontendStep, TOTAL_STEPS, 'Building frontend (furniture-render)...');
+    if (!flags.dryRun) {
+      try {
+        const furnitureDir = './furniture-render';
+        if (existsSync(`${furnitureDir}/node_modules`)) {
+          run(`cd ${furnitureDir} && npx vite build`);
+        } else {
+          warn('furniture-render/node_modules not found, installing deps first...');
+          run(`cd ${furnitureDir} && npm install && npx vite build`);
+        }
+        ok('Frontend built');
+      } catch (e) {
+        fail(`Frontend build failed: ${e.message}`);
+        process.exit(1);
+      }
+    } else {
+      ok('Would build frontend');
+    }
+
     // ── Step 4 (or 3): Rsync files to VPS ──
-    step(deployStepOffset, TOTAL_STEPS, 'Syncing files to VPS...');
+    const rsyncStep = deployStepOffset + 1;
+    step(rsyncStep, TOTAL_STEPS, 'Syncing files to VPS...');
 
     if (!flags.dryRun) {
       try {
@@ -261,15 +284,22 @@ ${color(C.bold, 'Config:')}
       ok(`Would rsync to ${CONFIG.sshHost}:${CONFIG.vpsPath}`);
     }
 
-    // ── Step 5 (or 4): Restart PM2 + health check ──
-    const healthStep = deployStepOffset + 1;
-    step(healthStep, TOTAL_STEPS, 'Restarting PM2 and running health check...');
+    // ── Step 5 (or 4): Restart process + health check ──
+    const healthStep = deployStepOffset + 2;
+    step(healthStep, TOTAL_STEPS, 'Restarting application and running health check...');
 
     if (!flags.dryRun) {
       try {
-        // Restart PM2
-        run(`ssh ${CONFIG.sshHost} "cd ${CONFIG.vpsPath} && pm2 startOrReload ecosystem.config.cjs --update-env"`, { silent: false });
-        ok('PM2 restarted');
+        // Detect Docker vs PM2 and restart accordingly
+        const dockerActive = runCapture(`ssh ${CONFIG.sshHost} "docker ps -q --filter name=product-studio-backend 2>/dev/null || true"`);
+        if (dockerActive) {
+          warn('Detected Docker deployment, rebuilding container...');
+          run(`ssh ${CONFIG.sshHost} "cd ${CONFIG.vpsPath} && docker compose build && docker compose up -d"`, { silent: false });
+          ok('Docker container rebuilt and restarted');
+        } else {
+          run(`ssh ${CONFIG.sshHost} "cd ${CONFIG.vpsPath} && pm2 startOrReload ecosystem.config.cjs --update-env"`, { silent: false });
+          ok('PM2 restarted');
+        }
 
         // Wait for startup
         console.log(`  ${color(C.dim, 'Waiting 3s for app to start...')}`);
