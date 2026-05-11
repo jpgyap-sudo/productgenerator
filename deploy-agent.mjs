@@ -320,6 +320,8 @@ ${color(C.bold, 'Config:')}
 
         // Detect Docker vs PM2 and restart accordingly
         const dockerActive = runCapture(sshCmd('docker ps -q --filter name=product-studio-backend 2>/dev/null || true'));
+        // Always stop old container first to avoid port conflicts
+        run(sshCmd('cd ' + CONFIG.vpsPath + ' && docker compose down 2>/dev/null; true'), { silent: true });
         if (dockerActive) {
           warn('Detected Docker deployment, rebuilding container...');
           run(sshCmd('cd ' + CONFIG.vpsPath + ' && docker compose build && docker compose up -d'), { silent: false });
