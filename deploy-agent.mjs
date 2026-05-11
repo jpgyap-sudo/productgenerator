@@ -25,6 +25,7 @@ import { existsSync } from 'fs';
 const CONFIG = {
   // VPS connection — uses Tailscale IP (public IP port 22 is firewalled)
   sshHost: '100.64.175.88',      // Tailscale IP (public IP port 22 is firewalled)
+  sshIdentityFile: 'C:\\Users\\User\\.ssh\\id_superroo_vps',  // SSH key
   vpsPath: '/root/productgenerator',
   pm2ProcessName: 'product-image-studio',
 
@@ -81,6 +82,11 @@ function runCapture(cmd) {
   } catch {
     return '';
   }
+}
+
+function sshCmd(cmd) {
+  const identityArg = CONFIG.sshIdentityFile ? `-i "${CONFIG.sshIdentityFile}"` : '';
+  return `ssh ${identityArg} -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new ${CONFIG.sshHost} "${cmd}"`;
 }
 
 function commandExists(command) {
@@ -267,12 +273,13 @@ ${color(C.bold, 'Config:')}
       try {
         if (commandExists('rsync')) {
           const excludeArgs = CONFIG.rsyncExcludes.map(e => `--exclude='${e}'`).join(' ');
-          const rsyncCmd = `rsync -avz --delete ${excludeArgs} -e "ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new" ./ ${CONFIG.sshHost}:${CONFIG.vpsPath}/`;
+          const sshOpts = CONFIG.sshIdentityFile ? `-i "${CONFIG.sshIdentityFile}" -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new` : '-o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new';
+          const rsyncCmd = `rsync -avz --delete ${excludeArgs} -e "ssh ${sshOpts}" ./ ${CONFIG.sshHost}:${CONFIG.vpsPath}/`;
           run(rsyncCmd);
           ok('Files synced to VPS with rsync');
         } else {
           warn('rsync not found; using git archive over SSH fallback');
-          const archiveCmd = `git archive --format=tar HEAD | ssh ${CONFIG.sshHost} "mkdir -p ${CONFIG.vpsPath} && tar -xf - -C ${CONFIG.vpsPath}"`;
+          const archiveCmd = `git archive --format=tar HEAD | ${sshCmd('mkdir -p ' + CONFIG.vpsPath + ' && tar -xf - -C ' + CONFIG.vpsPath)}`;
           run(archiveCmd);
           ok('Committed files synced to VPS with git archive');
         }
@@ -291,13 +298,13 @@ ${color(C.bold, 'Config:')}
     if (!flags.dryRun) {
       try {
         // Detect Docker vs PM2 and restart accordingly
-        const dockerActive = runCapture(`ssh ${CONFIG.sshHost} "docker ps -q --filter name=product-studio-backend 2>/dev/null || true"`);
+        const dockerActive = runCapture(sshCmd('docker ps -q --filter name=product-studio-backend 2>/dev/null || true'));
         if (dockerActive) {
           warn('Detected Docker deployment, rebuilding container...');
-          run(`ssh ${CONFIG.sshHost} "cd ${CONFIG.vpsPath} && docker compose build && docker compose up -d"`, { silent: false });
+          run(sshCmd('cd ' + CONFIG.vpsPath + ' && docker compose build && docker compose up -d'), { silent: false });
           ok('Docker container rebuilt and restarted');
         } else {
-          run(`ssh ${CONFIG.sshHost} "cd ${CONFIG.vpsPath} && pm2 startOrReload ecosystem.config.cjs --update-env"`, { silent: false });
+          run(sshCmd('cd ' + CONFIG.vpsPath + ' && pm2 startOrReload ecosystem.config.cjs --update-env'), { silent: false });
           ok('PM2 restarted');
         }
 
@@ -306,7 +313,7 @@ ${color(C.bold, 'Config:')}
         await sleep(3000);
 
         // Health check
-        const httpCode = runCapture(`ssh ${CONFIG.sshHost} "curl -s -o /dev/null -w '%{http_code}' ${CONFIG.healthEndpoint}"`);
+        const httpCode = runCapture(sshCmd(`curl -s -o /dev/null -w '%{http_code}' ${CONFIG.healthEndpoint}`));
         if (httpCode === '200') {
           ok(`Health check passed (HTTP ${httpCode})`);
         } else {
