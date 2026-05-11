@@ -1,11 +1,18 @@
 // ═══════════════════════════════════════════════════════════════════
 //  api/agent/process.js — POST /api/agent/process
-//  Uploading Agent: Accepts PDF + ZIP, extracts product info + images
-//  using DeepSeek AI for text analysis and adm-zip for image extraction.
+//  Uploading Agent: Accepts PDF/WPS/ET + ZIP (or standalone), extracts
+//  product info + images using DeepSeek AI for text analysis.
 //
-//  Phase 1 (Extract & Inspect): Returns ALL images with data URLs so
-//  the user can preview every image before matching.
-//  Also extracts PDF page images for GPT-4o visual product matching.
+//  Supported file types:
+//    - PDF: Text extraction via pdf-parse, page image extraction via pdfjs-dist
+//    - .wps: WPS Writer document (treated like PDF)
+//    - .et:  WPS Spreadsheet (parsed via SheetJS/xlsx)
+//    - .zip: Product images (optional, for standard matching mode)
+//
+//  Standalone mode (no ZIP): When only a document is uploaded, the system
+//  extracts products from text via DeepSeek AND extracts page images
+//  (PDF/WPS) for AI per-row matching. For .et files, no page images
+//  are available — products are extracted from spreadsheet rows.
 //
 //  Batch mode (optional): When `useBatchQueue=true` in the request body,
 //  the pipeline runs the full batch queue system including:
@@ -19,6 +26,7 @@
 import multer from 'multer';
 import { extractTextFromPDF } from '../../lib/pdf-extractor.js';
 import { extractImagesFromPDF } from '../../lib/pdf-image-extractor.js';
+import { extractTextFromET } from '../../lib/et-extractor.js';
 import { extractAllImagesFromZip } from '../../lib/zip-extractor.js';
 import { extractProductInfo } from '../../lib/deepseek.js';
 import { saveImagesToGallery } from '../../lib/upload-gallery.js';
@@ -29,19 +37,21 @@ const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
     fileSize: 50 * 1024 * 1024, // 50MB per file
-    files: 2 // PDF + ZIP
+    files: 2 // PDF + ZIP (or just PDF)
   },
   fileFilter: (req, file, cb) => {
-    const isPDF = file.mimetype === 'application/pdf'
-      || file.originalname.toLowerCase().endsWith('.pdf');
+    const ext = file.originalname.toLowerCase();
+    const isPDF = file.mimetype === 'application/pdf' || ext.endsWith('.pdf');
     const isZIP = file.mimetype === 'application/zip'
       || file.mimetype === 'application/x-zip-compressed'
-      || file.originalname.toLowerCase().endsWith('.zip');
+      || ext.endsWith('.zip');
+    const isWPS = ext.endsWith('.wps');
+    const isET = ext.endsWith('.et');
 
-    if (isPDF || isZIP) {
+    if (isPDF || isZIP || isWPS || isET) {
       cb(null, true);
     } else {
-      cb(new Error(`Unsupported file type: ${file.mimetype}. Only PDF and ZIP files are accepted.`));
+      cb(new Error(`Unsupported file type: ${file.mimetype}. Only PDF, WPS, ET, and ZIP files are accepted.`));
     }
   }
 });
@@ -104,93 +114,167 @@ export default async function handler(req, res) {
     const zipFile = req.files?.zip?.[0];
 
     if (!pdfFile) {
-      return res.status(400).json({ error: 'PDF file is required' });
+      return res.status(400).json({ error: 'A document file (PDF, WPS, or ET) is required' });
     }
 
-    if (!zipFile) {
-      return res.status(400).json({ error: 'ZIP file is required' });
+    // ── Detect file type ─────────────────────────────────────────────
+    const fileName = pdfFile.originalname.toLowerCase();
+    const isPDF = fileName.endsWith('.pdf');
+    const isWPS = fileName.endsWith('.wps');
+    const isET = fileName.endsWith('.et');
+    const isSpreadsheet = isET; // .et is a spreadsheet format
+    const isDocument = isPDF || isWPS; // PDF/WPS are document formats with pages
+
+    // ── Determine mode: standalone or with ZIP ───────────────────────
+    const isStandalone = !zipFile;
+
+    console.log(`[AGENT] Processing file: "${pdfFile.originalname}" (${(pdfFile.buffer.length / 1024 / 1024).toFixed(2)} MB, type: ${isET ? 'ET' : isWPS ? 'WPS' : 'PDF'})`);
+    if (zipFile) {
+      console.log(`[AGENT] Processing ZIP: "${zipFile.originalname}" (${(zipFile.buffer.length / 1024 / 1024).toFixed(2)} MB)`);
     }
+    console.log(`[AGENT] Mode: ${isStandalone ? 'Standalone (AI per-row matching)' : 'Document+ZIP (standard batch)'}`);
 
-    console.log(`[AGENT] Processing PDF: "${pdfFile.originalname}" (${(pdfFile.buffer.length / 1024 / 1024).toFixed(2)} MB)`);
-    console.log(`[AGENT] Processing ZIP: "${zipFile.originalname}" (${(zipFile.buffer.length / 1024 / 1024).toFixed(2)} MB)`);
-
-    // Step 1: Extract ALL images from ZIP with data URLs for preview
-    console.log('[AGENT] Step 1: Extracting ZIP images...');
-    const zipResult = await extractAllImagesFromZip(zipFile.buffer);
-
-    if (zipResult.totalImages === 0) {
-      return res.status(400).json({
-        error: 'No valid images found in the ZIP file.',
-        rawText
-      });
-    }
-
-    console.log(`[AGENT] ZIP images extracted: ${zipResult.totalImages} images found, returning ${zipResult.images.length} for preview`);
-
-    // Step 1b: Save images to VPS upload gallery for persistent access
-    // This ensures images survive the matchmaking flow (dataUrls are stripped by match.js)
-    const batchId = `batch_${Date.now()}`;
-    try {
-      const galleryImages = await saveImagesToGallery(zipResult.images, batchId);
-      // Attach gallery URLs to each image for server-side resolution
-      const urlMap = {};
-      galleryImages.forEach(gi => { urlMap[gi.name] = gi.url; });
-      zipResult.images.forEach(img => {
-        img.galleryUrl = urlMap[img.name] || '';
-      });
-      zipResult.batchId = batchId;
-      console.log(`[AGENT] Saved ${galleryImages.length} images to gallery (batch: ${batchId})`);
-    } catch (galleryErr) {
-      console.warn('[AGENT] Gallery save failed (non-fatal):', galleryErr.message);
-      // Continue with dataUrls only — gallery is optional for preview
-    }
-
-    // Step 2: Extract images from PDF pages (for GPT-4o visual matching)
-    console.log('[AGENT] Step 2: Extracting PDF page images...');
+    // ── Step 1: Extract images from source ──────────────────────────
+    let zipResult = { images: [], totalImages: 0, batchId: '' };
     let pdfImages = [];
-    try {
-      pdfImages = await extractImagesFromPDF(pdfFile.buffer);
-      console.log(`[AGENT] Extracted ${pdfImages.length} PDF page images`);
-    } catch (pdfImgErr) {
-      console.warn('[AGENT] PDF image extraction failed (non-fatal):', pdfImgErr.message);
-      // Continue without PDF images — matching will use text-only fallback
+
+    if (zipFile) {
+      // Standard mode: Extract ALL images from ZIP with data URLs for preview
+      console.log('[AGENT] Step 1: Extracting ZIP images...');
+      zipResult = await extractAllImagesFromZip(zipFile.buffer);
+
+      if (zipResult.totalImages === 0) {
+        return res.status(400).json({
+          error: 'No valid images found in the ZIP file.',
+          rawText
+        });
+      }
+
+      console.log(`[AGENT] ZIP images extracted: ${zipResult.totalImages} images found, returning ${zipResult.images.length} for preview`);
+
+      // Save images to VPS upload gallery for persistent access
+      const batchId = `batch_${Date.now()}`;
+      try {
+        const galleryImages = await saveImagesToGallery(zipResult.images, batchId);
+        const urlMap = {};
+        galleryImages.forEach(gi => { urlMap[gi.name] = gi.url; });
+        zipResult.images.forEach(img => {
+          img.galleryUrl = urlMap[img.name] || '';
+        });
+        zipResult.batchId = batchId;
+        console.log(`[AGENT] Saved ${galleryImages.length} images to gallery (batch: ${batchId})`);
+      } catch (galleryErr) {
+        console.warn('[AGENT] Gallery save failed (non-fatal):', galleryErr.message);
+      }
+
+      // Extract images from document pages (for GPT-4o visual matching)
+      if (isDocument) {
+        console.log('[AGENT] Step 1b: Extracting document page images...');
+        try {
+          pdfImages = await extractImagesFromPDF(pdfFile.buffer);
+          console.log(`[AGENT] Extracted ${pdfImages.length} page images`);
+        } catch (pdfImgErr) {
+          console.warn('[AGENT] Page image extraction failed (non-fatal):', pdfImgErr.message);
+        }
+      } else {
+        console.log('[AGENT] Step 1b: Skipping page image extraction for spreadsheet (.et) format');
+      }
+    } else {
+      // Standalone mode: Extract page images from document (PDF/WPS only)
+      if (isDocument) {
+        console.log('[AGENT] Step 1 (standalone): Extracting page images as product images...');
+        try {
+          // Pass a COPY of the buffer so the original remains intact for text extraction.
+          // pdfjs-dist's getDocument({ data: buffer.buffer }) may consume the underlying
+          // ArrayBuffer, leaving the original Buffer empty.
+          const pages = await extractImagesFromPDF(Buffer.from(pdfFile.buffer));
+          // Map PDF pages to the same format as ZIP images for compatibility
+          zipResult.images = pages.map((page, idx) => ({
+            name: `page_${page.page}.png`,
+            dataUrl: page.dataUrl,
+            width: page.width,
+            height: page.height,
+            size: page.size,
+            galleryUrl: '',
+            isPdfPage: true,
+            pageNumber: page.page
+          }));
+          zipResult.totalImages = zipResult.images.length;
+          zipResult.batchId = `batch_${Date.now()}`;
+          console.log(`[AGENT] Standalone: extracted ${zipResult.totalImages} page images`);
+        } catch (pdfImgErr) {
+          console.warn('[AGENT] Page image extraction failed:', pdfImgErr.message);
+          // Continue — we'll still have text products even without page images
+        }
+      } else {
+        // .et files are spreadsheets — no page images to extract
+        console.log('[AGENT] Step 1 (standalone): .et spreadsheet — no page images to extract');
+        zipResult.batchId = `batch_${Date.now()}`;
+      }
     }
 
-    // Step 3: Extract text from PDF
-    console.log('[AGENT] Step 3: Extracting PDF text...');
-    let pdfResult = { text: '', pages: 0 };
+    // ── Step 2: Extract text from document ───────────────────────────
+    let textResult = { text: '', pages: 0, rows: 0 };
 
-    try {
-      pdfResult = await extractTextFromPDF(pdfFile.buffer);
-      rawText = pdfResult.text || '';
-    } catch (pdfErr) {
-      console.error('[AGENT] PDF extraction failed:', pdfErr.message);
-      return res.json({
-        success: true,
-        products: [],
-        allImages: zipResult.images,
-        rawText: '',
-        totalImages: zipResult.totalImages,
-        pdfError: pdfErr.message,
-        warning: `PDF text extraction failed: ${pdfErr.message}. You can manually enter product details below.`
-      });
+    if (isSpreadsheet) {
+      // .et files: Parse spreadsheet data via SheetJS
+      console.log('[AGENT] Step 2: Extracting text from .et spreadsheet...');
+      try {
+        textResult = await extractTextFromET(pdfFile.buffer);
+        rawText = textResult.text || '';
+        console.log(`[ET-EXTRACTOR] Extracted ${textResult.rows} data rows, ${rawText.length} chars`);
+      } catch (etErr) {
+        console.error('[AGENT] ET extraction failed:', etErr.message);
+        return res.json({
+          success: true,
+          products: [],
+          allImages: zipResult.images,
+          rawText: '',
+          totalImages: zipResult.totalImages,
+          pdfError: etErr.message,
+          isPdfOnly: isStandalone,
+          warning: `Spreadsheet text extraction failed: ${etErr.message}. You can manually enter product details below.`
+        });
+      }
+    } else {
+      // PDF/WPS files: Extract text via pdf-parse
+      console.log('[AGENT] Step 2: Extracting document text...');
+      try {
+        textResult = await extractTextFromPDF(pdfFile.buffer);
+        rawText = textResult.text || '';
+      } catch (pdfErr) {
+        console.error('[AGENT] PDF extraction failed:', pdfErr.message);
+        return res.json({
+          success: true,
+          products: [],
+          allImages: zipResult.images,
+          rawText: '',
+          totalImages: zipResult.totalImages,
+          pdfError: pdfErr.message,
+          isPdfOnly: isStandalone,
+          warning: `Document text extraction failed: ${pdfErr.message}. You can manually enter product details below.`
+        });
+      }
     }
 
     if (!rawText || rawText.length < 10) {
+      const fileTypeLabel = isSpreadsheet ? 'spreadsheet' : 'document';
       return res.json({
         success: true,
         products: [],
         allImages: zipResult.images,
         rawText: rawText || '',
         totalImages: zipResult.totalImages,
-        warning: 'Could not extract meaningful text from the PDF. The file may be scanned/image-based. You can manually enter product details below.'
+        isPdfOnly: isStandalone,
+        warning: `Could not extract meaningful text from the ${fileTypeLabel}. You can manually enter product details below.`
       });
     }
 
-    console.log(`[AGENT] PDF text extracted: ${rawText.length} chars from ${pdfResult.pages} pages`);
+    const sourceLabel = isSpreadsheet ? 'spreadsheet' : 'document';
+    console.log(`[AGENT] ${sourceLabel} text extracted: ${rawText.length} chars`);
 
-    // Step 4: Use DeepSeek to extract product info from PDF text
-    console.log('[AGENT] Step 4: Analyzing PDF text with DeepSeek...');
+    // ── Step 3: Use DeepSeek to extract product info from PDF text ──
+    console.log('[AGENT] Step 3: Analyzing PDF text with DeepSeek...');
     let products = [];
 
     try {
@@ -198,7 +282,6 @@ export default async function handler(req, res) {
       console.log(`[AGENT] DeepSeek extracted ${products.length} product(s)`);
 
       // Auto-generate product codes: HA + originalCode + R
-      // e.g., CH-005 → HACH-005R
       products = products.map(p => ({
         ...p,
         generatedCode: p.productCode
@@ -213,6 +296,7 @@ export default async function handler(req, res) {
         allImages: zipResult.images,
         rawText,
         totalImages: zipResult.totalImages,
+        isPdfOnly: isStandalone,
         aiError: aiErr.message,
         warning: 'AI extraction failed. You can manually enter product details below.'
       });
@@ -225,18 +309,33 @@ export default async function handler(req, res) {
         allImages: zipResult.images,
         rawText,
         totalImages: zipResult.totalImages,
+        isPdfOnly: isStandalone,
         warning: 'No product information could be extracted from the PDF. You can manually enter details below.'
       });
     }
 
-    // Step 5: Optionally run the full batch pipeline (fingerprinting + verification)
-    // Triggered by `useBatchQueue: true` in the request body.
-    // This runs the slow but accurate pipeline and saves results to the database.
-    // IMPORTANT: The pipeline runs ASYNCHRONOUSLY (not awaited) to avoid Nginx
-    // 504 Gateway Timeout. The UI polls GET /api/agent/batch-status/:batchId
-    // for progress and final results.
+    // ── Step 4: Return results ──────────────────────────────────────
+    // PDF-only mode: Return with isPdfOnly flag so the UI can show AI per-row matching
+    // PDF+ZIP mode: Check for batch queue or standard mode
+
     const useBatchQueue = req.body?.useBatchQueue === true || req.body?.useBatchQueue === 'true';
 
+    if (isStandalone) {
+      // PDF-only mode — return products + page images for AI per-row matching
+      console.log('[AGENT] PDF-only mode complete. Returning products + page images for AI per-row matching.');
+      return res.json({
+        success: true,
+        isPdfOnly: true,
+        products,
+        allImages: zipResult.images,
+        pdfImages: [],  // In PDF-only mode, page images ARE the allImages
+        rawText,
+        totalImages: zipResult.totalImages,
+        batchId: zipResult.batchId || `pdf_${Date.now()}`
+      });
+    }
+
+    // Standard PDF+ZIP mode
     if (useBatchQueue) {
       console.log('[AGENT] Step 5: Launching batch queue pipeline asynchronously...');
 

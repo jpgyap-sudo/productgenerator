@@ -2695,6 +2695,140 @@ html, body {
   background: #0d1118;
 }
 
+/* ── PDF-only mode prompt ───────────────────────────────────────── */
+.vm-pdf-only-prompt {
+  padding: 18px;
+  border: 1px solid #2a3340;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #151a22, #10141b);
+  margin-bottom: 20px;
+}
+
+.vm-pdf-only-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #c5cbd3;
+  font-size: 13px;
+  margin-bottom: 14px;
+}
+
+.vm-pdf-only-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.vm-pdf-only-btn {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 14px 24px;
+  border: 1px solid #d3a64f;
+  background: linear-gradient(180deg, #1a150e, #14100a);
+  color: #d3a64f;
+  border-radius: 10px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  transition: border-color 0.2s, background 0.2s, transform 0.15s, box-shadow 0.2s;
+}
+
+.vm-pdf-only-btn:hover {
+  background: linear-gradient(180deg, #221b12, #1a150e);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 20px rgba(211, 166, 79, 0.15);
+}
+
+.vm-pdf-only-btn small {
+  font-weight: 400;
+  font-size: 11px;
+  opacity: 0.7;
+}
+
+.vm-pdf-only-or {
+  color: #4a5260;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.vm-pdf-only-hint {
+  color: #8e96a3;
+  font-size: 12px;
+}
+
+/* ── PDF-only mode badge ────────────────────────────────────────── */
+.vm-mode-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-size: 12px;
+  margin-bottom: 16px;
+}
+
+.vm-mode-pdf-only {
+  border: 1px solid #d3a64f44;
+  background: rgba(211, 166, 79, 0.06);
+  color: #d3a64f;
+}
+
+/* ── PDF-only match button variant ──────────────────────────────── */
+.vm-match-btn-pdf-only {
+  border-color: #8b5cf6 !important;
+  color: #a78bfa !important;
+  background: linear-gradient(180deg, #1a1025, #140e1f) !important;
+}
+
+.vm-match-btn-pdf-only:hover {
+  background: linear-gradient(180deg, #221530, #1a1025) !important;
+  box-shadow: 0 4px 20px rgba(139, 92, 246, 0.15) !important;
+}
+
+/* ── PDF-only footer ────────────────────────────────────────────── */
+.vm-pdf-only-footer {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 12px 16px;
+  border: 1px solid #252c38;
+  border-radius: 8px;
+  background: #121821;
+  color: #8e96a3;
+  font-size: 12px;
+  margin-top: 16px;
+  line-height: 1.5;
+}
+
+/* ── Pause Button ───────────────────────────────────────────────── */
+.vm-pause-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border: 1px solid #d34f4f;
+  background: rgba(211, 79, 79, 0.08);
+  color: #ff6b4a;
+  border-radius: 6px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  transition: background 0.2s, transform 0.15s;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.vm-pause-btn:hover {
+  background: rgba(211, 79, 79, 0.18);
+  transform: translateY(-1px);
+}
+
 /* ── Responsive ─────────────────────────────────────────────────── */
 @media (max-width: 800px) {
   .vm-upload-section {

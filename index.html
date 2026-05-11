@@ -8373,6 +8373,11 @@ function showBatchProcessorPanel() {
   monitorToggle?.classList.remove('active');
   monitorPanelOpen = false;
   if (monitorInterval) { clearInterval(monitorInterval); monitorInterval = null; }
+
+  // ── Check for recent completed batch ──
+  // checkRecentBatch is now defined inside initBatchProcessor()
+  // We trigger it via a custom event that initBatchProcessor listens for
+  document.dispatchEvent(new CustomEvent('batch-panel-shown'));
 }
 
 function hideBatchProcessorPanel() {
@@ -12580,7 +12585,7 @@ function initBatchProcessor() {
         }
 
         // Check if pipeline is complete
-        const isComplete = state.status === 'completed' || state.status === 'partial' || state.status === 'failed';
+        const isComplete = state.status === 'completed' || state.status === 'partial' || state.status === 'failed' || state.status === 'needs_review';
 
         if (isComplete) {
           // Stop polling
@@ -12980,7 +12985,119 @@ function initBatchProcessor() {
       batchSubmitBtn.textContent = '+ Add All Matched to Queue';
     }
   });
-}
+  }
+
+  // ── Check for recent completed batch (called when Batch tab is opened) ──
+  async function checkRecentBatch() {
+    try {
+      const res = await fetchApi('/api/agent/batch-status/recent');
+      if (!res.ok) return;
+      const data = await res.json();
+      if (!data.success || !data.batch) return;
+
+      const batch = data.batch;
+      // Only show banner if there's a batch with matches
+      if (!batch.match_count || batch.match_count === 0) return;
+
+      // Check if there's already a banner
+      let banner = document.getElementById('recentBatchBanner');
+      if (!banner) {
+        banner = document.createElement('div');
+        banner.id = 'recentBatchBanner';
+        banner.style.cssText = 'margin-bottom:16px;padding:14px 18px;background:linear-gradient(135deg,#1a2332,#0f172a);border:1px solid var(--accent);border-radius:10px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;';
+        const batchHero = document.querySelector('.batch-hero');
+        if (batchHero) {
+          batchHero.after(banner);
+        }
+      }
+
+      const statusLabel = batch.status === 'needs_review' ? '⚠ Needs Review' :
+                          batch.status === 'completed' ? '✅ Completed' :
+                          batch.status === 'partial' ? '⚠ Partial' : '📋 Previous';
+
+      banner.innerHTML = `
+        <div style="display:flex;align-items:center;gap:10px;">
+          <span style="font-size:20px;">📋</span>
+          <div>
+            <div style="font-weight:600;font-size:14px;color:var(--text);">Previous Batch Available</div>
+            <div style="font-size:12px;color:var(--text-muted);">
+              Batch #${batch.id} · ${statusLabel} · ${batch.match_count} match(es) · ${batch.total_products || '?'} products
+              ${batch.completed_at ? ' · ' + new Date(batch.completed_at).toLocaleString() : ''}
+            </div>
+          </div>
+        </div>
+        <button id="viewRecentBatchBtn" class="batch-btn" style="padding:8px 20px;font-size:13px;background:var(--accent);color:#fff;border:none;border-radius:6px;cursor:pointer;white-space:nowrap;">
+          View Results
+        </button>
+      `;
+
+      banner.style.display = 'flex';
+
+      // Attach click handler
+      const viewBtn = document.getElementById('viewRecentBatchBtn');
+      if (viewBtn) {
+        viewBtn.onclick = () => loadRecentBatchResults(batch.id);
+      }
+    } catch (err) {
+      console.error('[Batch] Error checking recent batch:', err);
+    }
+  }
+
+  // ── Load results from a previous batch ──
+  async function loadRecentBatchResults(batchId) {
+    try {
+      const res = await fetchApi(`/api/agent/batch-status/${batchId}`);
+      if (!res.ok) {
+        toast('Failed to load batch results: server returned ' + res.status, 'error');
+        return;
+      }
+      const data = await res.json();
+      if (!data.success) {
+        toast('Failed to load batch results: ' + (data.error || 'unknown error'), 'error');
+        return;
+      }
+
+      const state = data.state || data;
+      console.log('[Batch] Loaded recent batch:', batchId, 'state keys:', Object.keys(state));
+
+      // Hide the banner
+      const banner = document.getElementById('recentBatchBanner');
+      if (banner) banner.style.display = 'none';
+
+      // Check if we have matches
+      const matches = state.matches || [];
+      if (!matches.length) {
+        toast('No match results found for batch #' + batchId, 'info');
+        return;
+      }
+
+      // Build result data
+      const resultData = {
+        products: state.products || state.product_details || [],
+        allImages: state.all_images || state.allImages || [],
+        matches: matches,
+        matchStats: state.matchStats || state.match_stats || { autoAccepted: 0, needsReview: 0, rejected: 0 }
+      };
+
+      console.log('[Batch] Rendering recent batch results:', {
+        products: resultData.products.length,
+        allImages: resultData.allImages.length,
+        matches: resultData.matches.length
+      });
+
+      // Render using the existing functions (they're in scope since we're inside initBatchProcessor)
+      renderBatchResultsFromData(resultData);
+      toast('Loaded batch #' + batchId + ' results', 'success');
+    } catch (err) {
+      console.error('[Batch] Error loading recent batch:', err);
+      toast('Failed to load batch results: ' + err.message, 'error');
+    }
+  }
+
+  // ── Listen for batch-panel-shown custom event ──
+  document.addEventListener('batch-panel-shown', () => {
+    checkRecentBatch();
+  });
 
 function escapeHtml(str) {
   if (!str) return '';

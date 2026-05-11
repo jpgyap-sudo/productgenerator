@@ -1,13 +1,22 @@
 // ═══════════════════════════════════════════════════════════════════
-//  BatchPanel.jsx — PDF+ZIP batch matching with batch pipeline
+//  BatchPanel.jsx — PDF+ZIP batch matching + PDF-only AI per-row matching
 //
-//  Workflow:
+//  Workflow (PDF+ZIP mode):
 //    1. Upload PDF + ZIP → server extracts products & images
 //    2. Server runs batch pipeline (fingerprinting → candidate filter → verify)
 //    3. Results returned with confidence scores, no separate match call needed
 //    4. Display top candidates per product
 //    5. User confirms or changes selection
 //    6. Submit confirmed matches to render queue
+//
+//  Workflow (PDF-only mode):
+//    1. Upload only a PDF (or WPS) → server extracts products from text
+//       AND extracts page images from the PDF via sharp
+//    2. AI matches each product to its corresponding PDF page image
+//       using GPT-4o Vision (per-row matching)
+//    3. Results show product code, description, photo, brand per row
+//    4. User confirms or changes selection
+//    5. Submit confirmed matches to render queue
 //
 //  Key rules:
 //    - Never depend on ZIP order
@@ -20,7 +29,7 @@ import {
   Upload, FileImage, ImagePlus, CheckCircle2, AlertCircle, Info,
   Loader2, Zap, X, ChevronDown, ChevronUp, Sparkles, Eye,
   Download, RefreshCw, Check, Clock, FileText, Archive, Search,
-  ThumbsUp, ThumbsDown, ArrowRight, Layers, BarChart3
+  ThumbsUp, ThumbsDown, ArrowRight, Layers, BarChart3, File
 } from 'lucide-react';
 
 const API_BASE = window.location.origin;
@@ -42,6 +51,11 @@ const STATUS = {
   SUBMITTING: 'submitting',
   SUBMIT_DONE: 'submit_done',
   SUBMIT_ERROR: 'submit_error',
+  // PDF-only mode statuses
+  PDF_ONLY_EXTRACTING: 'pdf_only_extracting',
+  PDF_ONLY_MATCHING: 'pdf_only_matching',
+  PDF_ONLY_DONE: 'pdf_only_done',
+  PDF_ONLY_ERROR: 'pdf_only_error',
 };
 
 // ── Batch pipeline stage labels ───────────────────────────────────
@@ -55,6 +69,14 @@ const STAGE_LABELS = {
   needs_review: 'Matches need review',
   completed: 'Complete!',
   failed: 'Failed'
+};
+
+// ── PDF-only mode labels ──────────────────────────────────────────
+const PDF_ONLY_LABELS = {
+  extracting: 'Extracting products and page images from PDF...',
+  matching: 'AI is matching each product to its page image...',
+  complete: 'AI per-row matching complete!',
+  error: 'PDF-only matching failed'
 };
 
 // ── Confidence badge color ────────────────────────────────────────
@@ -384,19 +406,27 @@ export default function BatchPanel({ addToast }) {
   const [error, setError] = useState(null);
   const [progressMsg, setProgressMsg] = useState('');
   const [batchId, setBatchId] = useState(null);
+  const [isPdfOnlyMode, setIsPdfOnlyMode] = useState(false);
+  const [pdfOnlyPaused, setPdfOnlyPaused] = useState(false);
+  const pdfOnlyAbortRef = useRef(null);
 
   // ── Handle PDF upload ───────────────────────────────────────────
   const handlePdfUpload = useCallback(async (file) => {
-    if (!file.name.toLowerCase().endsWith('.pdf')) {
-      addToast('Please select a PDF file', 'error');
+    const isPdf = file.name.toLowerCase().endsWith('.pdf');
+    const isWps = file.name.toLowerCase().endsWith('.wps');
+    const isEt = file.name.toLowerCase().endsWith('.et');
+    if (!isPdf && !isWps && !isEt) {
+      addToast('Please select a PDF, WPS, or .et file', 'error');
       return;
     }
     setPdfFile(file);
-    // If ZIP is already selected, auto-process both
+    // If ZIP is already selected, auto-process both (standard mode)
     if (zipFile) {
+      setIsPdfOnlyMode(false);
       await handleProcessBoth(file, zipFile);
     } else {
-      addToast('PDF selected. Now upload the ZIP file to begin processing.', 'info');
+      // No ZIP selected — offer PDF-only mode
+      addToast('PDF selected. Upload a ZIP for standard matching, or click "Run AI Per-Row Matching" for PDF-only mode.', 'info');
     }
   }, [addToast, zipFile]);
 
@@ -407,6 +437,7 @@ export default function BatchPanel({ addToast }) {
       return;
     }
     setZipFile(file);
+    setIsPdfOnlyMode(false);
     // If PDF is already selected, auto-process both
     if (pdfFile) {
       await handleProcessBoth(pdfFile, file);
@@ -518,7 +549,168 @@ export default function BatchPanel({ addToast }) {
     }
   }, [addToast]);
 
-  // ── Run vision matching ─────────────────────────────────────────
+  // ── PDF-only: Upload and extract ────────────────────────────────
+  const handlePdfOnlyProcess = useCallback(async () => {
+    if (!pdfFile) {
+      addToast('Please upload a PDF file first', 'error');
+      return;
+    }
+
+    setError(null);
+    setIsPdfOnlyMode(true);
+    setZipFile(null); // Clear any ZIP reference
+    setStatus(STATUS.PDF_ONLY_EXTRACTING);
+    setProgressMsg(PDF_ONLY_LABELS.extracting);
+    setMatches([]);
+    setProducts([]);
+    setImages([]);
+
+    try {
+      const formData = new FormData();
+      formData.append('pdf', pdfFile);
+
+      setProgressMsg('Extracting products and page images from PDF...');
+
+      const res = await fetch(`${API_BASE}/api/agent/process`, {
+        method: 'POST',
+        body: formData
+      });
+
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+
+      if (!data.isPdfOnly) {
+        throw new Error('Server did not return PDF-only mode. The PDF may need a ZIP file.');
+      }
+
+      const extractedProducts = data.products || [];
+      const extractedImages = data.allImages || [];
+
+      if (extractedProducts.length === 0) {
+        throw new Error(data.warning || 'No products could be extracted from the PDF');
+      }
+      if (extractedImages.length === 0) {
+        throw new Error('No page images could be extracted from the PDF');
+      }
+
+      setProducts(extractedProducts);
+      setImages(extractedImages);
+
+      // Auto-launch AI per-row matching
+      await handlePdfOnlyMatching(extractedProducts, extractedImages);
+
+    } catch (err) {
+      setError(err.message);
+      setStatus(STATUS.PDF_ONLY_ERROR);
+      addToast(`PDF-only processing failed: ${err.message}`, 'error');
+    }
+  }, [pdfFile, addToast]);
+
+  // ── PDF-only: AI per-row matching ───────────────────────────────
+  const handlePdfOnlyMatching = useCallback(async (prods, imgs) => {
+    const productsToMatch = prods || products;
+    const imagesToMatch = imgs || images;
+
+    if (productsToMatch.length === 0 || imagesToMatch.length === 0) {
+      addToast('Need both products and page images for matching', 'error');
+      return;
+    }
+
+    // Create abort controller for this matching session
+    const abortController = new AbortController();
+    pdfOnlyAbortRef.current = abortController;
+    setPdfOnlyPaused(false);
+    setError(null);
+
+    setStatus(STATUS.PDF_ONLY_MATCHING);
+    setProgressMsg(PDF_ONLY_LABELS.matching);
+
+    try {
+      const res = await fetch(`${API_BASE}/api/agent/match-pdf-only`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          products: productsToMatch,
+          images: imagesToMatch
+        }),
+        signal: abortController.signal
+      });
+
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+
+      // Enrich matches with image data URLs for display
+      const enrichedMatches = data.matches.map(m => {
+        const enrich = (cand) => {
+          if (!cand) return null;
+          const img = imagesToMatch[cand.imageIndex];
+          return {
+            ...cand,
+            dataUrl: img?.dataUrl || null
+          };
+        };
+        return {
+          ...m,
+          bestMatch: enrich(m.bestMatch),
+          secondMatch: enrich(m.secondMatch),
+          thirdMatch: enrich(m.thirdMatch),
+          selectedImageIndex: 0,
+          confirmed: m.confirmed || m.overallConfidence === 'high'
+        };
+      });
+
+      setMatches(enrichedMatches);
+      setStats(data.stats || {
+        totalProducts: productsToMatch.length,
+        totalImages: imagesToMatch.length,
+        autoAccepted: enrichedMatches.filter(m => m.confirmed).length,
+        needsReview: enrichedMatches.filter(m => !m.confirmed).length
+      });
+      setStatus(STATUS.PDF_ONLY_DONE);
+      setPdfOnlyPaused(false);
+      pdfOnlyAbortRef.current = null;
+
+      const autoCount = enrichedMatches.filter(m => m.confirmed).length;
+      const reviewCount = enrichedMatches.length - autoCount;
+      addToast(
+        `AI per-row matching complete: ${autoCount} auto-accepted, ${reviewCount} need review`,
+        autoCount > 0 ? 'success' : 'info'
+      );
+    } catch (err) {
+      if (err.name === 'AbortError') {
+        // User cancelled — stay in current state, don't show error
+        setStatus(STATUS.PDF_ONLY_ERROR);
+        setPdfOnlyPaused(false);
+        pdfOnlyAbortRef.current = null;
+        addToast('PDF-only matching cancelled.', 'info');
+        return;
+      }
+      setError(err.message);
+      setStatus(STATUS.PDF_ONLY_ERROR);
+      setPdfOnlyPaused(false);
+      pdfOnlyAbortRef.current = null;
+      addToast(`AI matching failed: ${err.message}`, 'error');
+    }
+  }, [products, images, addToast]);
+
+  // ── PDF-only: Pause matching ────────────────────────────────────
+  const handlePdfOnlyPause = useCallback(() => {
+    if (pdfOnlyAbortRef.current) {
+      pdfOnlyAbortRef.current.abort();
+      setPdfOnlyPaused(true);
+      setProgressMsg('PDF-only matching paused. Click "Resume" to re-run.');
+      addToast('PDF-only matching paused. You can resume by clicking "Re-run AI Per-Row Matching".', 'info');
+    }
+  }, [addToast]);
+
+  // ── PDF-only: Resume matching ───────────────────────────────────
+  const handlePdfOnlyResume = useCallback(() => {
+    // Re-run matching with current products and images
+    setPdfOnlyPaused(false);
+    handlePdfOnlyMatching(products, images);
+  }, [products, images, handlePdfOnlyMatching]);
+
+  // ── Run vision matching (PDF+ZIP mode) ──────────────────────────
   const handleRunMatching = useCallback(async () => {
     if (products.length === 0 || images.length === 0) {
       addToast('Need both PDF products and ZIP images', 'error');
@@ -640,6 +832,11 @@ export default function BatchPanel({ addToast }) {
 
   // ── Reset everything ────────────────────────────────────────────
   const handleReset = useCallback(() => {
+    // Abort any in-flight PDF-only matching
+    if (pdfOnlyAbortRef.current) {
+      pdfOnlyAbortRef.current.abort();
+      pdfOnlyAbortRef.current = null;
+    }
     setStatus(STATUS.IDLE);
     setPdfFile(null);
     setZipFile(null);
@@ -650,11 +847,17 @@ export default function BatchPanel({ addToast }) {
     setError(null);
     setProgressMsg('');
     setBatchId(null);
+    setIsPdfOnlyMode(false);
+    setPdfOnlyPaused(false);
   }, []);
 
   // ── Determine if matching can run ───────────────────────────────
   const canMatch = products.length > 0 && images.length > 0 &&
-    status !== STATUS.MATCHING && status !== STATUS.SUBMITTING;
+    status !== STATUS.MATCHING && status !== STATUS.SUBMITTING &&
+    !isPdfOnlyMode;
+
+  const canPdfOnlyMatch = pdfFile && !zipFile &&
+    (status === STATUS.IDLE || status === STATUS.PDF_DONE || status === STATUS.PDF_ONLY_ERROR);
 
   const canSubmit = matches.some(m => m.confirmed) &&
     status !== STATUS.SUBMITTING;
@@ -666,7 +869,7 @@ export default function BatchPanel({ addToast }) {
         <div>
           <h2><Layers size={20} /> Batch Product Matching</h2>
           <p className="fr-panel-sub">
-            Upload a PDF catalog and a ZIP of product images. AI will match each product to the best images.
+            Upload a PDF catalog (and optionally a ZIP of images). AI will match each product to the best images.
           </p>
         </div>
         {status !== STATUS.IDLE && (
@@ -679,25 +882,49 @@ export default function BatchPanel({ addToast }) {
       {/* ── Upload Section ──────────────────────────────────────── */}
       <div className="vm-upload-section">
         <DropZone
-          label="Upload PDF Catalog"
-          accept=".pdf,application/pdf"
+          label="Upload PDF / WPS / ET Catalog"
+          accept=".pdf,.wps,.et,application/pdf"
           icon={FileText}
           onFile={handlePdfUpload}
-          disabled={status === STATUS.MATCHING || status === STATUS.SUBMITTING}
+          disabled={status === STATUS.MATCHING || status === STATUS.SUBMITTING ||
+            status === STATUS.PDF_ONLY_EXTRACTING || status === STATUS.PDF_ONLY_MATCHING}
           currentFile={pdfFile}
         />
         <div className="vm-upload-arrow">
           <ArrowRight size={24} />
         </div>
         <DropZone
-          label="Upload ZIP Images"
+          label="Upload ZIP Images (optional)"
           accept=".zip,application/zip"
           icon={Archive}
           onFile={handleZipUpload}
-          disabled={status === STATUS.MATCHING || status === STATUS.SUBMITTING}
+          disabled={status === STATUS.MATCHING || status === STATUS.SUBMITTING ||
+            status === STATUS.PDF_ONLY_EXTRACTING || status === STATUS.PDF_ONLY_MATCHING}
           currentFile={zipFile}
         />
       </div>
+
+      {/* ── PDF-only mode indicator ─────────────────────────────── */}
+      {pdfFile && !zipFile && status === STATUS.IDLE && (
+        <div className="vm-pdf-only-prompt">
+          <div className="vm-pdf-only-info">
+            <File size={16} />
+            <span>
+              Only a PDF file selected. You can either:
+            </span>
+          </div>
+          <div className="vm-pdf-only-actions">
+            <button className="vm-pdf-only-btn" onClick={handlePdfOnlyProcess}>
+              <Sparkles size={14} /> Run AI Per-Row Matching
+              <small>Extract products + page images, AI matches each row</small>
+            </button>
+            <span className="vm-pdf-only-or">or</span>
+            <span className="vm-pdf-only-hint">
+              Upload a ZIP file for standard image matching
+            </span>
+          </div>
+        </div>
+      )}
 
       {/* ── Batch Progress Bar (polling) ─────────────────────────── */}
       <BatchProgressBar
@@ -711,10 +938,41 @@ export default function BatchPanel({ addToast }) {
       {/* ── Progress / Error ────────────────────────────────────── */}
       {(status === STATUS.PDF_UPLOADING || status === STATUS.PDF_EXTRACTING ||
         status === STATUS.ZIP_UPLOADING || status === STATUS.ZIP_EXTRACTING ||
-        status === STATUS.MATCHING || status === STATUS.SUBMITTING) && (
+        status === STATUS.MATCHING || status === STATUS.SUBMITTING ||
+        status === STATUS.PDF_ONLY_EXTRACTING || status === STATUS.PDF_ONLY_MATCHING) && (
         <div className="vm-progress">
           <Loader2 size={18} className="fr-spin" />
           <span>{progressMsg}</span>
+          {/* Pause button during PDF-only matching */}
+          {status === STATUS.PDF_ONLY_MATCHING && !pdfOnlyPaused && (
+            <button
+              className="vm-pause-btn"
+              onClick={handlePdfOnlyPause}
+              title="Pause matching"
+            >
+              <X size={14} /> Pause
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* ── PDF-only paused state ───────────────────────────────── */}
+      {pdfOnlyPaused && status === STATUS.PDF_ONLY_ERROR && (
+        <div className="vm-pdf-only-prompt" style={{ marginTop: 12 }}>
+          <div className="vm-pdf-only-info">
+            <Info size={16} />
+            <span>Matching paused. You can resume or restart.</span>
+          </div>
+          <div className="vm-pdf-only-actions">
+            <button className="vm-pdf-only-btn" onClick={handlePdfOnlyResume}>
+              <RefreshCw size={14} /> Resume Matching
+              <small>Continue from where it left off</small>
+            </button>
+            <span className="vm-pdf-only-or">or</span>
+            <button className="vm-reset-btn" onClick={handleReset} style={{ border: '1px solid #4a5260', padding: '8px 16px', borderRadius: 8, background: 'transparent', color: '#8e96a3', cursor: 'pointer', fontFamily: 'inherit', fontSize: 13 }}>
+              Cancel & Reset
+            </button>
+          </div>
         </div>
       )}
 
@@ -722,6 +980,14 @@ export default function BatchPanel({ addToast }) {
         <div className="vm-error">
           <AlertCircle size={16} />
           <span>{error}</span>
+        </div>
+      )}
+
+      {/* ── PDF-only mode badge ─────────────────────────────────── */}
+      {isPdfOnlyMode && (status === STATUS.PDF_ONLY_DONE) && (
+        <div className="vm-mode-badge vm-mode-pdf-only">
+          <File size={14} />
+          <span>PDF-only mode — AI matched products to page images</span>
         </div>
       )}
 
@@ -769,11 +1035,22 @@ export default function BatchPanel({ addToast }) {
         </div>
       )}
 
-      {/* ── Run Matching Button ─────────────────────────────────── */}
-      {canMatch && status !== STATUS.MATCH_DONE && (
+      {/* ── Run Matching Button (PDF+ZIP mode only) ─────────────── */}
+      {canMatch && status !== STATUS.MATCH_DONE && !isPdfOnlyMode && (
         <button className="vm-match-btn" onClick={handleRunMatching}>
           <Search size={16} /> Run Vision Matching
           <small>{products.length} products × {images.length} images</small>
+        </button>
+      )}
+
+      {/* ── PDF-only: Re-run matching button ────────────────────── */}
+      {isPdfOnlyMode && status === STATUS.PDF_ONLY_DONE && products.length > 0 && images.length > 0 && (
+        <button
+          className="vm-match-btn vm-match-btn-pdf-only"
+          onClick={() => handlePdfOnlyMatching(products, images)}
+        >
+          <Sparkles size={16} /> Re-run AI Per-Row Matching
+          <small>{products.length} products × {images.length} page images</small>
         </button>
       )}
 
@@ -829,6 +1106,19 @@ export default function BatchPanel({ addToast }) {
               <span>All confirmed products submitted to render queue!</span>
             </div>
           )}
+        </div>
+      )}
+
+      {/* ── PDF-only mode footer ────────────────────────────────── */}
+      {isPdfOnlyMode && status === STATUS.PDF_ONLY_DONE && (
+        <div className="vm-pdf-only-footer">
+          <Info size={14} />
+          <span>
+            Products were matched to PDF page images using AI vision.
+            {matches.filter(m => !m.confirmed).length > 0 &&
+              ` ${matches.filter(m => !m.confirmed).length} products need manual review.`}
+            Review and confirm each match before submitting.
+          </span>
         </div>
       )}
     </div>

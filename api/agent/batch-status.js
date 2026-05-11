@@ -64,6 +64,51 @@ export default async function handler(req, res) {
     const batchId = parts[batchIdIndex];
     const action = parts[batchIdIndex + 1] || null; // 'pause' or 'resume' or null
 
+    // ── Special route: GET /api/agent/batch-status/recent ──
+    if (batchId === 'recent') {
+      if (req.method !== 'GET') {
+        return res.status(405).json({ error: 'Method not allowed' });
+      }
+
+      const { data: batches, error } = await supabase
+        .from('batch_jobs')
+        .select('id, status, stage, progress_percent, total_products, total_images, completed_products, created_at, completed_at')
+        .in('status', ['completed', 'needs_review', 'partial', 'failed'])
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      if (error || !batches || batches.length === 0) {
+        return res.json({ success: true, batch: null });
+      }
+
+      const batch = batches[0];
+
+      // Also fetch match stats for this batch
+      const { data: matches, error: matchError } = await supabase
+        .from('product_matches')
+        .select('status')
+        .eq('batch_id', batch.id);
+
+      const matchCount = (!matchError && matches) ? matches.length : 0;
+      let matchStats = null;
+      if (!matchError && matches) {
+        matchStats = {
+          autoAccepted: matches.filter(m => m.status === 'auto_accepted').length,
+          needsReview: matches.filter(m => m.status === 'needs_review' || m.status === 'review').length,
+          rejected: matches.filter(m => m.status === 'rejected').length
+        };
+      }
+
+      return res.json({
+        success: true,
+        batch: {
+          ...batch,
+          match_count: matchCount,
+          matchStats
+        }
+      });
+    }
+
     if (!batchId) {
       return res.status(400).json({ error: 'batchId parameter is required' });
     }
@@ -137,7 +182,7 @@ export default async function handler(req, res) {
       return res.status(404).json({ error: 'Batch not found', batchId });
     }
 
-    const isComplete = state.status === 'completed' || state.status === 'partial' || state.status === 'failed';
+    const isComplete = state.status === 'completed' || state.status === 'partial' || state.status === 'failed' || state.status === 'needs_review';
 
     // Build response
     const response = {

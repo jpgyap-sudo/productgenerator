@@ -48,6 +48,7 @@ import agentSaveMatchedPermanentHandler from './api/agent/save-matched-permanent
 import agentMatchedImagesPermanentHandler from './api/agent/matched-images-permanent.js';
 import agentUploadGalleryHandler from './api/agent/upload-gallery.js';
 import agentBatchStatusHandler from './api/agent/batch-status.js';
+import agentMatchPdfOnlyHandler from './api/agent/match-pdf-only.js';
 import { startGalleryCleanup } from './lib/upload-gallery.js';
 import renderProductHandler from './api/render/product.js';
 import renderQueueRoutes from './api/render-queue/index.js';
@@ -251,6 +252,17 @@ app.all('/api/agent/upload-gallery', async (req, res) => {
   }
 });
 
+// ── PDF-only AI Per-Row Matching ──
+app.post('/api/agent/match-pdf-only', async (req, res) => {
+  try {
+    const result = await agentMatchPdfOnlyHandler(req, res);
+    if (!res.headersSent) res.json(result);
+  } catch (err) {
+    console.error('[MATCH-PDF-ONLY] Error:', err);
+    if (!res.headersSent) res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Batch Status Polling ──
 app.get('/api/agent/batch-status/:batchId', async (req, res) => {
   try {
@@ -406,6 +418,15 @@ if (fs.existsSync(FURNITURE_RENDER_BUILD)) {
   app.use('/furniture-render', express.static(FURNITURE_RENDER_DIR, { maxAge: '1m' }));
 }
 
+// Don't cache HTML so UI updates take effect immediately
+app.use((req, res, next) => {
+  if (req.path === '/' || req.path.endsWith('.html')) {
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+  }
+  next();
+});
 app.use(express.static('.'));
 
 // ═══════════════════════════════════════════════════════════════════

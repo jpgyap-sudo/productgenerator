@@ -560,3 +560,87 @@ Every render must feel:
 - editorial
 - brand-authentic
 - architect approved
+
+---
+
+# PDF IMAGE EXTRACTION — SKILLS & RESOURCES
+
+## Node.js PDF Rendering Approaches
+
+### 1. pdfjs-dist + canvas (RECOMMENDED for Windows)
+- **pdfjs-dist**: https://www.npmjs.com/package/pdfjs-dist — Mozilla's PDF.js for Node.js (legacy build)
+- **canvas**: https://www.npmjs.com/package/canvas — Node.js native Canvas implementation (Cairo-backed)
+- **How it works**: pdfjs-dist parses the PDF, renders each page to a Canvas2D context provided by `node-canvas`, then exports as PNG buffer
+- **Install**: `npm install canvas pdfjs-dist`
+- **Usage**:
+  ```js
+  import { createCanvas } from 'canvas';
+  import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.js';
+  const pdf = await pdfjsLib.getDocument({ data: pdfBuffer.buffer }).promise;
+  const page = await pdf.getPage(1);
+  const viewport = page.getViewport({ scale: 0.5 });
+  const canvas = createCanvas(viewport.width, viewport.height);
+  await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+  const pngBuffer = canvas.toBuffer('image/png');
+  ```
+- **Pros**: Pure Node.js, no external binaries, works on Windows
+- **Cons**: Slower than native renderers, memory-intensive for large PDFs
+
+### 2. sharp (libvips) — requires PDF support compiled in
+- **sharp**: https://www.npmjs.com/package/sharp
+- **Requires**: libvips compiled with `poppler` or `libgs` (Ghostscript) for PDF rendering
+- **On Linux**: `apt-get install libvips-dev libpoppler-glib-dev` then rebuild sharp
+- **On Windows**: Not available by default — sharp's prebuilt binaries don't include PDF support
+- **Alternative**: Use `sharp-libvips-installer` or build from source with `--with-pdf`
+- **Usage** (when available):
+  ```js
+  const img = sharp(pdfBuffer, { page: 0, density: 150, pages: 1 });
+  const pngBuffer = await img.png().toBuffer();
+  ```
+
+### 3. pdf-to-img (wrapper around pdfjs-dist + @napi-rs/canvas)
+- **pdf-to-img**: https://www.npmjs.com/package/pdf-to-img
+- **Uses**: pdfjs-dist internally + `@napi-rs/canvas` (Rust-based native canvas)
+- **Install**: `npm install pdf-to-img`
+- **Usage**:
+  ```js
+  import { pdf } from 'pdf-to-img';
+  for await (const img of pdf(pdfBuffer, { scale: 0.5 })) {
+    // img is a base64 data URL string
+  }
+  ```
+- **Pros**: Simple API, async iterator
+- **Cons**: @napi-rs/canvas may have compatibility issues on some Windows setups
+
+### 4. Poppler pdftoppm (external binary)
+- **Poppler**: https://poppler.freedesktop.org/
+- **pdftoppm**: Converts PDF pages to PPM/PNG images
+- **Windows install**: `choco install poppler` (but only source is provided — needs MSYS2/MinGW build)
+- **Linux install**: `apt-get install poppler-utils`
+- **Usage** (child_process):
+  ```js
+  import { execFile } from 'child_process';
+  execFile('pdftoppm', ['-png', '-r', '150', '-f', '1', '-l', '1', pdfPath, outputPath]);
+  ```
+- **Pros**: Fast, high quality, reliable
+- **Cons**: Requires external binary, platform-dependent
+
+### 5. PyMuPDF (fitz) via Python child process
+- **PyMuPDF**: https://pymupdf.readthedocs.io/
+- **Install**: `pip install pymupdf`
+- **Usage** (child_process):
+  ```python
+  import fitz
+  doc = fitz.open("file.pdf")
+  page = doc[0]
+  pix = page.get_pixmap(matrix=fitz.Matrix(0.5, 0.5))
+  pix.save("page.png")
+  ```
+- **Pros**: Excellent quality, fast, well-maintained
+- **Cons**: Requires Python + PyMuPDF installed
+
+## Our Current Implementation
+- **File**: [`lib/pdf-image-extractor.js`](lib/pdf-image-extractor.js)
+- **Current approach**: Uses `sharp` with PDF page/density options
+- **Issue**: Sharp on Windows lacks PDF support
+- **Fix**: Switch to `pdfjs-dist/legacy/build/pdf.js` + `canvas` for cross-platform PDF page rendering
