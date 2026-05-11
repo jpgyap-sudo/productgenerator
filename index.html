@@ -3119,6 +3119,46 @@ padding-top: 16px;
 border-top: 1px solid var(--border-light);
 }
 
+/* ── .et Spreadsheet Upload Row ────────────────────────────────── */
+.batch-et-upload-row {
+display: flex;
+flex-direction: column;
+align-items: center;
+gap: 12px;
+margin-top: 20px;
+padding-top: 20px;
+border-top: 1px dashed var(--border-light);
+}
+.batch-et-upload-row .batch-upload-box {
+min-height: 100px;
+padding: 20px;
+width: 100%;
+max-width: 400px;
+}
+.batch-et-go-btn {
+display: inline-flex;
+align-items: center;
+gap: 8px;
+padding: 10px 24px;
+font-size: 13px;
+font-weight: 600;
+border: none;
+border-radius: 8px;
+cursor: pointer;
+background: linear-gradient(135deg, #7c3aed, #a855f7);
+color: #fff;
+transition: opacity var(--transition);
+}
+.batch-et-go-btn:hover { opacity: 0.85; }
+.batch-et-go-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.batch-et-go-btn small {
+display: block;
+font-size: 10px;
+font-weight: 400;
+opacity: 0.8;
+margin-top: 2px;
+}
+
 @media (max-width: 980px) {
   .bulk-layout { grid-template-columns: 1fr; }
   .bulk-stage { border-right: none; border-bottom: 1px solid var(--border-light); }
@@ -4313,6 +4353,18 @@ a.cr-meta-pill.cr-drive-link:hover { opacity: 0.8; }
             </label>
             <input type="file" id="batchZipInput" accept=".zip,application/zip,application/x-zip-compressed" style="position:absolute;opacity:0;width:0;height:0;overflow:hidden;"/>
           </div>
+
+          <!-- ── .et Spreadsheet Upload (dedicated) ──────────────────── -->
+          <div class="batch-et-upload-row">
+            <label for="batchEtInput" class="batch-upload-box" id="batchEtDropZone">
+              <span class="batch-upload-icon" id="batchEtIcon">📊</span>
+              <span class="batch-upload-text" id="batchEtText">Upload .et Spreadsheet (WPS)</span>
+              <span class="batch-upload-sub" id="batchEtSub">.et files only · max 50MB</span>
+            </label>
+            <input type="file" id="batchEtInput" accept=".et,.xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" style="position:absolute;opacity:0;width:0;height:0;overflow:hidden;"/>
+            <button class="batch-btn batch-et-go-btn" id="batchEtExtractBtn" style="display:none;">✨ Extract .et Products & Images</button>
+          </div>
+
           <div class="batch-analyze-row">
             <button class="batch-btn" id="batchAnalyzeBtn" disabled>🔍 Analyze & Extract</button>
           </div>
@@ -12046,6 +12098,212 @@ function initBatchProcessor() {
       batchZipSub.textContent = `${(file.size / 1024 / 1024).toFixed(2)} MB`;
       batchZipIcon.textContent = '✅';
       updateBatchAnalyzeBtn();
+    }
+  });
+
+  // ── .et file selection ──
+  let batchEtFile = null;
+  const batchEtDropZone = document.getElementById('batchEtDropZone');
+  const batchEtInput = document.getElementById('batchEtInput');
+  const batchEtIcon = document.getElementById('batchEtIcon');
+  const batchEtText = document.getElementById('batchEtText');
+  const batchEtSub = document.getElementById('batchEtSub');
+  const batchEtExtractBtn = document.getElementById('batchEtExtractBtn');
+
+  batchEtDropZone?.addEventListener('click', () => batchEtInput?.click());
+  batchEtInput?.addEventListener('change', (e) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const isEt = file.name.toLowerCase().endsWith('.et');
+      const isExcel = file.name.toLowerCase().endsWith('.xls') || file.name.toLowerCase().endsWith('.xlsx');
+      if (!isEt && !isExcel) {
+        toast('Please select a .et (WPS Spreadsheet) or .xls/.xlsx file', 'error');
+        return;
+      }
+      batchEtFile = file;
+      batchEtText.textContent = file.name;
+      batchEtSub.textContent = `${(file.size / 1024 / 1024).toFixed(2)} MB`;
+      batchEtIcon.textContent = '✅';
+      batchEtExtractBtn.style.display = 'inline-flex';
+      // Clear PDF/ZIP selections when .et is selected (standalone mode)
+      batchPdfFile = null;
+      batchZipFile = null;
+      batchPdfText.textContent = 'Drop PDF catalog here or click to browse';
+      batchPdfSub.textContent = 'PDF files only · max 50MB';
+      batchPdfIcon.textContent = '📄';
+      batchPdfInput.value = '';
+      batchZipText.textContent = 'Drop ZIP of product images here';
+      batchZipSub.textContent = 'ZIP files only · max 50MB';
+      batchZipIcon.textContent = '🗜️';
+      batchZipInput.value = '';
+      updateBatchAnalyzeBtn();
+    }
+  });
+
+  // ── Drag & drop for .et ──
+  batchEtDropZone?.addEventListener('dragover', (e) => { e.preventDefault(); batchEtDropZone.style.borderColor = 'var(--accent)'; });
+  batchEtDropZone?.addEventListener('dragleave', () => { batchEtDropZone.style.borderColor = ''; });
+  batchEtDropZone?.addEventListener('drop', (e) => {
+    e.preventDefault();
+    batchEtDropZone.style.borderColor = '';
+    const file = e.dataTransfer.files?.[0];
+    if (file) {
+      const isEt = file.name.toLowerCase().endsWith('.et');
+      const isExcel = file.name.toLowerCase().endsWith('.xls') || file.name.toLowerCase().endsWith('.xlsx');
+      if (!isEt && !isExcel) {
+        toast('Please select a .et (WPS Spreadsheet) or .xls/.xlsx file', 'error');
+        return;
+      }
+      batchEtFile = file;
+      batchEtText.textContent = file.name;
+      batchEtSub.textContent = `${(file.size / 1024 / 1024).toFixed(2)} MB`;
+      batchEtIcon.textContent = '✅';
+      batchEtExtractBtn.style.display = 'inline-flex';
+      // Clear PDF/ZIP selections when .et is selected (standalone mode)
+      batchPdfFile = null;
+      batchZipFile = null;
+      batchPdfText.textContent = 'Drop PDF catalog here or click to browse';
+      batchPdfSub.textContent = 'PDF files only · max 50MB';
+      batchPdfIcon.textContent = '📄';
+      batchPdfInput.value = '';
+      batchZipText.textContent = 'Drop ZIP of product images here';
+      batchZipSub.textContent = 'ZIP files only · max 50MB';
+      batchZipIcon.textContent = '🗜️';
+      batchZipInput.value = '';
+      updateBatchAnalyzeBtn();
+    }
+  });
+
+  // ── Extract .et Products & Images button ──
+  batchEtExtractBtn?.addEventListener('click', async () => {
+    if (!batchEtFile) return;
+
+    // Reset previous results
+    batchResultData = null;
+    batchMatchData = null;
+    batchAcceptedMatches = {};
+    batchStep2.style.display = 'none';
+    batchStep3.style.display = 'none';
+    batchMatchBtn.disabled = true;
+    batchSubmitBtn.disabled = true;
+
+    batchProgress.style.display = 'flex';
+    batchProgressText.textContent = 'Uploading .et file to server...';
+    batchEtExtractBtn.disabled = true;
+    batchEtExtractBtn.textContent = 'Extracting...';
+
+    try {
+      const formData = new FormData();
+      formData.append('pdf', batchEtFile);
+
+      batchProgressText.textContent = 'Extracting products and embedded images from .et spreadsheet...';
+
+      const res = await fetchApi('/api/agent/process', {
+        method: 'POST',
+        body: formData
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || `Server error: ${res.status}`);
+      }
+
+      const data = await res.json();
+      batchResultData = data;
+
+      if (!data.success) {
+        throw new Error(data.error || 'Extraction failed');
+      }
+
+      batchProgress.style.display = 'none';
+
+      // ── .et with embedded images ──
+      // Server returns hasEmbeddedImages: true with pre-mapped products + images
+      if (data.hasEmbeddedImages) {
+        const extractedProducts = data.products || [];
+        const extractedImages = data.allImages || [];
+
+        if (extractedProducts.length === 0) {
+          throw new Error(data.warning || 'No products could be extracted from the .et file');
+        }
+        if (extractedImages.length === 0) {
+          throw new Error('No embedded images could be extracted from the .et file');
+        }
+
+        // Create direct matches from pre-mapped data (no AI needed)
+        const directMatches = extractedProducts.map((product, idx) => {
+          const matchedImage = product.hasPreMappedImage && product.imageName
+            ? extractedImages.findIndex(img => img.name === product.imageName)
+            : -1;
+          const imageIndex = matchedImage >= 0 ? matchedImage : (idx < extractedImages.length ? idx : 0);
+          const bestImg = extractedImages[imageIndex];
+
+          return {
+            productIndex: idx,
+            product,
+            bestMatch: bestImg ? {
+              imageIndex,
+              imageName: bestImg.name,
+              confidence: 100,
+              reason: 'Pre-mapped from .et spreadsheet cell',
+              status: 'auto_accepted',
+              dataUrl: bestImg.dataUrl
+            } : null,
+            secondMatch: null,
+            thirdMatch: null,
+            overallConfidence: 'high',
+            overallReason: 'Image extracted from .et spreadsheet cell',
+            selectedImageIndex: 0,
+            confirmed: true,
+            batchStatus: 'completed'
+          };
+        });
+
+        // Build result data in the format renderBatchResultsFromData expects
+        const resultData = {
+          products: extractedProducts,
+          allImages: extractedImages,
+          matches: directMatches,
+          matchStats: {
+            totalProducts: extractedProducts.length,
+            totalImages: extractedImages.length,
+            autoAccepted: directMatches.filter(m => m.confirmed).length,
+            needsReview: 0
+          }
+        };
+
+        renderBatchResultsFromData(resultData);
+        toast(`.et processed: ${extractedProducts.length} products with ${extractedImages.length} embedded images`, 'success');
+      } else if (data.products && data.products.length > 0) {
+        // Standard extraction (no embedded images) — show products in Step 2
+        if (data.products && data.products.length > 0) {
+          renderBatchProductGrid(data.products);
+        } else {
+          batchProductGrid.innerHTML = `<div style="font-size:13px;color:var(--warning);padding:24px;text-align:center;">
+            No products could be extracted from the .et file.
+          </div>`;
+        }
+        if (data.allImages && data.allImages.length > 0) {
+          renderBatchImageGallery(data.allImages);
+        } else {
+          batchImageGallery.innerHTML = '<div style="font-size:13px;color:var(--text-muted);padding:24px;text-align:center;">No images found in .et file.</div>';
+          batchImageCount.textContent = '(0)';
+        }
+        batchStep2.style.display = 'block';
+        batchMatchBtn.disabled = false;
+        toast(`Extracted ${data.products?.length || 0} product(s) from .et file. Review and click "Match Products to Images".`, 'info');
+      } else {
+        throw new Error(data.warning || 'No products could be extracted from the .et file');
+      }
+
+    } catch (err) {
+      batchProgress.style.display = 'none';
+      batchProductGrid.innerHTML = `<div style="color:var(--danger);font-size:13px;padding:24px;text-align:center;">❌ Error: ${escapeHtml(err.message)}</div>`;
+      batchStep2.style.display = 'block';
+      toast(`.et extraction failed: ${err.message}`, 'error');
+    } finally {
+      batchEtExtractBtn.disabled = false;
+      batchEtExtractBtn.textContent = '✨ Extract .et Products & Images';
     }
   });
 
