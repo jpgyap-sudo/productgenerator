@@ -27,6 +27,7 @@ import multer from 'multer';
 import { extractTextFromPDF } from '../../lib/pdf-extractor.js';
 import { extractImagesFromPDF } from '../../lib/pdf-image-extractor.js';
 import { extractTextFromET } from '../../lib/et-extractor.js';
+import { extractETImagesAndData } from '../../lib/et-image-extractor.js';
 import { extractAllImagesFromZip } from '../../lib/zip-extractor.js';
 import { extractProductInfo } from '../../lib/deepseek.js';
 import { saveImagesToGallery } from '../../lib/upload-gallery.js';
@@ -207,35 +208,51 @@ export default async function handler(req, res) {
           // Continue — we'll still have text products even without page images
         }
       } else {
-        // .et files are spreadsheets — no page images to extract
-        console.log('[AGENT] Step 1 (standalone): .et spreadsheet — no page images to extract');
+        // .et files (standalone): Extract embedded images + row data via LibreOffice + exceljs
+        // .et files are WPS Spreadsheets — they contain product data AND embedded images in cells.
+        // The extractor converts .et → .xlsx (LibreOffice), extracts images + cell anchors (exceljs),
+        // and parses row data (SheetJS) — all without AI.
+        console.log('[AGENT] Step 1 (standalone): .et spreadsheet — extracting embedded images + row data...');
         zipResult.batchId = `batch_${Date.now()}`;
+
+        try {
+          const etImageResult = await extractETImagesAndData(pdfFile.buffer);
+          if (etImageResult.hasEmbeddedImages && etImageResult.allImages.length > 0) {
+            // Embedded images found! Store them for the UI
+            zipResult.images = etImageResult.allImages;
+            zipResult.totalImages = etImageResult.allImages.length;
+            zipResult.hasEmbeddedImages = true;
+            zipResult.etProducts = etImageResult.products || [];
+            console.log(`[AGENT] .et embedded image extraction: ${etImageResult.allImages.length} images, ${etImageResult.products.length} products`);
+          } else {
+            // No embedded images found — this is an error for .et files
+            // The user expects images to be embedded in the .et file
+            console.error('[AGENT] .et embedded image extraction: no images found');
+            return res.status(400).json({
+              error: 'No embedded images found in the .et file. The .et file must contain product images embedded in cells.',
+              warning: etImageResult.warning || 'LibreOffice conversion succeeded but no images were found.'
+            });
+          }
+        } catch (etImgErr) {
+          console.error('[AGENT] .et embedded image extraction failed:', etImgErr.message);
+          return res.status(400).json({
+            error: `Failed to extract images from .et file: ${etImgErr.message}`,
+            warning: 'Ensure LibreOffice is installed on the server. For .et files, embedded images are required.'
+          });
+        }
       }
     }
 
     // ── Step 2: Extract text from document ───────────────────────────
+    // For .et files with embedded images, data is already extracted in Step 1.
+    // For PDF/WPS files, extract text via pdf-parse.
     let textResult = { text: '', pages: 0, rows: 0 };
+    const hasEtEmbeddedImages = zipResult.hasEmbeddedImages && zipResult.etProducts && zipResult.etProducts.length > 0;
 
-    if (isSpreadsheet) {
-      // .et files: Parse spreadsheet data via SheetJS
-      console.log('[AGENT] Step 2: Extracting text from .et spreadsheet...');
-      try {
-        textResult = await extractTextFromET(pdfFile.buffer);
-        rawText = textResult.text || '';
-        console.log(`[ET-EXTRACTOR] Extracted ${textResult.rows} data rows, ${rawText.length} chars`);
-      } catch (etErr) {
-        console.error('[AGENT] ET extraction failed:', etErr.message);
-        return res.json({
-          success: true,
-          products: [],
-          allImages: zipResult.images,
-          rawText: '',
-          totalImages: zipResult.totalImages,
-          pdfError: etErr.message,
-          isPdfOnly: isStandalone,
-          warning: `Spreadsheet text extraction failed: ${etErr.message}. You can manually enter product details below.`
-        });
-      }
+    if (hasEtEmbeddedImages) {
+      // .et files with embedded images: data already extracted in Step 1
+      // Skip text extraction — products are already structured with row data
+      console.log(`[AGENT] Step 2: Skipping text extraction — .et embedded image data already extracted (${zipResult.etProducts.length} products)`);
     } else {
       // PDF/WPS files: Extract text via pdf-parse
       console.log('[AGENT] Step 2: Extracting document text...');
@@ -255,51 +272,71 @@ export default async function handler(req, res) {
           warning: `Document text extraction failed: ${pdfErr.message}. You can manually enter product details below.`
         });
       }
+
+      if (!rawText || rawText.length < 10) {
+        return res.json({
+          success: true,
+          products: [],
+          allImages: zipResult.images,
+          rawText: rawText || '',
+          totalImages: zipResult.totalImages,
+          isPdfOnly: isStandalone,
+          warning: 'Could not extract meaningful text from the document. You can manually enter product details below.'
+        });
+      }
+
+      console.log(`[AGENT] Document text extracted: ${rawText.length} chars`);
     }
 
-    if (!rawText || rawText.length < 10) {
-      const fileTypeLabel = isSpreadsheet ? 'spreadsheet' : 'document';
-      return res.json({
-        success: true,
-        products: [],
-        allImages: zipResult.images,
-        rawText: rawText || '',
-        totalImages: zipResult.totalImages,
-        isPdfOnly: isStandalone,
-        warning: `Could not extract meaningful text from the ${fileTypeLabel}. You can manually enter product details below.`
-      });
-    }
-
-    const sourceLabel = isSpreadsheet ? 'spreadsheet' : 'document';
-    console.log(`[AGENT] ${sourceLabel} text extracted: ${rawText.length} chars`);
-
-    // ── Step 3: Use DeepSeek to extract product info from PDF text ──
-    console.log('[AGENT] Step 3: Analyzing PDF text with DeepSeek...');
+    // ── Step 3: Extract product info ──────────────────────────────────
+    // For .et with embedded images: use pre-extracted data (skip DeepSeek AI)
+    // For PDF/WPS: use DeepSeek AI to extract structured products from raw text
     let products = [];
 
-    try {
-      products = await extractProductInfo(rawText);
-      console.log(`[AGENT] DeepSeek extracted ${products.length} product(s)`);
-
-      // Auto-generate product codes: HA + originalCode + R
-      products = products.map(p => ({
-        ...p,
-        generatedCode: p.productCode
-          ? `HA${p.productCode}R`
-          : ''
+    if (hasEtEmbeddedImages) {
+      // Use pre-extracted products from .et image extractor
+      // These already have productCode, description, brand, and image mappings
+      // No AI needed — data is parsed directly from spreadsheet cells
+      products = zipResult.etProducts.map(p => ({
+        name: p.name || '',
+        brand: p.brand || '',
+        productCode: p.productCode || '',
+        generatedCode: p.generatedCode || (p.productCode ? `HA${p.productCode}R` : ''),
+        description: p.description || '',
+        category: p.category || '',
+        // Preserve image mapping info for the UI
+        row: p.row,
+        hasPreMappedImage: p.hasPreMappedImage,
+        imageName: p.imageName || ''
       }));
-    } catch (aiErr) {
-      console.error('[AGENT] DeepSeek extraction failed:', aiErr.message);
-      return res.json({
-        success: true,
-        products: [],
-        allImages: zipResult.images,
-        rawText,
-        totalImages: zipResult.totalImages,
-        isPdfOnly: isStandalone,
-        aiError: aiErr.message,
-        warning: 'AI extraction failed. You can manually enter product details below.'
-      });
+      console.log(`[AGENT] Step 3: Using ${products.length} pre-extracted products from .et embedded images (no AI needed)`);
+    } else {
+      // PDF/WPS: Use DeepSeek AI to extract structured products from raw text
+      console.log('[AGENT] Step 3: Analyzing text with DeepSeek AI...');
+      try {
+        products = await extractProductInfo(rawText);
+        console.log(`[AGENT] DeepSeek extracted ${products.length} product(s)`);
+
+        // Auto-generate product codes: HA + originalCode + R
+        products = products.map(p => ({
+          ...p,
+          generatedCode: p.productCode
+            ? `HA${p.productCode}R`
+            : ''
+        }));
+      } catch (aiErr) {
+        console.error('[AGENT] DeepSeek extraction failed:', aiErr.message);
+        return res.json({
+          success: true,
+          products: [],
+          allImages: zipResult.images,
+          rawText,
+          totalImages: zipResult.totalImages,
+          isPdfOnly: isStandalone,
+          aiError: aiErr.message,
+          warning: 'AI extraction failed. You can manually enter product details below.'
+        });
+      }
     }
 
     if (products.length === 0) {
@@ -310,7 +347,7 @@ export default async function handler(req, res) {
         rawText,
         totalImages: zipResult.totalImages,
         isPdfOnly: isStandalone,
-        warning: 'No product information could be extracted from the PDF. You can manually enter details below.'
+        warning: 'No product information could be extracted from the document. You can manually enter details below.'
       });
     }
 
@@ -321,18 +358,35 @@ export default async function handler(req, res) {
     const useBatchQueue = req.body?.useBatchQueue === true || req.body?.useBatchQueue === 'true';
 
     if (isStandalone) {
-      // PDF-only mode — return products + page images for AI per-row matching
-      console.log('[AGENT] PDF-only mode complete. Returning products + page images for AI per-row matching.');
-      return res.json({
-        success: true,
-        isPdfOnly: true,
-        products,
-        allImages: zipResult.images,
-        pdfImages: [],  // In PDF-only mode, page images ARE the allImages
-        rawText,
-        totalImages: zipResult.totalImages,
-        batchId: zipResult.batchId || `pdf_${Date.now()}`
-      });
+      if (hasEtEmbeddedImages) {
+        // .et with embedded images — return products with pre-mapped images
+        // No AI matching needed — images are already mapped to rows
+        console.log('[AGENT] .et embedded image mode complete. Returning products + pre-mapped images.');
+        return res.json({
+          success: true,
+          isPdfOnly: false,
+          hasEmbeddedImages: true,
+          products,
+          allImages: zipResult.images,
+          pdfImages: [],
+          rawText: '',
+          totalImages: zipResult.totalImages,
+          batchId: zipResult.batchId || `et_${Date.now()}`
+        });
+      } else {
+        // PDF/WPS standalone mode — return products + page images for AI per-row matching
+        console.log('[AGENT] PDF-only mode complete. Returning products + page images for AI per-row matching.');
+        return res.json({
+          success: true,
+          isPdfOnly: true,
+          products,
+          allImages: zipResult.images,
+          pdfImages: [],  // In PDF-only mode, page images ARE the allImages
+          rawText,
+          totalImages: zipResult.totalImages,
+          batchId: zipResult.batchId || `pdf_${Date.now()}`
+        });
+      }
     }
 
     // Standard PDF+ZIP mode

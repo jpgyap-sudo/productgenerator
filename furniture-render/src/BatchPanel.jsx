@@ -549,7 +549,7 @@ export default function BatchPanel({ addToast }) {
     }
   }, [addToast]);
 
-  // ── PDF-only: Upload and extract ────────────────────────────────
+  // ── PDF-only / .et-only: Upload and extract ─────────────────────
   const handlePdfOnlyProcess = useCallback(async () => {
     if (!pdfFile) {
       addToast('Please upload a PDF file first', 'error');
@@ -569,7 +569,10 @@ export default function BatchPanel({ addToast }) {
       const formData = new FormData();
       formData.append('pdf', pdfFile);
 
-      setProgressMsg('Extracting products and page images from PDF...');
+      const isEtFile = pdfFile.name.toLowerCase().endsWith('.et');
+      setProgressMsg(isEtFile
+        ? 'Extracting products and embedded images from .et spreadsheet...'
+        : 'Extracting products and page images from PDF...');
 
       const res = await fetch(`${API_BASE}/api/agent/process`, {
         method: 'POST',
@@ -579,6 +582,71 @@ export default function BatchPanel({ addToast }) {
       const data = await res.json();
       if (data.error) throw new Error(data.error);
 
+      // ── .et with embedded images ──────────────────────────────────
+      // Server returns hasEmbeddedImages: true with pre-mapped products + images
+      // No AI matching needed — images are already mapped to rows
+      if (data.hasEmbeddedImages) {
+        const extractedProducts = data.products || [];
+        const extractedImages = data.allImages || [];
+
+        if (extractedProducts.length === 0) {
+          throw new Error(data.warning || 'No products could be extracted from the .et file');
+        }
+        if (extractedImages.length === 0) {
+          throw new Error('No embedded images could be extracted from the .et file');
+        }
+
+        setProducts(extractedProducts);
+        setImages(extractedImages);
+
+        // Create direct matches from pre-mapped data (no AI needed)
+        const directMatches = extractedProducts.map((product, idx) => {
+          // Find the image that matches this product's pre-mapped image
+          const matchedImage = product.hasPreMappedImage && product.imageName
+            ? extractedImages.findIndex(img => img.name === product.imageName)
+            : -1;
+
+          const imageIndex = matchedImage >= 0 ? matchedImage : (idx < extractedImages.length ? idx : 0);
+          const bestImg = extractedImages[imageIndex];
+
+          return {
+            productIndex: idx,
+            product,
+            bestMatch: bestImg ? {
+              imageIndex,
+              imageName: bestImg.name,
+              confidence: 100,
+              reason: 'Pre-mapped from .et spreadsheet cell',
+              status: 'auto_accepted',
+              dataUrl: bestImg.dataUrl
+            } : null,
+            secondMatch: null,
+            thirdMatch: null,
+            overallConfidence: 'high',
+            overallReason: 'Image extracted from .et spreadsheet cell',
+            selectedImageIndex: 0,
+            confirmed: true,
+            batchStatus: 'completed'
+          };
+        });
+
+        setMatches(directMatches);
+        setStats({
+          totalProducts: extractedProducts.length,
+          totalImages: extractedImages.length,
+          autoAccepted: directMatches.filter(m => m.confirmed).length,
+          needsReview: 0
+        });
+        setStatus(STATUS.PDF_ONLY_DONE);
+
+        addToast(
+          `.et processed: ${extractedProducts.length} products with ${extractedImages.length} embedded images`,
+          'success'
+        );
+        return;
+      }
+
+      // ── PDF/WPS standalone mode ───────────────────────────────────
       if (!data.isPdfOnly) {
         throw new Error('Server did not return PDF-only mode. The PDF may need a ZIP file.');
       }
@@ -602,7 +670,7 @@ export default function BatchPanel({ addToast }) {
     } catch (err) {
       setError(err.message);
       setStatus(STATUS.PDF_ONLY_ERROR);
-      addToast(`PDF-only processing failed: ${err.message}`, 'error');
+      addToast(`Processing failed: ${err.message}`, 'error');
     }
   }, [pdfFile, addToast]);
 
@@ -809,10 +877,12 @@ export default function BatchPanel({ addToast }) {
             product: m.product,
             imageIndex: m.selectedImageIndex,
             imageId: m.bestMatch?.imageId || m.secondMatch?.imageId || m.thirdMatch?.imageId,
-            imageDataUrl: images[m.selectedImageIndex]?.dataUrl || null,
+            imageDataUrl: images[m.selectedImageIndex]?.dataUrl || m.bestMatch?.dataUrl || null,
             confidence: m.overallConfidence,
             matchReason: m.overallReason,
-            matchSource: m.geminiFallback ? 'gemini-fallback' : 'openai-vision',
+            matchSource: m.bestMatch?.status === 'auto_accepted' && m.overallConfidence === 'high'
+              ? 'et-embedded'
+              : m.geminiFallback ? 'gemini-fallback' : 'openai-vision',
             geminiFallback: m.geminiFallback || false
           }))
         })
@@ -904,24 +974,35 @@ export default function BatchPanel({ addToast }) {
         />
       </div>
 
-      {/* ── PDF-only mode indicator ─────────────────────────────── */}
+      {/* ── PDF-only / .et-only mode indicator ──────────────────── */}
       {pdfFile && !zipFile && status === STATUS.IDLE && (
         <div className="vm-pdf-only-prompt">
           <div className="vm-pdf-only-info">
             <File size={16} />
             <span>
-              Only a PDF file selected. You can either:
+              {pdfFile.name.toLowerCase().endsWith('.et')
+                ? 'Only a .et spreadsheet selected. Click below to extract products and embedded images.'
+                : 'Only a PDF file selected. You can either:'}
             </span>
           </div>
           <div className="vm-pdf-only-actions">
             <button className="vm-pdf-only-btn" onClick={handlePdfOnlyProcess}>
-              <Sparkles size={14} /> Run AI Per-Row Matching
-              <small>Extract products + page images, AI matches each row</small>
+              <Sparkles size={14} />
+              {pdfFile.name.toLowerCase().endsWith('.et') ? 'Extract .et Products & Images' : 'Run AI Per-Row Matching'}
+              <small>
+                {pdfFile.name.toLowerCase().endsWith('.et')
+                  ? 'Extract product data + embedded images from spreadsheet cells'
+                  : 'Extract products + page images, AI matches each row'}
+              </small>
             </button>
-            <span className="vm-pdf-only-or">or</span>
-            <span className="vm-pdf-only-hint">
-              Upload a ZIP file for standard image matching
-            </span>
+            {!pdfFile.name.toLowerCase().endsWith('.et') && (
+              <>
+                <span className="vm-pdf-only-or">or</span>
+                <span className="vm-pdf-only-hint">
+                  Upload a ZIP file for standard image matching
+                </span>
+              </>
+            )}
           </div>
         </div>
       )}
@@ -983,11 +1064,15 @@ export default function BatchPanel({ addToast }) {
         </div>
       )}
 
-      {/* ── PDF-only mode badge ─────────────────────────────────── */}
+      {/* ── PDF-only / .et mode badge ───────────────────────────── */}
       {isPdfOnlyMode && (status === STATUS.PDF_ONLY_DONE) && (
         <div className="vm-mode-badge vm-mode-pdf-only">
           <File size={14} />
-          <span>PDF-only mode — AI matched products to page images</span>
+          <span>
+            {matches.length > 0 && matches[0]?.bestMatch?.status === 'auto_accepted' && matches[0]?.overallConfidence === 'high'
+              ? '.et embedded image mode — Products matched to cell images'
+              : 'PDF-only mode — AI matched products to page images'}
+          </span>
         </div>
       )}
 
@@ -1109,15 +1194,17 @@ export default function BatchPanel({ addToast }) {
         </div>
       )}
 
-      {/* ── PDF-only mode footer ────────────────────────────────── */}
+      {/* ── PDF-only / .et mode footer ──────────────────────────── */}
       {isPdfOnlyMode && status === STATUS.PDF_ONLY_DONE && (
         <div className="vm-pdf-only-footer">
           <Info size={14} />
           <span>
-            Products were matched to PDF page images using AI vision.
-            {matches.filter(m => !m.confirmed).length > 0 &&
-              ` ${matches.filter(m => !m.confirmed).length} products need manual review.`}
-            Review and confirm each match before submitting.
+            {matches.length > 0 && matches[0]?.bestMatch?.status === 'auto_accepted' && matches[0]?.overallConfidence === 'high'
+              ? 'Products and images were extracted directly from the .et spreadsheet cells. All matches are pre-confirmed. Review and submit to proceed.'
+              : `Products were matched to PDF page images using AI vision.
+                 ${matches.filter(m => !m.confirmed).length > 0 &&
+                   ` ${matches.filter(m => !m.confirmed).length} products need manual review.`}
+                 Review and confirm each match before submitting.`}
           </span>
         </div>
       )}

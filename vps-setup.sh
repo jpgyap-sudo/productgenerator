@@ -29,12 +29,21 @@ echo -e "${GREEN}  Target: ${VPS_IP}${NC}"
 echo -e "${GREEN}═══════════════════════════════════════════════════════════════${NC}"
 
 # ── Step 1: System update ──
-echo -e "\n${YELLOW}[1/7] Updating system packages...${NC}"
+echo -e "\n${YELLOW}[1/8] Updating system packages...${NC}"
 apt-get update -qq && apt-get upgrade -y -qq
 echo -e "${GREEN}  ✓ System updated${NC}"
 
-# ── Step 2: Install Docker ──
-echo -e "\n${YELLOW}[2/7] Installing Docker...${NC}"
+# ── Step 2: Install LibreOffice (for .et spreadsheet image extraction) ──
+echo -e "\n${YELLOW}[2/8] Installing LibreOffice (for .et file conversion)...${NC}"
+if command -v soffice &>/dev/null; then
+  echo "  LibreOffice already installed: $(soffice --version | head -1)"
+else
+  apt-get install -y -qq --no-install-recommends libreoffice-calc libreoffice-common
+  echo -e "${GREEN}  ✓ LibreOffice installed: $(soffice --version | head -1)${NC}"
+fi
+
+# ── Step 3: Install Docker ──
+echo -e "\n${YELLOW}[3/8] Installing Docker...${NC}"
 if command -v docker &>/dev/null; then
   echo "  Docker already installed: $(docker --version)"
 else
@@ -42,8 +51,8 @@ else
   echo -e "${GREEN}  ✓ Docker installed: $(docker --version)${NC}"
 fi
 
-# ── Step 3: Install Docker Compose plugin ──
-echo -e "\n${YELLOW}[3/7] Installing Docker Compose...${NC}"
+# ── Step 4: Install Docker Compose plugin ──
+echo -e "\n${YELLOW}[4/8] Installing Docker Compose...${NC}"
 if docker compose version &>/dev/null; then
   echo "  Docker Compose already installed: $(docker compose version)"
 else
@@ -51,8 +60,8 @@ else
   echo -e "${GREEN}  ✓ Docker Compose installed: $(docker compose version)${NC}"
 fi
 
-# ── Step 4: Create temp admin user ──
-echo -e "\n${YELLOW}[4/7] Creating temporary admin user...${NC}"
+# ── Step 5: Create temp admin user ──
+echo -e "\n${YELLOW}[5/8] Creating temporary admin user...${NC}"
 if id "${TEMP_USER}" &>/dev/null; then
   echo "  User ${TEMP_USER} already exists"
 else
@@ -64,22 +73,22 @@ else
   echo -e "${YELLOW}  ⚠  Password: ${TEMP_PASS}${NC}"
 fi
 
-# ── Step 5: Create project directory ──
-echo -e "\n${YELLOW}[5/7] Creating project directory...${NC}"
+# ── Step 6: Create project directory ──
+echo -e "\n${YELLOW}[6/8] Creating project directory...${NC}"
 mkdir -p /home/superroo/productgenerator
 chmod 755 /home/superroo
 echo -e "${GREEN}  ✓ Directory created at /home/superroo/productgenerator${NC}"
 
-# ── Step 6: Open firewall port ──
-echo -e "\n${YELLOW}[6/7] Opening port 3000 in firewall...${NC}"
+# ── Step 7: Open firewall port ──
+echo -e "\n${YELLOW}[7/8] Opening port 3000 in firewall...${NC}"
 if command -v ufw &>/dev/null; then
   ufw allow 3000/tcp 2>/dev/null && echo -e "${GREEN}  ✓ Port 3000 opened${NC}" || echo -e "  ${YELLOW}UFW not active, skipping${NC}"
 else
   echo -e "  ${YELLOW}UFW not installed, skipping firewall config${NC}"
 fi
 
-# ── Step 7: Enable Docker on boot ──
-echo -e "\n${YELLOW}[7/7] Enabling Docker on boot...${NC}"
+# ── Step 8: Enable Docker on boot ──
+echo -e "\n${YELLOW}[8/8] Enabling Docker on boot...${NC}"
 systemctl enable docker 2>/dev/null || true
 echo -e "${GREEN}  ✓ Docker auto-start enabled${NC}"
 

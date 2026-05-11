@@ -24,8 +24,11 @@ FROM node:20-slim AS runner
 WORKDIR /app
 
 # Install tini for proper signal handling (SIGTERM → Node.js)
+# Install LibreOffice for .et (WPS Spreadsheet) to .xlsx conversion
 RUN apt-get update -qq && apt-get install -y -qq --no-install-recommends \
     tini \
+    libreoffice-calc \
+    libreoffice-common \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy node_modules from deps stage
