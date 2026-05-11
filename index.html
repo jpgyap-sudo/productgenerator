@@ -12272,12 +12272,29 @@ function initBatchProcessor() {
       const formData = new FormData();
       formData.append('pdf', batchEtFile);
 
+      // Show progress with periodic updates while waiting for the long-running extraction + AI verification
       batchProgressText.textContent = 'Extracting products and embedded images from .et spreadsheet...';
+      
+      // Start a progress animation that updates every 5 seconds
+      const progressMessages = [
+        'Extracting products and embedded images from .et spreadsheet...',
+        'Converting .et format and extracting embedded images...',
+        'Running AI verification on product-image pairs (batch 1/2)...',
+        'Running AI verification on product-image pairs (batch 2/2)...',
+        'Finalizing results...'
+      ];
+      let progressIdx = 0;
+      const progressInterval = setInterval(() => {
+        progressIdx = Math.min(progressIdx + 1, progressMessages.length - 1);
+        batchProgressText.textContent = progressMessages[progressIdx];
+      }, 8000);
 
       const res = await fetchApi('/api/agent/process', {
         method: 'POST',
         body: formData
       });
+      
+      clearInterval(progressInterval);
 
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
