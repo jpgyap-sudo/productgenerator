@@ -86,7 +86,7 @@ function runCapture(cmd) {
 
 function sshCmd(cmd) {
   const identityArg = CONFIG.sshIdentityFile ? `-i "${CONFIG.sshIdentityFile}"` : '';
-  return `ssh ${identityArg} -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new ${CONFIG.sshHost} "${cmd}"`;
+  return `ssh ${identityArg} -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new superroo@${CONFIG.sshHost} "${cmd}"`;
 }
 
 function commandExists(command) {
@@ -274,7 +274,7 @@ ${color(C.bold, 'Config:')}
         if (commandExists('rsync')) {
           const excludeArgs = CONFIG.rsyncExcludes.map(e => `--exclude='${e}'`).join(' ');
           const sshOpts = CONFIG.sshIdentityFile ? `-i "${CONFIG.sshIdentityFile}" -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new` : '-o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new';
-          const rsyncCmd = `rsync -avz --delete ${excludeArgs} -e "ssh ${sshOpts}" ./ ${CONFIG.sshHost}:${CONFIG.vpsPath}/`;
+          const rsyncCmd = `rsync -avz --delete ${excludeArgs} -e "ssh ${sshOpts}" ./ superroo@${CONFIG.sshHost}:${CONFIG.vpsPath}/`;
           run(rsyncCmd);
           ok('Files synced to VPS with rsync');
         } else {
