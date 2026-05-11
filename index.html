@@ -3159,6 +3159,54 @@ opacity: 0.8;
 margin-top: 2px;
 }
 
+/* ── PDF-only mode prompt ─────────────────────────────────────── */
+.batch-pdf-only-prompt {
+display: flex;
+flex-direction: column;
+align-items: center;
+gap: 12px;
+margin-top: 16px;
+padding: 16px 20px;
+background: var(--surface-2);
+border: 1px dashed var(--accent);
+border-radius: 10px;
+}
+.batch-pdf-only-info {
+display: flex;
+align-items: center;
+gap: 8px;
+font-size: 13px;
+color: var(--text-secondary);
+}
+.batch-pdf-only-actions {
+display: flex;
+gap: 10px;
+}
+.batch-pdf-only-btn {
+display: inline-flex;
+flex-direction: column;
+align-items: center;
+gap: 4px;
+padding: 12px 28px;
+font-size: 13px;
+font-weight: 600;
+border: none;
+border-radius: 8px;
+cursor: pointer;
+background: linear-gradient(135deg, #2563eb, #3b82f6);
+color: #fff;
+transition: opacity var(--transition);
+line-height: 1.3;
+}
+.batch-pdf-only-btn:hover { opacity: 0.85; }
+.batch-pdf-only-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.batch-pdf-only-btn small {
+display: block;
+font-size: 10px;
+font-weight: 400;
+opacity: 0.8;
+}
+
 @media (max-width: 980px) {
   .bulk-layout { grid-template-columns: 1fr; }
   .bulk-stage { border-right: none; border-bottom: 1px solid var(--border-light); }
@@ -4363,6 +4411,20 @@ a.cr-meta-pill.cr-drive-link:hover { opacity: 0.8; }
             </label>
             <input type="file" id="batchEtInput" accept=".et,.xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" style="position:absolute;opacity:0;width:0;height:0;overflow:hidden;"/>
             <button class="batch-btn batch-et-go-btn" id="batchEtExtractBtn" style="display:none;">✨ Extract .et Products & Images</button>
+          </div>
+
+          <!-- ── PDF-only mode prompt (shown when PDF selected without ZIP) ── -->
+          <div class="batch-pdf-only-prompt" id="batchPdfOnlyPrompt" style="display:none;">
+            <div class="batch-pdf-only-info">
+              <span>📄</span>
+              <span>Only a PDF file selected. You can either:</span>
+            </div>
+            <div class="batch-pdf-only-actions">
+              <button class="batch-btn batch-pdf-only-btn" id="batchPdfOnlyBtn">
+                ✨ Run AI Per-Row Matching
+                <small>Extract products + page images, AI matches each row</small>
+              </button>
+            </div>
           </div>
 
           <div class="batch-analyze-row">
@@ -12052,6 +12114,13 @@ function initBatchProcessor() {
       batchPdfText.textContent = file.name;
       batchPdfSub.textContent = `${(file.size / 1024 / 1024).toFixed(2)} MB`;
       batchPdfIcon.textContent = '✅';
+      // Clear .et selection when PDF is selected
+      batchEtFile = null;
+      batchEtText.textContent = 'Upload .et Spreadsheet (WPS)';
+      batchEtSub.textContent = '.et files only · max 50MB';
+      batchEtIcon.textContent = '📊';
+      batchEtExtractBtn.style.display = 'none';
+      batchEtInput.value = '';
       updateBatchAnalyzeBtn();
     }
   });
@@ -12081,6 +12150,13 @@ function initBatchProcessor() {
       batchPdfText.textContent = file.name;
       batchPdfSub.textContent = `${(file.size / 1024 / 1024).toFixed(2)} MB`;
       batchPdfIcon.textContent = '✅';
+      // Clear .et selection when PDF is selected
+      batchEtFile = null;
+      batchEtText.textContent = 'Upload .et Spreadsheet (WPS)';
+      batchEtSub.textContent = '.et files only · max 50MB';
+      batchEtIcon.textContent = '📊';
+      batchEtExtractBtn.style.display = 'none';
+      batchEtInput.value = '';
       updateBatchAnalyzeBtn();
     }
   });
@@ -12307,9 +12383,105 @@ function initBatchProcessor() {
     }
   });
 
+  // ── PDF-only mode elements ──
+  const batchPdfOnlyPrompt = document.getElementById('batchPdfOnlyPrompt');
+  const batchPdfOnlyBtn = document.getElementById('batchPdfOnlyBtn');
+
   function updateBatchAnalyzeBtn() {
-    batchAnalyzeBtn.disabled = !batchPdfFile || !batchZipFile;
+    const hasPdf = !!batchPdfFile;
+    const hasZip = !!batchZipFile;
+    const hasEt = !!batchEtFile;
+
+    // "Analyze & Extract" requires both PDF + ZIP
+    batchAnalyzeBtn.disabled = !hasPdf || !hasZip;
+
+    // Show PDF-only prompt when PDF is selected but no ZIP and no .et
+    if (hasPdf && !hasZip && !hasEt) {
+      batchPdfOnlyPrompt.style.display = 'flex';
+    } else {
+      batchPdfOnlyPrompt.style.display = 'none';
+    }
   }
+
+  // ── PDF-only: Run AI Per-Row Matching ──
+  batchPdfOnlyBtn?.addEventListener('click', async () => {
+    if (!batchPdfFile) return;
+
+    // Reset previous results
+    batchResultData = null;
+    batchMatchData = null;
+    batchAcceptedMatches = {};
+    batchStep2.style.display = 'none';
+    batchStep3.style.display = 'none';
+    batchMatchBtn.disabled = true;
+    batchSubmitBtn.disabled = true;
+
+    batchProgress.style.display = 'flex';
+    batchProgressText.textContent = 'Uploading PDF to server...';
+    batchPdfOnlyBtn.disabled = true;
+    batchPdfOnlyBtn.textContent = 'Extracting...';
+
+    try {
+      const formData = new FormData();
+      formData.append('pdf', batchPdfFile);
+
+      batchProgressText.textContent = 'Extracting products and page images from PDF...';
+
+      const res = await fetchApi('/api/agent/process', {
+        method: 'POST',
+        body: formData
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || `Server error: ${res.status}`);
+      }
+
+      const data = await res.json();
+      batchResultData = data;
+
+      if (!data.success) {
+        throw new Error(data.error || 'Extraction failed');
+      }
+
+      batchProgress.style.display = 'none';
+
+      // ── PDF-only mode ──
+      if (!data.isPdfOnly && !data.hasEmbeddedImages) {
+        throw new Error('Server did not return PDF-only mode. The PDF may need a ZIP file.');
+      }
+
+      const extractedProducts = data.products || [];
+      const extractedImages = data.allImages || [];
+
+      if (extractedProducts.length === 0) {
+        throw new Error(data.warning || 'No products could be extracted from the PDF');
+      }
+      if (extractedImages.length === 0) {
+        throw new Error('No page images could be extracted from the PDF');
+      }
+
+      // Show products and images in Step 2
+      renderBatchProductGrid(extractedProducts);
+      renderBatchImageGallery(extractedImages);
+      batchStep2.style.display = 'block';
+      batchMatchBtn.disabled = false;
+
+      toast(`Extracted ${extractedProducts.length} product(s) and ${extractedImages.length} page image(s). Review and click "Match Products to Images".`, 'success');
+
+      // Auto-launch AI per-row matching
+      batchMatchBtn.click();
+
+    } catch (err) {
+      batchProgress.style.display = 'none';
+      batchProductGrid.innerHTML = `<div style="color:var(--danger);font-size:13px;padding:24px;text-align:center;">❌ Error: ${escapeHtml(err.message)}</div>`;
+      batchStep2.style.display = 'block';
+      toast(`PDF-only extraction failed: ${err.message}`, 'error');
+    } finally {
+      batchPdfOnlyBtn.disabled = false;
+      batchPdfOnlyBtn.innerHTML = '✨ Run AI Per-Row Matching<small>Extract products + page images, AI matches each row</small>';
+    }
+  });
 
   // ── Render product cards (Step 2) ──
   function renderBatchProductGrid(products) {
