@@ -298,6 +298,9 @@ ${color(C.bold, 'Config:')}
 
     if (!flags.dryRun) {
       try {
+        // Ensure logs directory exists with proper permissions
+        run(sshCmd('sudo mkdir -p ' + CONFIG.vpsPath + '/logs && sudo chown superroo:superroo ' + CONFIG.vpsPath + '/logs'), { silent: true });
+
         // Detect Docker vs PM2 and restart accordingly
         const dockerActive = runCapture(sshCmd('docker ps -q --filter name=product-studio-backend 2>/dev/null || true'));
         if (dockerActive) {
@@ -305,8 +308,9 @@ ${color(C.bold, 'Config:')}
           run(sshCmd('cd ' + CONFIG.vpsPath + ' && docker compose build && docker compose up -d'), { silent: false });
           ok('Docker container rebuilt and restarted');
         } else {
-          run(sshCmd('cd ' + CONFIG.vpsPath + ' && pm2 startOrReload ecosystem.config.cjs --update-env'), { silent: false });
-          ok('PM2 restarted');
+          warn('Docker container not running; starting with Docker...');
+          run(sshCmd('cd ' + CONFIG.vpsPath + ' && docker compose up -d'), { silent: false });
+          ok('Docker container started');
         }
 
         // Wait for startup
