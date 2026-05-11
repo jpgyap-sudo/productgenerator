@@ -279,7 +279,8 @@ ${color(C.bold, 'Config:')}
           ok('Files synced to VPS with rsync');
         } else {
           warn('rsync not found; using git archive over SSH fallback');
-          const archiveCmd = `git archive --format=tar HEAD | ${sshCmd('mkdir -p ' + CONFIG.vpsPath + ' && tar -xf - -C ' + CONFIG.vpsPath)}`;
+          // Use sudo tar because files in /root/productgenerator are owned by root
+          const archiveCmd = `git archive --format=tar HEAD | ${sshCmd('mkdir -p ' + CONFIG.vpsPath + ' && sudo tar -xf - -C ' + CONFIG.vpsPath)}`;
           run(archiveCmd);
           ok('Committed files synced to VPS with git archive');
         }

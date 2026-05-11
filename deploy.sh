@@ -1,25 +1,27 @@
 #!/bin/bash
 # ═══════════════════════════════════════════════════════════════════
-#  deploy.sh — One-command deploy to VPS
+#  deploy.sh — One-command deploy to VPS (via Tailscale)
 #
 #  Usage:
-#    ./deploy.sh                    # Deploy to default VPS
+#    ./deploy.sh                    # Deploy to default VPS via Tailscale
 #    ./deploy.sh user@host          # Deploy to custom VPS
 #    ./deploy.sh user@host /path    # Deploy to custom path
 #
 #  Prerequisites:
-#    - SSH key-based auth to VPS (no password prompt)
+#    - Tailscale installed on both local machine and VPS
+#    - SSH key-based auth to VPS via Tailscale IP
 #    - rsync installed locally and on VPS
-#    - PM2 installed on VPS
+#    - Docker installed on VPS
 # ═══════════════════════════════════════════════════════════════════
 
 set -euo pipefail
 
 # ── Configuration ──
-VPS_USER="${1:-root@104.248.225.250}"
+# Use Tailscale IP (public IP port 22 is firewalled by DigitalOcean)
+VPS_USER="${1:-superroo@100.64.175.88}"
 VPS_HOST="${VPS_USER#*@}"
 VPS_PATH="${2:-/root/productgenerator}"
-SSH_OPTS="-o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new"
+SSH_OPTS="-i ~/.ssh/id_superroo_vps -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new"
 
 # ── Colors ──
 RED='\033[0;31m'
@@ -87,7 +89,7 @@ fi
 # ── Step 5: Health check ──
 echo -e "\n${YELLOW}[5/5] Running health check...${NC}"
 sleep 3
-HEALTH=$(ssh ${SSH_OPTS} "${VPS_USER}" "curl -s -o /dev/null -w '%{http_code}' http://localhost:3000/health 2>&1" || echo "failed")
+HEALTH=$(ssh ${SSH_OPTS} "${VPS_USER}" "curl -s -o /dev/null -w '%{http_code}' http://localhost:3001/health 2>&1" || echo "failed")
 
 if [ "${HEALTH}" = "200" ]; then
   echo -e "${GREEN}  ✓ Health check passed (HTTP ${HEALTH})${NC}"
