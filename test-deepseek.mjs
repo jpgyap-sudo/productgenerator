@@ -1,18 +1,17 @@
-const res = await fetch("https://api.deepseek.com/v1/chat/completions", {
-  method: "POST",
-  headers: {
-    "Content-Type": "application/json",
-    "Authorization": "Bearer sk-2c47d2f37e96490290077f85fef582ce"
-  },
-  body: JSON.stringify({
-    model: "deepseek-chat",
-    messages: [
-      { role: "system", content: "Return ONLY valid JSON. No markdown." },
-      { role: "user", content: "Extract products from this catalog text:\n\nHA-790 chair, brand Home Atelier, wood and metal. HA-789 chair, brand Home Atelier, leather and steel." }
-    ],
-    response_format: { type: "json_object" }
-  })
-});
-const d = await res.json();
-console.log("Status:", res.status);
-console.log("Content:", d.choices?.[0]?.message?.content);
+import { extractTextFromPDF } from './lib/pdf-extractor.js';
+import { extractProductInfo } from './lib/deepseek.js';
+import fs from 'fs';
+
+const buffer = fs.readFileSync('uploads/DINING_CHAIRS_with_Brand.pdf');
+const textResult = await extractTextFromPDF(buffer);
+console.log(`Text length: ${textResult.text.length} chars`);
+console.log('First 500 chars:');
+console.log(textResult.text.slice(0, 500));
+console.log('\n--- Calling DeepSeek ---');
+try {
+  const products = await extractProductInfo(textResult.text);
+  console.log(`DeepSeek OK: ${products.length} products`);
+  console.log(JSON.stringify(products.slice(0, 2), null, 2));
+} catch (e) {
+  console.error('DeepSeek FAILED:', e.message);
+}
