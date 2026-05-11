@@ -292,20 +292,18 @@ ${color(C.bold, 'Config:')}
       ok(`Would rsync to ${CONFIG.sshHost}:${CONFIG.vpsPath}`);
     }
 
-    // ── Sync .env file (not in git, needed for Docker) ──
+    // ── Ensure VPS .env has correct PORT (preserve existing VPS .env) ──
+    // The local .env may differ from VPS (e.g., PORT=3000 locally vs PORT=3002 on VPS).
+    // We only ensure the VPS .env has the correct PORT for Docker host networking.
     if (!flags.dryRun) {
       try {
-        if (existsSync('.env')) {
-          // Use type + ssh sudo tee because files in /root/ are owned by root
-          const identityArg = CONFIG.sshIdentityFile ? `-i "${CONFIG.sshIdentityFile}"` : '';
-          const pipeCmd = `type .env | ssh ${identityArg} -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new superroo@${CONFIG.sshHost} "sudo tee ${CONFIG.vpsPath}/.env > /dev/null && sudo chmod 600 ${CONFIG.vpsPath}/.env && sudo chown superroo:superroo ${CONFIG.vpsPath}/.env"`;
-          run(pipeCmd, { silent: true });
-          ok('.env file synced to VPS');
-        } else {
-          warn('No local .env file found; keeping existing remote .env');
-        }
+        const identityArg = CONFIG.sshIdentityFile ? `-i "${CONFIG.sshIdentityFile}"` : '';
+        // Check if .env exists on VPS and ensure PORT=3002 is set
+        const ensurePortCmd = `ssh ${identityArg} -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new superroo@${CONFIG.sshHost} "sudo grep -q '^PORT=3002' ${CONFIG.vpsPath}/.env 2>/dev/null || (echo 'PORT=3002' | sudo tee -a ${CONFIG.vpsPath}/.env > /dev/null && echo 'Added PORT=3002 to .env')"`;
+        run(ensurePortCmd, { silent: true });
+        ok('VPS .env preserved (PORT=3002 ensured)');
       } catch (e) {
-        warn(`Failed to sync .env: ${e.message}`);
+        warn(`Failed to ensure PORT in VPS .env: ${e.message}`);
       }
     }
 
@@ -344,17 +342,20 @@ ${color(C.bold, 'Config:')}
           ok('Docker container started');
         }
 
-        // Wait for startup
-        console.log(`  ${color(C.dim, 'Waiting 3s for app to start...')}`);
-        await sleep(3000);
+        // Wait for startup with retries (Docker can take 10-15s)
+        let httpCode = '';
+        for (let attempt = 1; attempt <= 6; attempt++) {
+          console.log(`  ${color(C.dim, `Waiting for app to start (attempt ${attempt}/6)...`)}`);
+          await sleep(5000);
+          httpCode = runCapture(sshCmd(`curl -s -o /dev/null -w '%{http_code}' ${CONFIG.healthEndpoint}`));
+          if (httpCode === '200') break;
+        }
 
-        // Health check
-        const httpCode = runCapture(sshCmd(`curl -s -o /dev/null -w '%{http_code}' ${CONFIG.healthEndpoint}`));
         if (httpCode === '200') {
           ok(`Health check passed (HTTP ${httpCode})`);
         } else {
           fail(`Health check failed (HTTP ${httpCode || 'no response'})`);
-          warn(`Check logs: ssh ${CONFIG.sshHost} "pm2 logs ${CONFIG.pm2ProcessName} --lines 20"`);
+          warn(`Check logs: ssh ${CONFIG.sshHost} "docker logs ${CONFIG.pm2ProcessName} --tail 20"`);
           process.exit(1);
         }
       } catch (e) {
