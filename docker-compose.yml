@@ -32,10 +32,11 @@ services:
         reservations:
           memory: 384M
 
-    # ── Port Mapping ─────────────────────────────────────────────
-    # Expose port 3002 (SuperRoo Cloud Dashboard uses ports 3000 + 3001)
-    ports:
-      - "0.0.0.0:3002:3000"
+    # ── Network ──────────────────────────────────────────────────
+    # Use host networking so the container can reach Redis on 127.0.0.1:6379
+    # (Redis is bound to 0.0.0.0 on the host, but host networking avoids
+    #  Docker gateway routing issues with ioredis timeouts)
+    network_mode: host
 
     # ── Environment ──────────────────────────────────────────────
     # Loaded from .env file (create it with your API keys)

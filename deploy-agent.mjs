@@ -158,7 +158,7 @@ ${color(C.bold, 'Config:')}
   // Extract commit message from args (filter out flags)
   let commitMsg = args.filter(a => !a.startsWith('--')).join(' ') || '';
 
-  const TOTAL_STEPS = flags.noDeploy ? 3 : 6;
+  const TOTAL_STEPS = flags.noDeploy ? 3 : 8;
 
   console.log(color(C.cyan, '═══════════════════════════════════════════════════════════════'));
   console.log(color(C.cyan, `  ${color(C.bold, 'Deploy Agent')} — Commit → Push → Deploy`));
@@ -306,6 +306,18 @@ ${color(C.bold, 'Config:')}
         }
       } catch (e) {
         warn(`Failed to sync .env: ${e.message}`);
+      }
+    }
+
+    // ── Sync nginx config (render.abcx124.xyz) and reload ──
+    if (!flags.dryRun) {
+      try {
+        const identityArg = CONFIG.sshIdentityFile ? `-i "${CONFIG.sshIdentityFile}"` : '';
+        const nginxPipeCmd = `type render-nginx.conf | ssh ${identityArg} -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new superroo@${CONFIG.sshHost} "sudo tee /etc/nginx/sites-enabled/render.abcx124.xyz > /dev/null && sudo nginx -t && sudo nginx -s reload"`;
+        run(nginxPipeCmd, { silent: true });
+        ok('Nginx config synced and reloaded');
+      } catch (e) {
+        warn(`Failed to sync nginx config: ${e.message}`);
       }
     }
 
