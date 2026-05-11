@@ -347,9 +347,10 @@ export default async function handler(req, res) {
         // inaccurate after LibreOffice conversion. AI verification catches misalignments.
         // Uses batch-by-batch processing (2 at a time) with 3s delay between batches,
         // retry with exponential backoff, and pause/resume via file-based state.
+        const resumeDir = path.join(os.tmpdir(), `et-ai-resume-${Date.now()}`);
         try {
           const verifiedProducts = await verifyEtMatchesWithAI(rawProducts, zipResult.images, {
-            resumeDir: tempDir, // Enable pause/resume via file-based state
+            resumeDir, // Enable pause/resume via file-based state
             onProgress: (progress) => {
               // Update the progress store so the UI can show AI verification progress
               const batchId = zipResult.batchId || `et_${Date.now()}`;

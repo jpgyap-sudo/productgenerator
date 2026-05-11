@@ -400,14 +400,18 @@ async function main() {
           info(`Progress (${(attempt + 1) * 2}s): ${progress.substring(0, 100)}`);
         }
 
-        // Check if Step 2 (products) appeared
-        const step2Visible = await cdp.evaluate(`
+        // Check if Step 2 (products) or Step 3 (results with embedded images) appeared
+        // For .et with embedded images, renderBatchResultsFromData hides Step 2 and shows Step 3
+        const stepVisible = await cdp.evaluate(`
           (() => {
             const step2 = document.getElementById('batchStep2');
-            return step2 ? getComputedStyle(step2).display !== 'none' : false;
+            const step3 = document.getElementById('batchStep3');
+            const step2vis = step2 ? getComputedStyle(step2).display !== 'none' : false;
+            const step3vis = step3 ? getComputedStyle(step3).display !== 'none' : false;
+            return { step2: step2vis, step3: step3vis, any: step2vis || step3vis };
           })()
         `);
-        if (step2Visible) {
+        if (stepVisible.any) {
           processingComplete = true;
           await delay(1000);
           await cdp.screenshot('05-results-loaded');
@@ -417,8 +421,10 @@ async function main() {
             (() => {
               const products = window.__batchProducts || [];
               const step2Text = document.getElementById('batchStep2')?.innerText || '';
+              const step3Text = document.getElementById('batchStep3')?.innerText || '';
               return {
                 step2Text: step2Text.substring(0, 500),
+                step3Text: step3Text.substring(0, 500),
                 productCount: products.length,
                 products: products.slice(0, 5).map(p => ({
                   name: p.name,
@@ -475,14 +481,17 @@ async function main() {
       await delay(5000);
       await cdp.screenshot('04-no-extract-btn');
 
-      // Check if results already loaded
-      const step2Visible = await cdp.evaluate(`
+      // Check if results already loaded (Step 2 for standard, Step 3 for embedded images)
+      const stepVisible = await cdp.evaluate(`
         (() => {
           const step2 = document.getElementById('batchStep2');
-          return step2 ? getComputedStyle(step2).display !== 'none' : false;
+          const step3 = document.getElementById('batchStep3');
+          const step2vis = step2 ? getComputedStyle(step2).display !== 'none' : false;
+          const step3vis = step3 ? getComputedStyle(step3).display !== 'none' : false;
+          return { step2: step2vis, step3: step3vis, any: step2vis || step3vis };
         })()
       `);
-      if (step2Visible) {
+      if (stepVisible.any) {
         pass('Results already loaded without clicking extract');
       }
     }
