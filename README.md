@@ -137,3 +137,4 @@ const SUPA_ANON = 'eyJhbGciOiJIUzI1NiIs...';
 ```
 
 > **Note:** Once connected, the **fal API key** is automatically synced to the `app_config` table. Enter it once on any device and it will be available on all devices connected to the same Supabase project.
+"."  
