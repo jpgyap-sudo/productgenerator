@@ -51,8 +51,8 @@ const CONFIG = {
     'product_studio_queue*',
   ],
 
-  // Health check
-  healthEndpoint: 'http://localhost:3000/health',
+  // Health check (port 3001 — SuperRoo Cloud Dashboard uses port 3000)
+  healthEndpoint: 'http://localhost:3001/health',
 };
 
 // ── Colors ─────────────────────────────────────────────────────────

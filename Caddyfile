@@ -1,9 +1,12 @@
 # ═══════════════════════════════════════════════════════════════════
 #  Caddyfile — Reverse proxy for Product Image Studio
 #
-#  IMPORTANT: Replace 'yourdomain.com' with your actual domain name
-#  BEFORE deploying. Caddy automatically provisions Let's Encrypt
-#  TLS certificates for the domain.
+#  SuperRoo Cloud Dashboard runs on port 3000 (primary project).
+#  Product Image Studio runs on port 3001 (Docker container).
+#
+#  Routes:
+#    render.abcx124.xyz/studio/*  →  Product Image Studio (port 3001)
+#    render.abcx124.xyz/*          →  SuperRoo Cloud Dashboard (port 3000)
 #
 #  Installation: sudo apt install -y caddy
 #  Start:        sudo caddy start
@@ -11,7 +14,14 @@
 # ═══════════════════════════════════════════════════════════════════
 
 render.abcx124.xyz {
+    # ── SuperRoo Cloud Dashboard (primary, port 3000) ────────────
     reverse_proxy localhost:3000
+
+    # ── Product Image Studio (secondary, port 3001) ──────────────
+    route /studio/* {
+        uri strip_prefix /studio
+        reverse_proxy localhost:3001
+    }
 
     header {
         X-Content-Type-Options "nosniff"
@@ -28,23 +38,3 @@ render.abcx124.xyz {
         format json
     }
 }
-
-# ── Production domain (uncomment and configure when you have a domain) ──
-# yourdomain.com {
-#     reverse_proxy localhost:3000
-#
-#     header {
-#         X-Content-Type-Options "nosniff"
-#         X-Frame-Options "DENY"
-#         X-XSS-Protection "1; mode=block"
-#         Referrer-Policy "strict-origin-when-cross-origin"
-#         Permissions-Policy "camera=(), microphone=(), geolocation=()"
-#     }
-#
-#     encode gzip
-#
-#     log {
-#         output file /var/log/caddy/product-image-studio.log
-#         format json
-#     }
-# }
