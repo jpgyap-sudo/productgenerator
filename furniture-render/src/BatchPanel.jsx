@@ -699,14 +699,16 @@ export default function BatchPanel({ addToast }) {
             ? extractedImages.findIndex(img => img.name === product.imageName)
             : -1;
 
-          const imageIndex = matchedImage >= 0 ? matchedImage : (idx < extractedImages.length ? idx : 0);
-          const bestImg = extractedImages[imageIndex];
+          // IMPORTANT: Only assign an image if the product has a pre-mapped image.
+          // Products without hasPreMappedImage have no unique image in the .et file
+          // and should NOT be silently assigned a cycled image.
+          const bestImg = matchedImage >= 0 ? extractedImages[matchedImage] : null;
 
           return {
             productIndex: idx,
             product,
             bestMatch: bestImg ? {
-              imageIndex,
+              imageIndex: matchedImage,
               imageName: bestImg.name,
               confidence: 100,
               reason: 'Pre-mapped from .et spreadsheet cell',
@@ -715,11 +717,13 @@ export default function BatchPanel({ addToast }) {
             } : null,
             secondMatch: null,
             thirdMatch: null,
-            overallConfidence: 'high',
-            overallReason: 'Image extracted from .et spreadsheet cell',
+            overallConfidence: bestImg ? 'high' : 'low',
+            overallReason: bestImg
+              ? 'Image extracted from .et spreadsheet cell'
+              : 'No image available for this product — needs manual assignment',
             selectedImageIndex: 0,
-            confirmed: true,
-            batchStatus: 'completed'
+            confirmed: !!bestImg,
+            batchStatus: bestImg ? 'completed' : 'pending'
           };
         });
 
