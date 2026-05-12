@@ -339,7 +339,12 @@ export default async function handler(req, res) {
           name: p.name || '',
           brand: p.brand || '',
           productCode: p.productCode || '',
-          generatedCode: p.generatedCode || (p.productCode ? `HA${p.productCode}R` : ''),
+          // generatedCode: use product code as-is if it starts with "HA",
+          // otherwise wrap with HA...R for Drive folder naming convention.
+          // Prevents double-wrapping like "HA" + "HA" + "R" = "HAHAR".
+          generatedCode: p.generatedCode || (p.productCode
+            ? (p.productCode.startsWith('HA') ? p.productCode : `HA${p.productCode}R`)
+            : ''),
           description: p.description || '',
           category: p.category || '',
           // Preserve image mapping info for the UI
@@ -348,74 +353,40 @@ export default async function handler(req, res) {
           imageName: p.imageName || '',
           dataUrl: p.dataUrl || ''
         }));
-        console.log(`[AGENT] Step 3: ${rawProducts.length} pre-extracted products from .et, running AI verification...`);
+        // ── Skip AI verification for .et files ────────────────────────────
+        // The OLE2 ETCellImageData parser extracts images with exact UUID
+        // matching (DISPIMG formula UUID → cellImages.xml UUID). This is
+        // already 100% accurate — the image in each row is the correct one.
+        // AI vision verification is unnecessary and causes false mismatches
+        // (e.g., rejecting correct dining chair images because they look
+        // similar to other dining chair images).
+        //
+        // All products are auto-accepted with the UUID-based match.
+        console.log(`[AGENT] Step 3: ${rawProducts.length} pre-extracted products from .et (UUID-matched, skipping AI verification)`);
 
-        // ── AI Verification: Use OpenAI GPT-4o Vision to verify each product-image pair ──
-        // The positional mapping (DISPIMG row order → image anchor row order) can be
-        // inaccurate after LibreOffice conversion. AI verification catches misalignments.
-        // Uses batch-by-batch processing (2 at a time) with 3s delay between batches,
-        // retry with exponential backoff, and pause/resume via file-based state.
-        const resumeDir = path.join(os.tmpdir(), `et-ai-resume-${Date.now()}`);
-        try {
-          const aiBatchId = zipResult.batchId || `et_${Date.now()}`;
-          const verifiedProducts = await verifyEtMatchesWithAI(rawProducts, zipResult.images, {
-            resumeDir, // Enable pause/resume via file-based state
-            batchId: aiBatchId, // For pause/resume support
-            onProgress: (progress) => {
-              // Update the progress store so the UI can show AI verification progress
-              etProgressStore.set(aiBatchId, {
-                percent: progress.percent,
-                stage: progress.stage,
-                detail: progress.detail || ''
-              });
-            }
-          });
+        products = rawProducts.map(p => ({
+          name: p.name || '',
+          brand: p.brand || '',
+          productCode: p.productCode || '',
+          // generatedCode: use product code as-is if it starts with "HA",
+          // otherwise wrap with HA...R for Drive folder naming convention.
+          generatedCode: p.generatedCode || (p.productCode
+            ? (p.productCode.startsWith('HA') ? p.productCode : `HA${p.productCode}R`)
+            : ''),
+          description: p.description || '',
+          category: p.category || '',
+          row: p.row,
+          hasPreMappedImage: p.hasPreMappedImage,
+          imageName: p.imageName || '',
+          dataUrl: p.dataUrl || '',
+          // All UUID-matched products are auto-accepted
+          aiVerified: false,
+          aiConfidence: 100,
+          aiReason: 'UUID-matched via OLE2 ETCellImageData — exact match, no AI verification needed',
+          aiMatchStatus: 'auto_accepted'
+        }));
 
-          // Map verified products back to the standard format
-          products = verifiedProducts.map(p => ({
-            name: p.name || '',
-            brand: p.brand || '',
-            productCode: p.productCode || '',
-            generatedCode: p.generatedCode || (p.productCode ? `HA${p.productCode}R` : ''),
-            description: p.description || '',
-            category: p.category || '',
-            row: p.row,
-            hasPreMappedImage: p.hasPreMappedImage,
-            imageName: p.imageName || '',
-            // AI verification results
-            aiVerified: p.aiVerified,
-            aiConfidence: p.aiConfidence,
-            aiReason: p.aiReason,
-            aiMatchStatus: p.aiMatchStatus
-          }));
-
-          const autoAccepted = products.filter(p => p.aiMatchStatus === 'auto_accepted').length;
-          const needsReview = products.filter(p => p.aiMatchStatus === 'needs_review').length;
-          const rejected = products.filter(p => p.aiMatchStatus === 'rejected').length;
-          console.log(`[AGENT] Step 3: AI verification complete — ${autoAccepted} auto-accepted, ${needsReview} needs review, ${rejected} rejected`);
-
-          // Clear progress store
-          const batchId = zipResult.batchId || `et_${Date.now()}`;
-          etProgressStore.delete(batchId);
-        } catch (aiVerifyErr) {
-          // AI verification failed — fall back to positional mapping (no AI)
-          console.warn('[AGENT] Step 3: AI verification failed, falling back to positional mapping:', aiVerifyErr.message);
-          products = rawProducts.map(p => ({
-            name: p.name || '',
-            brand: p.brand || '',
-            productCode: p.productCode || '',
-            generatedCode: p.generatedCode || (p.productCode ? `HA${p.productCode}R` : ''),
-            description: p.description || '',
-            category: p.category || '',
-            row: p.row,
-            hasPreMappedImage: p.hasPreMappedImage,
-            imageName: p.imageName || '',
-            aiVerified: false,
-            aiConfidence: 100,
-            aiReason: `AI verification unavailable: ${aiVerifyErr.message}`,
-            aiMatchStatus: 'needs_review'
-          }));
-        }
+        console.log(`[AGENT] Step 3: All ${products.length} products auto-accepted (UUID-matched)`);
       } else {
         // Embedded images found but no products could be parsed from rows.
         // This happens when the column structure doesn't match expected patterns.
