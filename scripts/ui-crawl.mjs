@@ -7,7 +7,7 @@ import WebSocket from 'ws';
 const chromePath = process.env.CHROME_PATH
   || 'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe';
 const remotePort = Number(process.env.CDP_PORT || 9223);
-const baseUrl = process.env.UI_URL || 'http://104.248.225.250:3000';
+const baseUrl = process.env.UI_URL || 'https://render.abcx124.xyz';
 const outDir = process.env.UI_CRAWL_OUT || 'C:\\tmp\\product-ui-crawl';
 
 if (!existsSync(chromePath)) {

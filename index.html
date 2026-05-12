@@ -4622,9 +4622,9 @@ a.cr-meta-pill.cr-drive-link:hover { opacity: 0.8; }
             </div>
           </div>
           <div class="dcm-steps">
-            <div class="dcm-step dcm-step-done"><span>1</span> Upload</div>
-            <div class="dcm-step dcm-step-done"><span>2</span> Extract</div>
-            <div class="dcm-step dcm-step-active"><span>3</span> Match</div>
+            <div class="dcm-step dcm-step-active"><span>1</span> Upload</div>
+            <div class="dcm-step"><span>2</span> Extract</div>
+            <div class="dcm-step"><span>3</span> Match</div>
             <div class="dcm-step"><span>4</span> Review</div>
             <div class="dcm-step"><span>5</span> Save Canvas</div>
           </div>
@@ -4637,19 +4637,19 @@ a.cr-meta-pill.cr-drive-link:hover { opacity: 0.8; }
         <section class="dcm-stats">
           <div class="dcm-stat-card">
             <div class="dcm-file-icon">📄</div>
-            <div><p>PDF Catalog</p><strong id="dcmPdfName">Dining Chairs Catalog.pdf</strong><small id="dcmPdfStats">127 products extracted</small></div>
+            <div><p>PDF Catalog</p><strong id="dcmPdfName">—</strong><small id="dcmPdfStats">No PDF uploaded</small></div>
           </div>
           <div class="dcm-stat-card">
             <div class="dcm-file-icon" style="color:#e5c07b;border-color:#e5c07b;">🗜️</div>
-            <div><p>ZIP Archive</p><strong id="dcmZipName">Dining_Chairs_Images.zip</strong><small id="dcmZipStats">248 images extracted</small></div>
+            <div><p>ZIP Archive</p><strong id="dcmZipName">—</strong><small id="dcmZipStats">No ZIP uploaded</small></div>
           </div>
-          <div class="dcm-number-stat"><p>Matched</p><strong class="dcm-num-good" id="dcmMatchedCount">96</strong><small id="dcmMatchedPct">75.6%</small></div>
-          <div class="dcm-number-stat"><p>Needs Review</p><strong class="dcm-num-warn" id="dcmReviewCount">31</strong><small id="dcmReviewPct">24.4%</small></div>
-          <div class="dcm-number-stat"><p>No Match</p><strong class="dcm-num-bad" id="dcmNoMatchCount">0</strong><small id="dcmNoMatchPct">0%</small></div>
+          <div class="dcm-number-stat"><p>Matched</p><strong class="dcm-num-good" id="dcmMatchedCount">0</strong><small id="dcmMatchedPct">—</small></div>
+          <div class="dcm-number-stat"><p>Needs Review</p><strong class="dcm-num-warn" id="dcmReviewCount">0</strong><small id="dcmReviewPct">—</small></div>
+          <div class="dcm-number-stat"><p>No Match</p><strong class="dcm-num-bad" id="dcmNoMatchCount">0</strong><small id="dcmNoMatchPct">—</small></div>
           <div class="dcm-progress-card">
             <p>Overall Progress</p>
-            <strong id="dcmProgressText">127 / 127 reviewed</strong>
-            <div class="dcm-progress"><span id="dcmProgressBar" style="width:100%"></span></div>
+            <strong id="dcmProgressText">0 / 0 reviewed</strong>
+            <div class="dcm-progress"><span id="dcmProgressBar" style="width:0%"></span></div>
           </div>
         </section>
 
@@ -4658,7 +4658,7 @@ a.cr-meta-pill.cr-drive-link:hover { opacity: 0.8; }
           <!-- Left: Product List -->
           <aside class="dcm-panel dcm-product-panel">
             <div class="dcm-panel-header">
-              <h2>PDF Products (<span id="dcmProductCount">127</span>)</h2>
+              <h2>PDF Products (<span id="dcmProductCount">0</span>)</h2>
               <div><button class="dcm-icon-btn" id="dcmFilterProductsBtn" title="Filter">🔍</button><button class="dcm-mini-btn">Filter</button></div>
             </div>
             <div class="dcm-search-box">
@@ -4669,13 +4669,7 @@ a.cr-meta-pill.cr-drive-link:hover { opacity: 0.8; }
               <!-- populated by JS -->
             </div>
             <div class="dcm-pagination" id="dcmProductPagination">
-              <button id="dcmPrevPage">◀</button>
-              <button class="dcm-active-page">1</button>
-              <button>2</button>
-              <button>3</button>
-              <span>...</span>
-              <button>13</button>
-              <button id="dcmNextPage">▶</button>
+              <!-- populated by JS -->
             </div>
           </aside>
 
@@ -4684,7 +4678,7 @@ a.cr-meta-pill.cr-drive-link:hover { opacity: 0.8; }
             <div class="dcm-panel-header">
               <h2>Match Review</h2>
               <div class="dcm-review-nav">
-                <span id="dcmReviewPosition">1 of 127</span>
+                <span id="dcmReviewPosition">—</span>
                 <button id="dcmPrevReview">◀</button>
                 <button id="dcmNextReview">▶</button>
               </div>
@@ -4714,7 +4708,7 @@ a.cr-meta-pill.cr-drive-link:hover { opacity: 0.8; }
           <!-- Right: ZIP Image Browser -->
           <aside class="dcm-panel dcm-image-panel">
             <div class="dcm-panel-header">
-              <h2>ZIP Image Browser (<span id="dcmImageCount">248</span>)</h2>
+              <h2>ZIP Image Browser (<span id="dcmImageCount">0</span>)</h2>
               <button class="dcm-icon-btn" id="dcmRefreshImages">↻</button>
             </div>
             <div class="dcm-search-box">
@@ -4723,9 +4717,9 @@ a.cr-meta-pill.cr-drive-link:hover { opacity: 0.8; }
               <button id="dcmImageFilterBtn">🔍</button>
             </div>
             <div class="dcm-tabs">
-              <button class="dcm-tab-active" data-filter="all">All (248)</button>
-              <button data-filter="unused">Unused (152)</button>
-              <button data-filter="matched">Matched (96)</button>
+              <button class="dcm-tab-active" data-filter="all">All (0)</button>
+              <button data-filter="unused">Unused (0)</button>
+              <button data-filter="matched">Matched (0)</button>
               <button data-filter="rejected">Rejected (0)</button>
             </div>
             <div class="dcm-image-grid" id="dcmImageGrid">
@@ -4735,7 +4729,7 @@ a.cr-meta-pill.cr-drive-link:hover { opacity: 0.8; }
               <span>View</span>
               <button class="dcm-active-view">▦</button>
               <button>☰</button>
-              <span id="dcmImageRange">Showing 1–12 of 248</span>
+              <span id="dcmImageRange">No images</span>
               <button id="dcmPrevImages">◀</button>
               <button id="dcmNextImages">▶</button>
             </div>
@@ -4762,7 +4756,7 @@ a.cr-meta-pill.cr-drive-link:hover { opacity: 0.8; }
           <button id="dcmExportBtn">⬇ Export Match Report</button>
           <button id="dcmViewLogsBtn">View Logs</button>
           <div class="dcm-spacer"></div>
-          <button class="dcm-warning" id="dcmReviewLowBtn">Review Low Confidence (31)</button>
+          <button class="dcm-warning" id="dcmReviewLowBtn">Review Low Confidence (0)</button>
           <button class="dcm-gold-outline" id="dcmSaveCanvasBtn">Save to Image Canvas</button>
           <button class="dcm-gold-fill" id="dcmSaveQueueBtn">Save & Add to Queue →</button>
         </footer>
@@ -4790,11 +4784,11 @@ a.cr-meta-pill.cr-drive-link:hover { opacity: 0.8; }
             <div style="display:flex;gap:12px;flex-wrap:wrap;">
               <div style="flex:1;min-width:180px;">
                 <label style="font-weight:600;font-size:13px;">Product Name</label>
-                <input type="text" name="productName" value="Dining Chair" style="padding:8px;border:1px solid var(--border);border-radius:6px;width:100%;" />
+                <input type="text" name="productName" placeholder="e.g. Dining Chair HC-001" style="padding:8px;border:1px solid var(--border);border-radius:6px;width:100%;" />
               </div>
               <div style="flex:1;min-width:180px;">
                 <label style="font-weight:600;font-size:13px;">Brand</label>
-                <input type="text" name="brand" value="Home Atelier" style="padding:8px;border:1px solid var(--border);border-radius:6px;width:100%;" />
+                <input type="text" name="brand" placeholder="e.g. Home Atelier" style="padding:8px;border:1px solid var(--border);border-radius:6px;width:100%;" />
               </div>
               <div style="flex:1;min-width:140px;">
                 <label style="font-weight:600;font-size:13px;">Mode</label>
@@ -13579,34 +13573,9 @@ function escapeHtml(str) {
 
 const DCM_CANVAS_KEY = 'dcm-canvas-records-v1';
 
-// ── Mock Data ──
-const dcmChairImages = [
-  'https://images.unsplash.com/photo-1598300042247-d088f8ab3a91?auto=format&fit=crop&w=500&q=80',
-  'https://images.unsplash.com/photo-1503602642458-232111445657?auto=format&fit=crop&w=500&q=80',
-  'https://images.unsplash.com/photo-1519947486511-46149fa0a254?auto=format&fit=crop&w=500&q=80',
-  'https://images.unsplash.com/photo-1541558869434-2840d308329a?auto=format&fit=crop&w=500&q=80',
-  'https://images.unsplash.com/photo-1561677978-583a8c7a4b43?auto=format&fit=crop&w=500&q=80'
-];
-
-const dcmProducts = [
-  { id:'p1', productCode:'HACH-005R', name:'Dining Chair', brand:'Minotti', category:'Dining Chair', description:'Upholstered dining chair with curved backrest, solid wood legs, and premium fabric.', image:dcmChairImages[0], matchScore:96, matchType:'Exact', status:'auto' },
-  { id:'p2', productCode:'HACH-008R', name:'Dining Chair', brand:'Minotti', category:'Dining Chair', description:'Modern dining chair with soft rounded shell and slim dark legs.', image:dcmChairImages[1], matchScore:72, matchType:'Code in Filename', status:'review' },
-  { id:'p3', productCode:'HACH-010R', name:'Dining Chair', brand:'Minotti', category:'Dining Chair', description:'Dining chair extracted from PDF but no confident source image has been detected.', image:dcmChairImages[2], matchScore:0, matchType:'No Match', status:'none' },
-  { id:'p4', productCode:'HACH-012R', name:'Dining Chair', brand:'Poliform', category:'Dining Chair', description:'Slim premium dining chair with upholstered seat and contemporary luxury silhouette.', image:dcmChairImages[3], matchScore:91, matchType:'Code in Filename', status:'auto' },
-  { id:'p5', productCode:'HACH-015R', name:'Dining Chair', brand:'B&B Italia', category:'Dining Chair', description:'Soft dining chair with warm beige upholstery and elegant residential proportions.', image:dcmChairImages[4], matchScore:64, matchType:'Token Overlap', status:'review' }
-];
-
-const dcmZipImages = [
-  { id:'z1', filename:'chair_hach-005_front.jpg', width:1200, height:1200, sizeKb:320, format:'JPG', image:dcmChairImages[0], usedBy:'HACH-005R' },
-  { id:'z2', filename:'chair_hach-005_side.jpg', width:1200, height:1200, sizeKb:295, format:'JPG', image:dcmChairImages[1], usedBy:'HACH-005R' },
-  { id:'z3', filename:'chair_hach-005_back.jpg', width:1200, height:1200, sizeKb:310, format:'JPG', image:dcmChairImages[2], usedBy:'HACH-005R' },
-  { id:'z4', filename:'chair_hach-007_front.jpg', width:1200, height:1200, sizeKb:338, format:'JPG', image:dcmChairImages[3] },
-  { id:'z5', filename:'chair_hach-008_front.jpg', width:1200, height:1200, sizeKb:347, format:'JPG', image:dcmChairImages[4] },
-  { id:'z6', filename:'chair_hach-009_front.jpg', width:1200, height:1200, sizeKb:301, format:'JPG', image:dcmChairImages[1] },
-  { id:'z7', filename:'chair_hach-010_front.jpg', width:1200, height:1200, sizeKb:289, format:'JPG', image:dcmChairImages[2] },
-  { id:'z8', filename:'chair_hach-011_front.jpg', width:1200, height:1200, sizeKb:315, format:'JPG', image:dcmChairImages[0] },
-  { id:'z9', filename:'chair_hach-012_front.jpg', width:1200, height:1200, sizeKb:326, format:'JPG', image:dcmChairImages[3] }
-];
+// ── Data (populated after PDF+ZIP upload) ──
+const dcmProducts = [];
+const dcmZipImages = [];
 
 // ── Canvas Store ──
 function dcmLoadCanvasRecords() {
@@ -13666,8 +13635,8 @@ function dcmBuildCanvasRecord(product, image, existing) {
     matchScore: product.matchScore,
     matchType: product.matchType,
     sourceBatch: 'dining-chair-matching-ui',
-    sourcePdf: 'Dining Chairs Catalog.pdf',
-    sourceZip: 'Dining_Chairs_Images.zip',
+    sourcePdf: dcmState.sourcePdf || '',
+    sourceZip: dcmState.sourceZip || '',
     duplicateNotices: notices,
     savedAt: now,
     updatedAt: now,
@@ -13690,10 +13659,10 @@ function dcmFormatTime(value) {
 
 // ── State ──
 let dcmState = {
-  products: JSON.parse(JSON.stringify(dcmProducts)),
-  zipImages: JSON.parse(JSON.stringify(dcmZipImages)),
-  selectedProductId: 'p1',
-  selectedImageId: 'z1',
+  products: [],
+  zipImages: [],
+  selectedProductId: null,
+  selectedImageId: null,
   imageFilter: 'all',
   query: '',
   canvasRecords: dcmLoadCanvasRecords(),
@@ -13701,11 +13670,19 @@ let dcmState = {
   productPage: 0,
   imagePage: 0,
   productsPerPage: 10,
-  imagesPerPage: 12
+  imagesPerPage: 12,
+  sourcePdf: '',
+  sourceZip: ''
 };
 
-function dcmGetSelectedProduct() { return dcmState.products.find(p => p.id === dcmState.selectedProductId) || dcmState.products[0]; }
-function dcmGetSelectedImage() { return dcmState.zipImages.find(img => img.id === dcmState.selectedImageId) || dcmState.zipImages[0]; }
+function dcmGetSelectedProduct() {
+  if (!dcmState.selectedProductId) return null;
+  return dcmState.products.find(p => p.id === dcmState.selectedProductId) || null;
+}
+function dcmGetSelectedImage() {
+  if (!dcmState.selectedImageId) return null;
+  return dcmState.zipImages.find(img => img.id === dcmState.selectedImageId) || null;
+}
 
 function dcmStatusLabel(status) {
   const map = { auto:'Auto Matched', review:'Needs Review', none:'No Match', accepted:'Accepted', rejected:'Rejected' };
@@ -13729,8 +13706,8 @@ function dcmRenderStats() {
   document.getElementById('dcmReviewPct').textContent = total ? `${(review/total*100).toFixed(1)}%` : '0%';
   document.getElementById('dcmNoMatchCount').textContent = noMatch;
   document.getElementById('dcmNoMatchPct').textContent = total ? `${(noMatch/total*100).toFixed(1)}%` : '0%';
-  document.getElementById('dcmProgressText').textContent = `${total} / ${total} reviewed`;
-  document.getElementById('dcmProgressBar').style.width = '100%';
+  document.getElementById('dcmProgressText').textContent = total ? `${total} / ${total} reviewed` : '0 / 0 reviewed';
+  document.getElementById('dcmProgressBar').style.width = total ? '100%' : '0%';
 }
 
 function dcmRenderProductList() {
@@ -13738,6 +13715,14 @@ function dcmRenderProductList() {
   const products = dcmState.products;
   const page = dcmState.productPage;
   const perPage = dcmState.productsPerPage;
+
+  if (products.length === 0) {
+    list.innerHTML = '<div style="padding:24px;text-align:center;color:var(--text-secondary);">No products yet. Upload a PDF catalog to begin.</div>';
+    document.getElementById('dcmProductPagination').innerHTML = '';
+    document.getElementById('dcmProductCount').textContent = 0;
+    return;
+  }
+
   const start = page * perPage;
   const end = start + perPage;
   const pageItems = products.slice(start, end);
@@ -13791,6 +13776,14 @@ function dcmRenderReview() {
   const product = dcmGetSelectedProduct();
   const image = dcmGetSelectedImage();
   const total = dcmState.products.length;
+
+  if (!product || !image) {
+    document.getElementById('dcmReviewPosition').textContent = '—';
+    document.getElementById('dcmProductDetail').innerHTML = '<div style="padding:24px;text-align:center;color:var(--text-secondary);">Upload PDF and ZIP to see product details</div>';
+    document.getElementById('dcmImageMatchCard').innerHTML = '<div style="padding:24px;text-align:center;color:var(--text-secondary);">Upload PDF and ZIP to see image matches</div>';
+    return;
+  }
+
   const idx = dcmState.products.findIndex(p => p.id === product.id);
   document.getElementById('dcmReviewPosition').textContent = `${idx + 1} of ${total}`;
 
@@ -13830,6 +13823,19 @@ function dcmRenderReview() {
 function dcmRenderImageGrid() {
   const grid = document.getElementById('dcmImageGrid');
   const images = dcmState.zipImages;
+
+  if (images.length === 0) {
+    grid.innerHTML = '<div style="padding:24px;text-align:center;color:var(--text-secondary);">No images yet. Upload a ZIP archive to begin.</div>';
+    document.getElementById('dcmImageCount').textContent = 0;
+    document.getElementById('dcmImageRange').textContent = 'No images';
+    const tabs = document.querySelectorAll('.dcm-tabs button');
+    if (tabs[0]) tabs[0].textContent = 'All (0)';
+    if (tabs[1]) tabs[1].textContent = 'Unused (0)';
+    if (tabs[2]) tabs[2].textContent = 'Matched (0)';
+    if (tabs[3]) tabs[3].textContent = 'Rejected (0)';
+    return;
+  }
+
   const filter = dcmState.imageFilter;
   const query = dcmState.query.toLowerCase();
   const page = dcmState.imagePage;
@@ -13923,6 +13929,7 @@ function dcmRenderAll() {
 // ── Actions ──
 function dcmUpdateStatus(status) {
   const product = dcmGetSelectedProduct();
+  if (!product) return;
   dcmState.products = dcmState.products.map(p => p.id === product.id ? { ...p, status } : p);
   const next = dcmState.products.find(p => p.id !== product.id && (p.status === 'review' || p.status === 'none'));
   if (next) dcmState.selectedProductId = next.id;
@@ -13932,6 +13939,7 @@ function dcmUpdateStatus(status) {
 function dcmSaveToCanvas(addToQueue = false) {
   const product = dcmGetSelectedProduct();
   const image = dcmGetSelectedImage();
+  if (!product || !image) return;
   const { record, records } = dcmSaveCanvasRecord(product, image);
   dcmState.canvasRecords = records;
   dcmState.canvasNotice = record.duplicateNotices && record.duplicateNotices.length
@@ -13992,11 +14000,13 @@ function initDiningChairMatch() {
   // Skip
   document.getElementById('dcmSkipBtn')?.addEventListener('click', () => {
     const product = dcmGetSelectedProduct();
+    if (!product || dcmState.products.length === 0) return;
     const next = dcmState.products.find(p => p.id !== product.id);
     if (next) { dcmState.selectedProductId = next.id; dcmRenderAll(); }
   });
   // Pick Different - just cycle to next image
   document.getElementById('dcmPickDifferentBtn')?.addEventListener('click', () => {
+    if (dcmState.zipImages.length === 0) return;
     const currentIdx = dcmState.zipImages.findIndex(img => img.id === dcmState.selectedImageId);
     const nextIdx = (currentIdx + 1) % dcmState.zipImages.length;
     dcmState.selectedImageId = dcmState.zipImages[nextIdx].id;
