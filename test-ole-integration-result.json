@@ -1,0 +1,378 @@
+{
+  "imageCount": 53,
+  "uuidMapSize": 53,
+  "success": true,
+  "images": [
+    {
+      "name": "media/image1.png",
+      "size": 103530,
+      "uuid": "ID_059ECC2786744341B7F824B45C334F0D",
+      "mimeType": "image/png",
+      "hasDataUrl": true
+    },
+    {
+      "name": "media/image2.png",
+      "size": 417683,
+      "uuid": "ID_6196DDCAA1DC4B918D75AC64999948A3",
+      "mimeType": "image/png",
+      "hasDataUrl": true
+    },
+    {
+      "name": "media/image3.jpeg",
+      "size": 584776,
+      "uuid": "ID_A4788EC807314E32B18BBBB82BEC6098",
+      "mimeType": "image/jpeg",
+      "hasDataUrl": true
+    },
+    {
+      "name": "media/image4.png",
+      "size": 294610,
+      "uuid": "ID_6449C468ECF744A69AFCF170FDF33C51",
+      "mimeType": "image/png",
+      "hasDataUrl": true
+    },
+    {
+      "name": "media/image5.jpeg",
+      "size": 709282,
+      "uuid": "ID_3F09DF47136F4812B4E2E22D7EF98344",
+      "mimeType": "image/jpeg",
+      "hasDataUrl": true
+    },
+    {
+      "name": "media/image6.png",
+      "size": 316888,
+      "uuid": "ID_108DAC8CA0D14AE7A3B4AF4F04818CC3",
+      "mimeType": "image/png",
+      "hasDataUrl": true
+    },
+    {
+      "name": "media/image7.png",
+      "size": 163373,
+      "uuid": "ID_BEEECFF1CD354CEABE038DFD778FDD0A",
+      "mimeType": "image/png",
+      "hasDataUrl": true
+    },
+    {
+      "name": "media/image8.png",
+      "size": 407630,
+      "uuid": "ID_7450574C36DF4275B7EB8F606A7B1D3F",
+      "mimeType": "image/png",
+      "hasDataUrl": true
+    },
+    {
+      "name": "media/image9.png",
+      "size": 207855,
+      "uuid": "ID_1C064938E3D949A2AA3C32E9087A6955",
+      "mimeType": "image/png",
+      "hasDataUrl": true
+    },
+    {
+      "name": "media/image10.png",
+      "size": 153632,
+      "uuid": "ID_F1EAE97D910F4CC8A43D3F22AF7E1115",
+      "mimeType": "image/png",
+      "hasDataUrl": true
+    },
+    {
+      "name": "media/image11.jpeg",
+      "size": 16688,
+      "uuid": "ID_CD3BAAAD858149E685BB1F5CB492AE5E",
+      "mimeType": "image/jpeg",
+      "hasDataUrl": true
+    },
+    {
+      "name": "media/image12.png",
+      "size": 75128,
+      "uuid": "ID_FB47AFEAC6A348AAA9C0C690462461EA",
+      "mimeType": "image/png",
+      "hasDataUrl": true
+    },
+    {
+      "name": "media/image13.png",
+      "size": 399922,
+      "uuid": "ID_858A79D38DA84B21A11EF16686B1CD1D",
+      "mimeType": "image/png",
+      "hasDataUrl": true
+    },
+    {
+      "name": "media/image14.png",
+      "size": 235635,
+      "uuid": "ID_DD6AC679EBF64DEFB3F930723404779F",
+      "mimeType": "image/png",
+      "hasDataUrl": true
+    },
+    {
+      "name": "media/image15.png",
+      "size": 151250,
+      "uuid": "ID_DF659FAC263542C8B01A6BFB6D80A0E2",
+      "mimeType": "image/png",
+      "hasDataUrl": true
+    },
+    {
+      "name": "media/image16.png",
+      "size": 305307,
+      "uuid": "ID_FFDDC0BD49D749EBA1245DB3128817F9",
+      "mimeType": "image/png",
+      "hasDataUrl": true
+    },
+    {
+      "name": "media/image17.png",
+      "size": 626629,
+      "uuid": "ID_EB534A97336048A2902E07C1541402AE",
+      "mimeType": "image/png",
+      "hasDataUrl": true
+    },
+    {
+      "name": "media/image18.png",
+      "size": 425465,
+      "uuid": "ID_FD6948DAFE7843FC8F21968B8029ACB1",
+      "mimeType": "image/png",
+      "hasDataUrl": true
+    },
+    {
+      "name": "media/image19.jpeg",
+      "size": 50866,
+      "uuid": "ID_DFF2CDE231A64CA3A4311A0CAE158053",
+      "mimeType": "image/jpeg",
+      "hasDataUrl": true
+    },
+    {
+      "name": "media/image20.png",
+      "size": 161166,
+      "uuid": "ID_13FF5AC9589A477DAF7F9A46BC0F0CC3",
+      "mimeType": "image/png",
+      "hasDataUrl": true
+    },
+    {
+      "name": "media/image21.png",
+      "size": 138237,
+      "uuid": "ID_B1F80D47C2334FD7BFA72662C89ECDF8",
+      "mimeType": "image/png",
+      "hasDataUrl": true
+    },
+    {
+      "name": "media/image22.png",
+      "size": 169845,
+      "uuid": "ID_A65472E4A3A3429AA24137151AB89699",
+      "mimeType": "image/png",
+      "hasDataUrl": true
+    },
+    {
+      "name": "media/image23.png",
+      "size": 512510,
+      "uuid": "ID_C3EC9814405343FBB83C6A9F129680B0",
+      "mimeType": "image/png",
+      "hasDataUrl": true
+    },
+    {
+      "name": "media/image24.png",
+      "size": 204623,
+      "uuid": "ID_E2412017C789404A8C70E1E5175130B4",
+      "mimeType": "image/png",
+      "hasDataUrl": true
+    },
+    {
+      "name": "media/image25.png",
+      "size": 356094,
+      "uuid": "ID_F2898669F332454C835BD40596BB413E",
+      "mimeType": "image/png",
+      "hasDataUrl": true
+    },
+    {
+      "name": "media/image26.png",
+      "size": 71896,
+      "uuid": "ID_2D0B827DBC5544C69C91F9F8B666A916",
+      "mimeType": "image/png",
+      "hasDataUrl": true
+    },
+    {
+      "name": "media/image27.jpeg",
+      "size": 232779,
+      "uuid": "ID_61E0CC015D5840EFAB4135A3C5C90EEB",
+      "mimeType": "image/jpeg",
+      "hasDataUrl": true
+    },
+    {
+      "name": "media/image28.png",
+      "size": 123939,
+      "uuid": "ID_095865F6136743E58E270A2345352F3E",
+      "mimeType": "image/png",
+      "hasDataUrl": true
+    },
+    {
+      "name": "media/image29.png",
+      "size": 325082,
+      "uuid": "ID_A2FE8F0F5258446FA90B19BF613489E4",
+      "mimeType": "image/png",
+      "hasDataUrl": true
+    },
+    {
+      "name": "media/image30.png",
+      "size": 272863,
+      "uuid": "ID_7021B479055D492F80BB680C400C0BC4",
+      "mimeType": "image/png",
+      "hasDataUrl": true
+    },
+    {
+      "name": "media/image31.png",
+      "size": 163243,
+      "uuid": "ID_CC3E42FFFB4848E78CAF174C844E1305",
+      "mimeType": "image/png",
+      "hasDataUrl": true
+    },
+    {
+      "name": "media/image32.png",
+      "size": 307699,
+      "uuid": "ID_E68FF63DDE6449E8A156ECA8375CDBB0",
+      "mimeType": "image/png",
+      "hasDataUrl": true
+    },
+    {
+      "name": "media/image33.png",
+      "size": 451094,
+      "uuid": "ID_030EB4B698B5412FBC585D9A67817797",
+      "mimeType": "image/png",
+      "hasDataUrl": true
+    },
+    {
+      "name": "media/image34.png",
+      "size": 257501,
+      "uuid": "ID_8121B3E863DE490CAB78C1D093EFAF4E",
+      "mimeType": "image/png",
+      "hasDataUrl": true
+    },
+    {
+      "name": "media/image35.png",
+      "size": 62402,
+      "uuid": "ID_F6834A48F5BE430BBABFDBD3D43C6A6F",
+      "mimeType": "image/png",
+      "hasDataUrl": true
+    },
+    {
+      "name": "media/image36.jpeg",
+      "size": 18796,
+      "uuid": "ID_E66F059AA5A44BFD964137AD69FBCE35",
+      "mimeType": "image/jpeg",
+      "hasDataUrl": true
+    },
+    {
+      "name": "media/image37.png",
+      "size": 191886,
+      "uuid": "ID_CB493B245FF8414F915B97B0F52012D7",
+      "mimeType": "image/png",
+      "hasDataUrl": true
+    },
+    {
+      "name": "media/image38.png",
+      "size": 825518,
+      "uuid": "ID_1B916B6820F843B69DFD78E3911096F3",
+      "mimeType": "image/png",
+      "hasDataUrl": true
+    },
+    {
+      "name": "media/image39.png",
+      "size": 357298,
+      "uuid": "ID_545EBD1848F34093BE15A0D2CDE46E35",
+      "mimeType": "image/png",
+      "hasDataUrl": true
+    },
+    {
+      "name": "media/image40.png",
+      "size": 93432,
+      "uuid": "ID_4D833A05921E4F84A0A9DC23379AF3DA",
+      "mimeType": "image/png",
+      "hasDataUrl": true
+    },
+    {
+      "name": "media/image41.png",
+      "size": 46380,
+      "uuid": "ID_1D3A1CAF18BF44E88A61CD1AAEE64A50",
+      "mimeType": "image/png",
+      "hasDataUrl": true
+    },
+    {
+      "name": "media/image42.png",
+      "size": 111594,
+      "uuid": "ID_6A52D18E90BF42B990CD81539D23721E",
+      "mimeType": "image/png",
+      "hasDataUrl": true
+    },
+    {
+      "name": "media/image43.png",
+      "size": 113588,
+      "uuid": "ID_02BC7461C8804C038DBC77B352E2BE0D",
+      "mimeType": "image/png",
+      "hasDataUrl": true
+    },
+    {
+      "name": "media/image44.png",
+      "size": 199839,
+      "uuid": "ID_55B089C4AB544BDFA99147D337E6DAE3",
+      "mimeType": "image/png",
+      "hasDataUrl": true
+    },
+    {
+      "name": "media/image45.png",
+      "size": 164061,
+      "uuid": "ID_02F7A6380378476DA9C63727520CF187",
+      "mimeType": "image/png",
+      "hasDataUrl": true
+    },
+    {
+      "name": "media/image46.png",
+      "size": 142548,
+      "uuid": "ID_32D56A1BEA4848C68DCF61E1A2848F1C",
+      "mimeType": "image/png",
+      "hasDataUrl": true
+    },
+    {
+      "name": "media/image47.png",
+      "size": 293259,
+      "uuid": "ID_08683B2CBD574048A45D947AAAA9A4F3",
+      "mimeType": "image/png",
+      "hasDataUrl": true
+    },
+    {
+      "name": "media/image48.jpeg",
+      "size": 39925,
+      "uuid": "ID_020EFA9CCFD04C19A1482A4828AD4B46",
+      "mimeType": "image/jpeg",
+      "hasDataUrl": true
+    },
+    {
+      "name": "media/image49.jpeg",
+      "size": 257330,
+      "uuid": "ID_A627C6E517A444408E81A33F779BBC3E",
+      "mimeType": "image/jpeg",
+      "hasDataUrl": true
+    },
+    {
+      "name": "media/image50.jpeg",
+      "size": 264570,
+      "uuid": "ID_BF59156497414228BE9F1CA8C34EDBCD",
+      "mimeType": "image/jpeg",
+      "hasDataUrl": true
+    },
+    {
+      "name": "media/image51.png",
+      "size": 146509,
+      "uuid": "ID_3E73B622681148B6BA892702BF821BEA",
+      "mimeType": "image/png",
+      "hasDataUrl": true
+    },
+    {
+      "name": "media/image52.png",
+      "size": 305146,
+      "uuid": "ID_8EF2F8DF9DC84764A418E53B4A03D35E",
+      "mimeType": "image/png",
+      "hasDataUrl": true
+    },
+    {
+      "name": "media/image53.png",
+      "size": 230246,
+      "uuid": "ID_3F80F06606D342A89928FE33A5127BC7",
+      "mimeType": "image/png",
+      "hasDataUrl": true
+    }
+  ]
+}

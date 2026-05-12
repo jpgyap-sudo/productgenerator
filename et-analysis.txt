@@ -1,0 +1,6 @@
+Size: 14642688
+First 16 hex: d0cf11e0a1b11ae10000000000000000
+OLE2: true
+ZIP: false
+JPEG: 13
+PNG: 48
