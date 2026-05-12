@@ -1246,7 +1246,7 @@ function sleep(ms) {
 //  Start Server
 // ═══════════════════════════════════════════════════════════════════
 
-app.listen(PORT, '0.0.0.0', () => {
+const server = app.listen(PORT, '0.0.0.0', () => {
   console.log(`[SERVER] Product Image Studio running on port ${PORT}`);
   console.log(`[SERVER] Environment: SUPABASE_URL=${process.env.SUPABASE_URL ? '✓ set' : '✗ missing'}`);
   console.log(`[SERVER] Environment: SUPABASE_SERVICE_ROLE_KEY=${process.env.SUPABASE_SERVICE_ROLE_KEY ? '✓ set' : '✗ missing'}`);
@@ -1269,3 +1269,9 @@ app.listen(PORT, '0.0.0.0', () => {
   });
   console.log('[SERVER] Upload gallery cleanup scheduled (every 60 min)');
 });
+
+// ── Increase server timeout for long-running requests ──────────────
+// The .et extraction + AI verification can take 5+ minutes.
+// Default Node.js server timeout is 0 (no timeout), but Express
+// middleware or reverse proxies may have lower timeouts.
+server.timeout = 600000; // 10 minutes

@@ -23,6 +23,17 @@ render.abcx124.xyz {
         reverse_proxy localhost:3002
     }
 
+    # ── Long-running API routes (et extraction + AI verification) ─
+    #     .et extraction can take 5+ minutes, need longer timeouts
+    route /api/agent/process* {
+        reverse_proxy localhost:3002 {
+            transport http {
+                read_timeout 10m
+                write_timeout 10m
+            }
+        }
+    }
+
     header {
         X-Content-Type-Options "nosniff"
         X-Frame-Options "SAMEORIGIN"
