@@ -160,8 +160,7 @@ app.post('/api/queue/save-state', async (req, res) => {
 // ── Uploading Agent Routes ──
 app.post('/api/agent/process', async (req, res) => {
   try {
-    const result = await agentProcessHandler(req, res);
-    if (!res.headersSent) res.json(result);
+    await agentProcessHandler(req, res);
   } catch (err) {
     console.error('[AGENT-PROCESS] Error:', err);
     if (!res.headersSent) res.status(500).json({ error: err.message });
