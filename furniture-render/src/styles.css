@@ -2883,6 +2883,30 @@ html, body {
   transform: translateY(-1px);
 }
 
+/* ── Continue Button ────────────────────────────────────────────── */
+.vm-continue-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border: 1px solid #3b82f6;
+  background: rgba(59, 130, 246, 0.08);
+  color: #60a5fa;
+  border-radius: 6px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  transition: background 0.2s, transform 0.15s;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.vm-continue-btn:hover {
+  background: rgba(59, 130, 246, 0.18);
+  transform: translateY(-1px);
+}
+
 /* ── Responsive ─────────────────────────────────────────────────── */
 @media (max-width: 800px) {
   .vm-upload-section {

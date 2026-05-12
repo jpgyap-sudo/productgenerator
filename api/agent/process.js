@@ -40,6 +40,13 @@ import { runBatchPipeline, createBatchJob, autoResumePausedBatches } from '../..
 // The UI polls GET /api/agent/et-progress/:batchId to show a progress bar.
 export const etProgressStore = new Map();
 
+// ── ET extraction pause store ───────────────────────────────────────
+// Global Map<batchId, { paused: boolean }> for pause/resume support.
+// The UI calls POST /api/agent/et-pause/:batchId to toggle pause.
+// Imported from et-image-extractor for the server endpoint.
+import { etPauseStore } from '../../lib/et-image-extractor.js';
+export { etPauseStore };
+
 // Multer config — store files in memory
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -228,6 +235,7 @@ export default async function handler(req, res) {
 
         try {
           const etImageResult = await extractETImagesAndData(pdfFile.buffer, {
+            batchId: etBatchId, // For pause/resume support
             onProgress: (progress) => {
               // Update the global progress store so the UI can poll it
               etProgressStore.set(etBatchId, {
@@ -349,12 +357,13 @@ export default async function handler(req, res) {
         // retry with exponential backoff, and pause/resume via file-based state.
         const resumeDir = path.join(os.tmpdir(), `et-ai-resume-${Date.now()}`);
         try {
+          const aiBatchId = zipResult.batchId || `et_${Date.now()}`;
           const verifiedProducts = await verifyEtMatchesWithAI(rawProducts, zipResult.images, {
             resumeDir, // Enable pause/resume via file-based state
+            batchId: aiBatchId, // For pause/resume support
             onProgress: (progress) => {
               // Update the progress store so the UI can show AI verification progress
-              const batchId = zipResult.batchId || `et_${Date.now()}`;
-              etProgressStore.set(batchId, {
+              etProgressStore.set(aiBatchId, {
                 percent: progress.percent,
                 stage: progress.stage,
                 detail: progress.detail || ''

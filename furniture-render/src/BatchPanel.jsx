@@ -413,7 +413,7 @@ function BatchProgressBar({ batchId, status, setStatus, setProgressMsg, addToast
 // ── ET Extraction Progress Bar ────────────────────────────────────
 // Polls /api/agent/et-progress/:batchId during .et file extraction
 // to show a real-time progress bar with stage labels.
-function EtProgressBar({ batchId, status, setStatus, setProgressMsg, addToast, etProgress, setEtProgress }) {
+function EtProgressBar({ batchId, status, setStatus, setProgressMsg, addToast, etProgress, setEtProgress, setEtPaused }) {
   const POLL_INTERVAL = 1000; // 1 second
 
   useEffect(() => {
@@ -431,6 +431,11 @@ function EtProgressBar({ batchId, status, setStatus, setProgressMsg, addToast, e
 
         if (data.exists) {
           setEtProgress({ percent: data.percent, stage: data.stage, detail: data.detail });
+
+          // Detect paused state from server
+          if (data.stage && data.stage.includes('Paused')) {
+            if (typeof setEtPaused === 'function') setEtPaused(true);
+          }
 
           // Map stage to user-friendly label
           const stageLabel = ET_EXTRACT_LABELS[data.stage] || data.stage;
@@ -455,7 +460,7 @@ function EtProgressBar({ batchId, status, setStatus, setProgressMsg, addToast, e
       cancelled = true;
       clearInterval(timer);
     };
-  }, [batchId, status, setStatus, setProgressMsg, addToast, setEtProgress]);
+  }, [batchId, status, setStatus, setProgressMsg, addToast, setEtProgress, setEtPaused]);
 
   return null; // Renders nothing — just drives polling
 }
@@ -475,6 +480,7 @@ export default function BatchPanel({ addToast }) {
   const [isPdfOnlyMode, setIsPdfOnlyMode] = useState(false);
   const [pdfOnlyPaused, setPdfOnlyPaused] = useState(false);
   const [etProgress, setEtProgress] = useState({ percent: 0, stage: '', detail: '' });
+  const [etPaused, setEtPaused] = useState(false);
   const pdfOnlyAbortRef = useRef(null);
 
   // ── Handle PDF/WPS upload ──────────────────────────────────────
@@ -872,6 +878,39 @@ export default function BatchPanel({ addToast }) {
     handlePdfOnlyMatching(products, images);
   }, [products, images, handlePdfOnlyMatching]);
 
+  // ── ET extraction: Pause ─────────────────────────────────────────
+  const handleEtPause = useCallback(async () => {
+    if (!batchId) return;
+    try {
+      await fetch(`${API_BASE}/api/agent/et-pause/${batchId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ paused: true })
+      });
+      setEtPaused(true);
+      setProgressMsg('Extraction paused. Click Continue to resume.');
+      addToast('.et extraction paused', 'info');
+    } catch (err) {
+      console.warn('[EtPause] Failed to pause:', err.message);
+    }
+  }, [batchId, addToast]);
+
+  // ── ET extraction: Continue (resume) ─────────────────────────────
+  const handleEtContinue = useCallback(async () => {
+    if (!batchId) return;
+    try {
+      await fetch(`${API_BASE}/api/agent/et-pause/${batchId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ paused: false })
+      });
+      setEtPaused(false);
+      addToast('.et extraction resumed', 'success');
+    } catch (err) {
+      console.warn('[EtPause] Failed to resume:', err.message);
+    }
+  }, [batchId, addToast]);
+
   // ── Run vision matching (PDF+ZIP mode) ──────────────────────────
   const handleRunMatching = useCallback(async () => {
     if (products.length === 0 || images.length === 0) {
@@ -1013,6 +1052,7 @@ export default function BatchPanel({ addToast }) {
     setBatchId(null);
     setIsPdfOnlyMode(false);
     setPdfOnlyPaused(false);
+    setEtPaused(false);
   }, []);
 
   // ── Determine if matching can run ───────────────────────────────
@@ -1133,6 +1173,7 @@ export default function BatchPanel({ addToast }) {
         addToast={addToast}
         etProgress={etProgress}
         setEtProgress={setEtProgress}
+        setEtPaused={setEtPaused}
       />
 
       {/* ── Progress / Error ────────────────────────────────────── */}
@@ -1155,6 +1196,24 @@ export default function BatchPanel({ addToast }) {
                 <span className="vm-et-progress-pct">{etProgress.percent || 0}%</span>
               </div>
               <span className="vm-et-progress-msg">{progressMsg}</span>
+              {/* Pause/Continue buttons for .et extraction */}
+              {!etPaused ? (
+                <button
+                  className="vm-pause-btn"
+                  onClick={handleEtPause}
+                  title="Pause extraction"
+                >
+                  <X size={14} /> Pause
+                </button>
+              ) : (
+                <button
+                  className="vm-continue-btn"
+                  onClick={handleEtContinue}
+                  title="Continue extraction"
+                >
+                  <RefreshCw size={14} /> Continue
+                </button>
+              )}
             </>
           ) : (
             <>
@@ -1172,6 +1231,26 @@ export default function BatchPanel({ addToast }) {
               <X size={14} /> Pause
             </button>
           )}
+        </div>
+      )}
+
+      {/* ── ET extraction paused state ────────────────────────────── */}
+      {etPaused && status === STATUS.ET_EXTRACTING && (
+        <div className="vm-pdf-only-prompt" style={{ marginTop: 12 }}>
+          <div className="vm-pdf-only-info">
+            <Info size={16} />
+            <span>Extraction paused at {etProgress.percent || 0}%. Click Continue to resume.</span>
+          </div>
+          <div className="vm-pdf-only-actions">
+            <button className="vm-pdf-only-btn" onClick={handleEtContinue}>
+              <RefreshCw size={14} /> Continue Extraction
+              <small>Resume from where it paused</small>
+            </button>
+            <span className="vm-pdf-only-or">or</span>
+            <button className="vm-reset-btn" onClick={handleReset} style={{ border: '1px solid #4a5260', padding: '8px 16px', borderRadius: 8, background: 'transparent', color: '#8e96a3', cursor: 'pointer', fontFamily: 'inherit', fontSize: 13 }}>
+              Cancel & Reset
+            </button>
+          </div>
         </div>
       )}
 

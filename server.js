@@ -38,7 +38,7 @@ import completedHandler from './api/queue/completed.js';
 import downloadZipHandler from './api/queue/download-zip.js';
 import uploadDriveHandler from './api/queue/upload-drive.js';
 import saveStateHandler from './api/queue/save-state.js';
-import agentProcessHandler, { etProgressStore } from './api/agent/process.js';
+import agentProcessHandler, { etProgressStore, etPauseStore } from './api/agent/process.js';
 import agentMatchHandler from './api/agent/match.js';
 import agentMatchVisionHandler from './api/agent/match-vision.js';
 import agentSubmitHandler from './api/agent/submit.js';
@@ -177,6 +177,31 @@ app.get('/api/agent/et-progress/:batchId', (req, res) => {
   }
   const progress = etProgressStore.get(batchId);
   res.json({ ...progress, exists: true });
+});
+
+// ET extraction pause/continue endpoint
+// The UI calls POST /api/agent/et-pause/:batchId to toggle pause.
+// The extraction process checks etPauseStore between batches/steps.
+app.post('/api/agent/et-pause/:batchId', (req, res) => {
+  const { batchId } = req.params;
+  const { paused } = req.body || {};
+
+  if (paused === true) {
+    // Pause the extraction
+    etPauseStore.set(batchId, { paused: true });
+    console.log(`[ET-PAUSE] Paused extraction for batch: ${batchId}`);
+    return res.json({ paused: true, batchId });
+  } else if (paused === false) {
+    // Resume the extraction
+    etPauseStore.set(batchId, { paused: false });
+    console.log(`[ET-PAUSE] Resumed extraction for batch: ${batchId}`);
+    return res.json({ paused: false, batchId });
+  } else {
+    // Toggle: return current state
+    const current = etPauseStore.get(batchId);
+    const isPaused = current?.paused === true;
+    return res.json({ paused: isPaused, batchId });
+  }
 });
 
 app.post('/api/agent/match', async (req, res) => {
