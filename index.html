@@ -2493,6 +2493,55 @@ textarea:focus { outline: none; border-color: var(--text-secondary); }
   font-weight: 700;
 }
 
+/* ── MI Card Select (checkbox on cards) ──────────────────────── */
+.mi-card-select {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  border: 2px solid rgba(255,255,255,0.8);
+  background: rgba(0,0,0,0.35);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2;
+  transition: all 0.15s ease;
+  opacity: 0;
+}
+.mi-card:hover .mi-card-select,
+.mi-card.selected .mi-card-select {
+  opacity: 1;
+}
+.mi-card-select input[type="checkbox"] {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+.mi-checkmark {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  font-size: 12px;
+  font-weight: 700;
+  color: transparent;
+  transition: all 0.15s ease;
+}
+.mi-card.selected .mi-checkmark {
+  color: #fff;
+}
+.mi-card.selected .mi-card-select {
+  background: var(--accent);
+  border-color: var(--accent);
+  opacity: 1;
+}
+
 /* ── MI Edit Mode ────────────────────────────────────────────── */
 .mi-edit-field {
   width: 100%;
@@ -8261,7 +8310,7 @@ document.querySelectorAll('.cr-nav-item').forEach(btn => {
 
       card.innerHTML = `
         <div class="mi-card-img-wrap">
-          <img src="${escapeHtml(displayUrl)}" alt="${escapeHtml(img.product_name)}" onerror="this.style.display='none'" loading="lazy"/>
+          <img class="mi-card-img" src="${escapeHtml(displayUrl)}" alt="${escapeHtml(img.product_name)}" onerror="this.style.display='none'" loading="lazy"/>
           ${statusBadge}
           <label class="mi-card-select" onclick="event.stopPropagation(); toggleMiSelect(${img.id})">
             <input type="checkbox" ${isSelected ? 'checked' : ''} />
