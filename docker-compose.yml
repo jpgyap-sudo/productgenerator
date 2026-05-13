@@ -46,9 +46,11 @@ services:
     # ── Volumes ──────────────────────────────────────────────────
     # Persist logs outside the container
     # Mount .env directly so changes take effect on container restart
+    # Mount vps-assets so nginx on the host can serve rendered images
     volumes:
       - ./logs:/app/logs
       - ./.env:/app/.env:ro
+      - ./vps-assets:/app/vps-assets
 
     # ── Health Check ─────────────────────────────────────────────
     # Uses PORT from .env (currently 3002). The health check reads the env

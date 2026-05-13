@@ -1,0 +1,1 @@
+const {createClient} = require("@supabase/supabase-js"); const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY); supabase.from("batch_jobs").select("all_images").limit(1).then(r = console.log(JSON.stringify(r)); if (r.error) console.log("COLUMN MISSING"); else console.log("COLUMN EXISTS"); }).catch(e =; 

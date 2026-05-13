@@ -26,6 +26,7 @@
 
 import { getBatchState, pauseBatch, resumeBatch } from '../../lib/batch-queue.js';
 import { supabase, PRODUCT_MATCHES_TABLE } from '../../lib/supabase.js';
+import { loadBatchImageMetadata } from '../../lib/upload-gallery.js';
 
 /**
  * Determine if a batch can be paused based on its status.
@@ -184,6 +185,25 @@ export default async function handler(req, res) {
 
     const isComplete = state.status === 'completed' || state.status === 'partial' || state.status === 'failed' || state.status === 'needs_review';
 
+    // Parse all_images — first try DB column, then fall back to filesystem metadata
+    let allImages = [];
+    if (state.all_images) {
+      try {
+        allImages = typeof state.all_images === 'string'
+          ? JSON.parse(state.all_images)
+          : state.all_images;
+      } catch { /* ignore parse errors */ }
+    }
+    // Fallback: load from filesystem batch-images.json if DB has no images
+    if (!allImages || allImages.length === 0) {
+      try {
+        const fsImages = await loadBatchImageMetadata(batchId);
+        if (fsImages && fsImages.length > 0) {
+          allImages = fsImages;
+        }
+      } catch { /* ignore filesystem fallback errors */ }
+    }
+
     // Build response
     const response = {
       success: true,
@@ -197,6 +217,7 @@ export default async function handler(req, res) {
       estimated_seconds_remaining: state.estimated_seconds_remaining || null,
       last_error: state.last_error || null,
       activity_log: state.activity_log || [],
+      all_images: allImages,
       canPause: canPause(state.status),
       canResume: canResume(state.status)
     };

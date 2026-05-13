@@ -57,7 +57,15 @@ import rerenderViewHandler from './api/queue/rerender-view.js';
 
 const PORT = process.env.PORT || 3000;
 const POLL_INTERVAL_MS = 5000; // Check for new jobs every 5 seconds
-const CONCURRENCY = 5; // Process up to 5 items simultaneously
+
+// ── Batch-by-batch processing configuration ─────────────────────────
+// Instead of processing all items at once (which floods AI APIs),
+// we process items in small batches with delays between each batch.
+// This gives AI APIs time to breathe and prevents rate-limit errors.
+const BATCH_SIZE = parseInt(process.env.QUEUE_BATCH_SIZE || '2', 10);     // Items per batch
+const BATCH_DELAY_MS = parseInt(process.env.QUEUE_BATCH_DELAY_MS || '15000', 10); // Delay between batches (15s)
+const VIEW_DELAY_MS = parseInt(process.env.QUEUE_VIEW_DELAY_MS || '3000', 10);    // Delay between views within an item (3s)
+const CONCURRENCY = BATCH_SIZE; // Match concurrency to batch size
 
 const app = express();
 
@@ -68,7 +76,7 @@ app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 // ── CORS (allow frontend from any origin) ──
 app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   if (req.method === 'OPTIONS') return res.sendStatus(204);
   next();
@@ -246,12 +254,24 @@ app.post('/api/agent/save-matched', async (req, res) => {
   }
 });
 
-app.get('/api/agent/matched-images', async (req, res) => {
+app.all('/api/agent/matched-images', async (req, res) => {
   try {
     const result = await agentMatchedImagesHandler(req, res);
     if (!res.headersSent) res.json(result);
   } catch (err) {
     console.error('[MATCHED-IMAGES] Error:', err);
+    if (!res.headersSent) res.status(500).json({ error: err.message });
+  }
+});
+
+// PATCH /api/agent/matched-images/:id — update a matched image record
+app.patch('/api/agent/matched-images/:id', async (req, res) => {
+  try {
+    // Reuse the same handler — it dispatches on req.method
+    const result = await agentMatchedImagesHandler(req, res);
+    if (!res.headersSent) res.json(result);
+  } catch (err) {
+    console.error('[MATCHED-IMAGES-PATCH] Error:', err);
     if (!res.headersSent) res.status(500).json({ error: err.message });
   }
 });
@@ -306,6 +326,16 @@ app.get('/api/agent/batch-status/:batchId', async (req, res) => {
     if (!res.headersSent) res.json(result);
   } catch (err) {
     console.error('[BATCH-STATUS] Error:', err);
+    if (!res.headersSent) res.status(500).json({ error: err.message });
+  }
+});
+
+// GET: Poll re-render progress (handled by the same handler with GET method)
+app.get('/api/queue/rerender-view', async (req, res) => {
+  try {
+    await rerenderViewHandler(req, res);
+  } catch (err) {
+    console.error('[RERENDER-VIEW-PROGRESS] Error:', err);
     if (!res.headersSent) res.status(500).json({ error: err.message });
   }
 });
@@ -542,9 +572,23 @@ async function processNextBatch() {
 
   if (!items || items.length === 0) return;
 
-  for (const item of items) {
+  // ── Staggered batch processing ──────────────────────────────────────
+  // Instead of starting all items at once (which floods AI APIs),
+  // we start items one by one with a delay between each.
+  // This spreads out the AI requests so the APIs are not overwhelmed.
+  const staggerDelay = BATCH_SIZE > 1 ? Math.floor(BATCH_DELAY_MS / BATCH_SIZE) : 0;
+
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i];
+
     // Skip if already being processed
     if (currentJobs.has(item.id)) continue;
+
+    // Add staggered delay between items (except the first one)
+    if (i > 0 && staggerDelay > 0) {
+      console.log(`[WORKER] Staggering item ${item.id} — waiting ${staggerDelay}ms before starting next item in batch`);
+      await sleep(staggerDelay);
+    }
 
     // Reserve the slot IMMEDIATELY to prevent duplicate processing.
     // We create a placeholder promise that gets replaced after setup.
@@ -713,8 +757,10 @@ async function processItem(itemId, provider = 'openai-mini') {
     await updateItemStatus(itemId, 'active', `Generating 4 views with ${providerLabel}...`);
     await updateViewStatuses(itemId, viewsToGenerate.map(view => view.id), 'generating', null);
 
-    // Generate unfinished views in parallel. Completed views are preserved for
-    // retry flows so successful renders are not charged/regenerated again.
+    // ── Sequential view generation with pacing ─────────────────────────
+    // Instead of generating all views in parallel (which floods AI APIs),
+    // we generate views one at a time with a configurable delay between each.
+    // This prevents rate-limit errors and gives the AI time to breathe.
     const isStability = provider.startsWith('stability');
     const isGemini = provider === 'gemini';
     const isMiniGemini = provider === 'openai-mini';
@@ -726,31 +772,46 @@ async function processItem(itemId, provider = 'openai-mini') {
           ? generateWithFallback
           : generateOpenAIView;
     const brand = item.brand || '';
-    // Pass the provider string as options.provider so the generate function can
-    // resolve the model (e.g., 'openai-cheap' → dall-e-2, 'stability-cheap' → sdxl-turbo)
     const genOptions = { provider };
-    let results = await Promise.allSettled(
-      viewsToGenerate.map(view => generateFn(view, desc, imageUrl, item.resolution || '1K', brand, genOptions))
-    );
+    const resolution = item.resolution || '1K';
 
-    // If Gemini failed due to quota or timeout, retry with OpenAI
-    if (provider === 'gemini') {
-      const geminiFailCount = results.filter(r => r.status === 'rejected').length;
-      if (geminiFailCount > 0) {
-        const shouldFallback = results.some(r =>
-          r.status === 'rejected' &&
-          /quota|rate.limi|resource.exhausted|too.many.request|timeout|abort/i.test(r.reason?.message || '')
-        );
-        if (shouldFallback) {
-          console.log(`[WORKER] Gemini quota/timeout for item ${itemId} (${geminiFailCount} failed views), retrying with OpenAI...`);
-          const fallbackResults = await Promise.allSettled(
-            viewsToGenerate.map((view, i) => {
-              if (results[i].status === 'fulfilled') return Promise.resolve(results[i].value);
-              return generateOpenAIView(view, desc, imageUrl, item.resolution || '1K', brand, { provider: 'openai' });
-            })
-          );
-          results = fallbackResults;
+    // Generate views sequentially with a delay between each
+    const results = [];
+    for (let vi = 0; vi < viewsToGenerate.length; vi++) {
+      const view = viewsToGenerate[vi];
+
+      // Update sub_text to show current view progress
+      const viewLabel = getViewLabel(view.id);
+      await updateItemStatus(itemId, 'active',
+        `Generating view ${vi + 1}/${viewsToGenerate.length} (${viewLabel})...`);
+
+      // Generate this single view
+      let viewResult;
+      try {
+        viewResult = await generateFn(view, desc, imageUrl, resolution, brand, genOptions);
+        results.push({ status: 'fulfilled', value: viewResult });
+      } catch (err) {
+        results.push({ status: 'rejected', reason: err });
+      }
+
+      // If Gemini failed due to quota or timeout, retry this view with OpenAI immediately
+      if (provider === 'gemini' && results[vi].status === 'rejected') {
+        const err = results[vi].reason;
+        if (/quota|rate.limi|resource.exhausted|too.many.request|timeout|abort/i.test(err?.message || '')) {
+          console.log(`[WORKER] Gemini quota/timeout for item ${itemId} view ${view.id}, retrying with OpenAI...`);
+          try {
+            const fallbackResult = await generateOpenAIView(view, desc, imageUrl, resolution, brand, { provider: 'openai' });
+            results[vi] = { status: 'fulfilled', value: fallbackResult };
+          } catch (fallbackErr) {
+            results[vi] = { status: 'rejected', reason: fallbackErr };
+          }
         }
+      }
+
+      // Add delay between views (except after the last one)
+      if (vi < viewsToGenerate.length - 1 && VIEW_DELAY_MS > 0) {
+        console.log(`[WORKER] Pacing — waiting ${VIEW_DELAY_MS}ms before next view for item ${itemId}`);
+        await sleep(VIEW_DELAY_MS);
       }
     }
 

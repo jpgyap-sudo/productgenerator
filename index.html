@@ -1989,6 +1989,9 @@ textarea:focus { outline: none; border-color: var(--text-secondary); }
   color: var(--text);
   line-height: 1.2;
 }
+.mi-stat-value.stat-rendered { color: #16a34a; }
+.mi-stat-value.stat-processing { color: #b45309; }
+.mi-stat-value.stat-pending { color: var(--text-muted); }
 .mi-stat-sub {
   font-size: 10px;
   color: var(--text-muted);
@@ -2014,6 +2017,24 @@ textarea:focus { outline: none; border-color: var(--text-secondary); }
   font-size: 12px;
 }
 .mi-filters input { flex: 1; min-width: 160px; }
+.mi-filters .mi-search-wrap { position: relative; flex: 1; min-width: 160px; display: flex; align-items: center; }
+.mi-filters .mi-search-wrap input { flex: 1; min-width: 160px; padding-right: 28px; }
+.mi-search-clear {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 2px 4px;
+  line-height: 1;
+  display: none;
+  border-radius: 4px;
+}
+.mi-search-clear:hover { color: var(--text); background: var(--surface-2); }
 .mi-filters select { min-width: 100px; }
 .mi-filters .mi-per-page { width: 70px; }
 .mi-grid {
@@ -2026,12 +2047,20 @@ textarea:focus { outline: none; border-color: var(--text-secondary); }
   border: 1px solid var(--border);
   border-radius: var(--radius);
   overflow: hidden;
-  transition: background var(--transition), border-color var(--transition);
+  transition: all 0.25s ease;
   cursor: pointer;
+  position: relative;
 }
 .mi-card:hover {
   border-color: var(--accent);
   background: var(--surface-2);
+  transform: translateY(-3px);
+  box-shadow: 0 6px 20px rgba(0,0,0,0.15);
+}
+.mi-card.selected {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+  background: rgba(59,130,246,0.05);
 }
 .mi-card-img-wrap {
   position: relative;
@@ -2040,9 +2069,13 @@ textarea:focus { outline: none; border-color: var(--text-secondary); }
 }
 .mi-card-img {
   width: 100%;
-  height: 180px;
-  object-fit: cover;
+  height: 220px;
+  object-fit: contain;
   display: block;
+  transition: transform 0.3s ease;
+}
+.mi-card:hover .mi-card-img {
+  transform: scale(1.05);
 }
 .mi-card-img-wrap.has-render {
   outline: 2px solid #22c55e;
@@ -2144,12 +2177,13 @@ textarea:focus { outline: none; border-color: var(--text-secondary); }
   gap: 3px;
   font-size: 10px;
   font-weight: 600;
-  padding: 2px 8px;
+  padding: 2px 10px;
   border-radius: 99px;
+  border-left: 3px solid transparent;
 }
-.mi-badge.rendered { background: rgba(34,197,94,0.15); color: #16a34a; }
-.mi-badge.processing { background: rgba(234,179,8,0.15); color: #b45309; }
-.mi-badge.pending { background: rgba(100,116,139,0.15); color: var(--text-muted); }
+.mi-badge.rendered { background: rgba(34,197,94,0.12); color: #16a34a; border-left-color: #16a34a; }
+.mi-badge.processing { background: rgba(234,179,8,0.12); color: #b45309; border-left-color: #b45309; }
+.mi-badge.pending { background: rgba(100,116,139,0.12); color: var(--text-muted); border-left-color: var(--text-muted); }
 .mi-card-brand { font-size: 11px; color: var(--text-secondary); margin-bottom: 3px; }
 .mi-pagination {
   display: flex;
@@ -2392,6 +2426,249 @@ textarea:focus { outline: none; border-color: var(--text-secondary); }
 .matched-refresh-btn:hover {
   border-color: var(--accent);
   color: var(--accent);
+}
+
+/* ── MI Batch Select / Action Bar ────────────────────────────── */
+.mi-batch-bar {
+  display: none;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background: var(--accent);
+  color: #fff;
+  border-radius: 8px;
+  margin-bottom: 12px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.mi-batch-bar.visible { display: flex; }
+.mi-batch-bar .mi-batch-count { flex: 1; }
+.mi-batch-bar button {
+  font-size: 11px;
+  padding: 4px 12px;
+  border: 1px solid rgba(255,255,255,0.4);
+  border-radius: 6px;
+  background: transparent;
+  color: #fff;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+.mi-batch-bar button:hover {
+  background: rgba(255,255,255,0.15);
+  border-color: #fff;
+}
+.mi-batch-bar .mi-batch-cancel {
+  background: rgba(255,255,255,0.1);
+}
+.mi-card .mi-checkbox {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  border: 2px solid rgba(255,255,255,0.7);
+  background: rgba(0,0,0,0.3);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2;
+  transition: all 0.15s ease;
+  opacity: 0;
+}
+.mi-card:hover .mi-checkbox,
+.mi-card.selected .mi-checkbox {
+  opacity: 1;
+}
+.mi-card .mi-checkbox.checked {
+  background: var(--accent);
+  border-color: var(--accent);
+  opacity: 1;
+}
+.mi-card .mi-checkbox.checked::after {
+  content: '✓';
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+/* ── MI Edit Mode ────────────────────────────────────────────── */
+.mi-edit-field {
+  width: 100%;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--card-bg);
+  color: var(--text);
+  font-size: 13px;
+  font-family: inherit;
+  transition: border-color var(--transition);
+}
+.mi-edit-field:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(59,130,246,0.15);
+}
+.mi-edit-textarea {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--card-bg);
+  color: var(--text);
+  font-size: 13px;
+  font-family: inherit;
+  resize: vertical;
+  min-height: 80px;
+  transition: border-color var(--transition);
+}
+.mi-edit-textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(59,130,246,0.15);
+}
+.mi-edit-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+.mi-edit-save-btn {
+  font-size: 12px;
+  padding: 6px 16px;
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  background: var(--accent);
+  color: #fff;
+  cursor: pointer;
+  font-weight: 600;
+  transition: all var(--transition);
+}
+.mi-edit-save-btn:hover { opacity: 0.85; }
+.mi-edit-save-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.mi-edit-cancel-btn {
+  font-size: 12px;
+  padding: 6px 16px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+  font-weight: 500;
+  transition: all var(--transition);
+}
+.mi-edit-cancel-btn:hover { border-color: var(--accent); color: var(--accent); }
+.mi-edit-toggle-btn {
+  font-size: 11px;
+  padding: 4px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+  transition: all var(--transition);
+}
+.mi-edit-toggle-btn:hover { border-color: var(--accent); color: var(--accent); }
+.mi-edit-toggle-btn.active {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+
+/* ── MI Loading Skeleton ─────────────────────────────────────── */
+@keyframes mi-shimmer {
+  0% { background-position: -200px 0; }
+  100% { background-position: calc(200px + 100%) 0; }
+}
+.mi-skeleton-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+}
+.mi-skeleton-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.mi-skeleton-img {
+  height: 220px;
+  background: linear-gradient(90deg, var(--surface-2) 25%, var(--surface) 50%, var(--surface-2) 75%);
+  background-size: 200px 100%;
+  animation: mi-shimmer 1.5s ease-in-out infinite;
+}
+.mi-skeleton-body {
+  padding: 10px 12px;
+}
+.mi-skeleton-line {
+  height: 12px;
+  background: linear-gradient(90deg, var(--surface-2) 25%, var(--surface) 50%, var(--surface-2) 75%);
+  background-size: 200px 100%;
+  animation: mi-shimmer 1.5s ease-in-out infinite;
+  border-radius: 4px;
+  margin-bottom: 6px;
+}
+.mi-skeleton-line.short { width: 60%; }
+.mi-skeleton-line.medium { width: 80%; }
+
+/* ── MI Detail Nav (prev/next) ───────────────────────────────── */
+.mi-detail-nav {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.mi-detail-nav button {
+  font-size: 11px;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+  transition: all var(--transition);
+}
+.mi-detail-nav button:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.mi-detail-nav button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.mi-detail-nav .mi-detail-nav-info {
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+/* ── MI Responsive ───────────────────────────────────────────── */
+@media (max-width: 900px) {
+  .mi-shell {
+    grid-template-columns: 1fr;
+  }
+  .mi-sidebar {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 4px;
+    padding: 10px;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+    overflow-x: auto;
+  }
+  .mi-sidebar-head { display: none; }
+  .mi-nav-item { white-space: nowrap; font-size: 11px; padding: 6px 10px; }
+  .mi-main { max-height: none; padding: 14px; }
+  .mi-grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 8px; }
+  .mi-card-img { height: 160px; }
+  .mi-stats { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
+  .mi-detail-layout { grid-template-columns: 1fr; }
+  .mi-filters { flex-direction: column; align-items: stretch; }
+  .mi-filters input, .mi-filters .mi-search-wrap { min-width: 0; }
+  .mi-detail-info-section .mi-detail-meta-grid { grid-template-columns: 1fr; }
+  .mi-header { flex-direction: column; }
+  .mi-header-actions { width: 100%; }
+  .mi-header-actions button { flex: 1; text-align: center; }
 }
 
 /* ── LOG PANEL ───────────────────────────────────────────────── */
@@ -4782,9 +5059,19 @@ a.cr-meta-pill.cr-drive-link:hover { opacity: 0.8; }
                   <div class="mi-stat-card"><span class="mi-stat-label">Sources</span><span class="mi-stat-value" id="miStatSources">—</span><span class="mi-stat-sub">PDF+ZIP batches</span></div>
                 </div>
 
+                <!-- Batch Action Bar -->
+                <div class="mi-batch-bar" id="miBatchBar">
+                  <span class="mi-batch-count" id="miBatchCount">0 selected</span>
+                  <button id="miBatchAddBtn">➕ Add Selected to Queue</button>
+                  <button class="mi-batch-cancel" id="miBatchCancelBtn">✕ Cancel</button>
+                </div>
+
                 <!-- Filters -->
                 <div class="mi-filters">
-                  <input type="text" id="miSearch" placeholder="Search by product name, code, or brand..." />
+                  <div class="mi-search-wrap">
+                    <input type="text" id="miSearch" placeholder="Search by product name, code, or brand..." />
+                    <button class="mi-search-clear" id="miSearchClear" type="button">✕</button>
+                  </div>
                   <select id="miBrandFilter"><option value="">All Brands</option></select>
                   <select id="miStatusFilter">
                     <option value="">All Statuses</option>
@@ -4819,6 +5106,12 @@ a.cr-meta-pill.cr-drive-link:hover { opacity: 0.8; }
                     <p id="miDetailSub">View and manage matched product</p>
                   </div>
                   <div class="mi-header-actions">
+                    <div class="mi-detail-nav" id="miDetailNav">
+                      <button id="miDetailPrevBtn" disabled>← Prev</button>
+                      <span class="mi-detail-nav-info" id="miDetailNavInfo">1 / 1</span>
+                      <button id="miDetailNextBtn" disabled>Next →</button>
+                    </div>
+                    <button class="mi-edit-toggle-btn" id="miEditToggleBtn" type="button">✏️ Edit</button>
                     <button class="mi-detail-back" id="matchedDetailBackBtn" type="button">← Back to Gallery</button>
                   </div>
                 </div>
@@ -7761,6 +8054,8 @@ document.querySelectorAll('.cr-nav-item').forEach(btn => {
   let miPerPage = 12;
   let miFiltered = [];
   let miSelectedImg = null;
+  let miSelectedIds = new Set();
+  let miEditMode = false;
 
   function getMiElements() {
     return {
@@ -7774,6 +8069,7 @@ document.querySelectorAll('.cr-nav-item').forEach(btn => {
       content: document.getElementById('miContent'),
       pagination: document.getElementById('miPagination'),
       search: document.getElementById('miSearch'),
+      searchClear: document.getElementById('miSearchClear'),
       brandFilter: document.getElementById('miBrandFilter'),
       statusFilter: document.getElementById('miStatusFilter'),
       perPage: document.getElementById('miPerPage'),
@@ -7789,7 +8085,16 @@ document.querySelectorAll('.cr-nav-item').forEach(btn => {
       statPending: document.getElementById('miStatPending'),
       statBrands: document.getElementById('miStatBrands'),
       statSources: document.getElementById('miStatSources'),
-      navItems: document.querySelectorAll('.mi-nav-item')
+      navItems: document.querySelectorAll('.mi-nav-item'),
+      batchBar: document.getElementById('miBatchBar'),
+      batchCount: document.getElementById('miBatchCount'),
+      batchAddBtn: document.getElementById('miBatchAddBtn'),
+      batchCancelBtn: document.getElementById('miBatchCancelBtn'),
+      editToggleBtn: document.getElementById('miEditToggleBtn'),
+      detailNav: document.getElementById('miDetailNav'),
+      detailPrevBtn: document.getElementById('miDetailPrevBtn'),
+      detailNextBtn: document.getElementById('miDetailNextBtn'),
+      detailNavInfo: document.getElementById('miDetailNavInfo')
     };
   }
 
@@ -7803,6 +8108,21 @@ document.querySelectorAll('.cr-nav-item').forEach(btn => {
     } catch (err) {
       console.error('[MI] Fetch error:', err);
       return { success: false, images: [], total: 0 };
+    }
+  }
+
+  async function updateMatchedImage(id, updates) {
+    try {
+      const res = await fetchApi('/api/agent/matched-images/' + id, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates)
+      });
+      if (!res.ok) throw new Error('Server returned ' + res.status);
+      return await res.json();
+    } catch (err) {
+      console.error('[MI] Update error:', err);
+      return { success: false };
     }
   }
 
@@ -7821,9 +8141,18 @@ document.querySelectorAll('.cr-nav-item').forEach(btn => {
     const el = getMiElements();
     const stats = computeMiStats(data);
     if (el.statTotal) el.statTotal.textContent = stats.total;
-    if (el.statRendered) el.statRendered.textContent = stats.rendered;
-    if (el.statProcessing) el.statProcessing.textContent = stats.processing;
-    if (el.statPending) el.statPending.textContent = stats.pending;
+    if (el.statRendered) {
+      el.statRendered.textContent = stats.rendered;
+      el.statRendered.className = 'mi-stat-value' + (stats.rendered > 0 ? ' stat-rendered' : '');
+    }
+    if (el.statProcessing) {
+      el.statProcessing.textContent = stats.processing;
+      el.statProcessing.className = 'mi-stat-value' + (stats.processing > 0 ? ' stat-processing' : '');
+    }
+    if (el.statPending) {
+      el.statPending.textContent = stats.pending;
+      el.statPending.className = 'mi-stat-value' + (stats.pending > 0 ? ' stat-pending' : '');
+    }
     if (el.statBrands) el.statBrands.textContent = stats.brands;
     if (el.statSources) el.statSources.textContent = stats.sources;
   }
@@ -7863,6 +8192,25 @@ document.querySelectorAll('.cr-nav-item').forEach(btn => {
     el.brandFilter.innerHTML = '<option value="">All Brands</option>' + brands.map(b => `<option value="${escapeHtml(b)}">${escapeHtml(b)}</option>`).join('');
   }
 
+  function updateMiBatchBar() {
+    const el = getMiElements();
+    if (!el.batchBar) return;
+    const count = miSelectedIds.size;
+    if (el.batchCount) el.batchCount.textContent = count + ' selected';
+    el.batchBar.classList.toggle('visible', count > 0);
+  }
+
+  function toggleMiSelect(imgId) {
+    if (miSelectedIds.has(imgId)) {
+      miSelectedIds.delete(imgId);
+    } else {
+      miSelectedIds.add(imgId);
+    }
+    updateMiBatchBar();
+    // Re-render current cards to update checkbox states
+    renderMiCards(miData);
+  }
+
   function renderMiCards(data) {
     const el = getMiElements();
     if (!el.content) return;
@@ -7892,7 +8240,8 @@ document.querySelectorAll('.cr-nav-item').forEach(btn => {
 
     for (const img of pageItems) {
       const card = document.createElement('div');
-      card.className = 'mi-card';
+      const isSelected = miSelectedIds.has(img.id);
+      card.className = 'mi-card' + (isSelected ? ' selected' : '');
 
       const displayUrl = img.image_url || img.image_data_url || '';
       const createdDate = img.created_at ? new Date(img.created_at).toLocaleString() : '';
@@ -7914,6 +8263,10 @@ document.querySelectorAll('.cr-nav-item').forEach(btn => {
         <div class="mi-card-img-wrap">
           <img src="${escapeHtml(displayUrl)}" alt="${escapeHtml(img.product_name)}" onerror="this.style.display='none'" loading="lazy"/>
           ${statusBadge}
+          <label class="mi-card-select" onclick="event.stopPropagation(); toggleMiSelect(${img.id})">
+            <input type="checkbox" ${isSelected ? 'checked' : ''} />
+            <span class="mi-checkmark"></span>
+          </label>
         </div>
         <div class="mi-card-body">
           <div class="mi-card-name" title="${escapeHtml(img.product_name)}">${escapeHtml(img.product_name)}</div>
@@ -7932,7 +8285,7 @@ document.querySelectorAll('.cr-nav-item').forEach(btn => {
       `;
 
       card.addEventListener('click', (e) => {
-        if (e.target.closest('button')) return;
+        if (e.target.closest('button') || e.target.closest('label') || e.target.closest('input')) return;
         showMiDetail(img);
       });
 
@@ -7964,6 +8317,17 @@ document.querySelectorAll('.cr-nav-item').forEach(btn => {
       statusBadge = '<span class="mi-badge pending">⏳ Pending</span>';
     }
 
+    // Update detail navigation
+    const currentIndex = miFiltered.findIndex(i => i.id === img.id);
+    const totalDetail = miFiltered.length;
+    if (el.detailNavInfo) el.detailNavInfo.textContent = `${currentIndex + 1} / ${totalDetail}`;
+    if (el.detailPrevBtn) el.detailPrevBtn.disabled = currentIndex <= 0;
+    if (el.detailNextBtn) el.detailNextBtn.disabled = currentIndex >= totalDetail - 1;
+
+    // Reset edit mode when navigating
+    miEditMode = false;
+    if (el.editToggleBtn) el.editToggleBtn.textContent = '✏️ Edit';
+
     el.detailContent.innerHTML = `
       <div class="mi-detail-layout">
         <div class="mi-detail-image-section">
@@ -7971,18 +8335,18 @@ document.querySelectorAll('.cr-nav-item').forEach(btn => {
           <div class="mi-detail-img-label">${escapeHtml(img.image_name || '')}</div>
         </div>
         <div class="mi-detail-info-section">
-          <div class="mi-detail-name">${escapeHtml(img.product_name)}</div>
-          ${img.product_code ? `<div class="mi-detail-code">${escapeHtml(img.product_code)}</div>` : ''}
-          ${img.product_brand ? `<div class="mi-detail-brand">🏷️ ${escapeHtml(img.product_brand)}</div>` : ''}
+          <div class="mi-detail-name" id="miEditName">${escapeHtml(img.product_name)}</div>
+          ${img.product_code ? `<div class="mi-detail-code" id="miEditCode">${escapeHtml(img.product_code)}</div>` : ''}
+          ${img.product_brand ? `<div class="mi-detail-brand" id="miEditBrand">🏷️ ${escapeHtml(img.product_brand)}</div>` : ''}
           <div style="display:flex;gap:8px;align-items:center;margin-top:4px;flex-wrap:wrap;">
             ${statusBadge}
             ${img.match_type ? `<span style="font-size:11px;color:var(--text-muted);">🔗 ${escapeHtml(img.match_type)}</span>` : ''}
             ${img.match_score ? `<span style="font-size:11px;color:var(--text-muted);">⭐ ${img.match_score}</span>` : ''}
           </div>
           <div class="mi-detail-desc-label">Description</div>
-          <div class="mi-detail-desc">${escapeHtml(descFull) || '<em style="color:var(--text-muted)">No description available</em>'}</div>
+          <div class="mi-detail-desc" id="miEditDesc">${escapeHtml(descFull) || '<em style="color:var(--text-muted)">No description available</em>'}</div>
           <div class="mi-detail-meta-grid">
-            ${img.image_name ? `<div class="mi-detail-meta-item"><strong>Original Image</strong>${escapeHtml(img.image_name)}</div>` : ''}
+            ${img.image_name ? `<div class="mi-detail-meta-item"><strong>Original Image</strong><span id="miEditImageName">${escapeHtml(img.image_name)}</span></div>` : ''}
             ${img.source_batch ? `<div class="mi-detail-meta-item"><strong>Source</strong>${escapeHtml(img.source_batch)}</div>` : ''}
             ${img.source_pdf ? `<div class="mi-detail-meta-item"><strong>PDF</strong>${escapeHtml(img.source_pdf)}</div>` : ''}
             ${img.source_zip ? `<div class="mi-detail-meta-item"><strong>ZIP</strong>${escapeHtml(img.source_zip)}</div>` : ''}
@@ -8253,6 +8617,158 @@ document.querySelectorAll('.cr-nav-item').forEach(btn => {
         }
       }
     });
+  });
+
+  // ── Search clear button ──
+  document.getElementById('miSearchClear')?.addEventListener('click', () => {
+    const el = getMiElements();
+    if (el.search) {
+      el.search.value = '';
+      miPage = 1;
+      renderMiCards(miData);
+    }
+  });
+
+  // ── Batch Add Selected to Queue ──
+  document.getElementById('miBatchAddBtn')?.addEventListener('click', () => {
+    if (!miData || !miData.images) return;
+    const selectedImages = miData.images.filter(img => miSelectedIds.has(img.id));
+    if (selectedImages.length === 0) {
+      toast('No images selected', 'info');
+      return;
+    }
+    let added = 0;
+    for (const img of selectedImages) {
+      const code = img.product_code || '';
+      const name = img.product_name || '';
+      const desc = img.description || '';
+      const brand = img.product_brand || '';
+      const url = img.image_url || img.image_data_url || '';
+
+      const alreadyExists = pendingItems.some(item =>
+        item.driveFolderName === code || (item.name === code && item.desc === desc)
+      );
+      if (alreadyExists) continue;
+
+      pendingItems.push({
+        id: nextId++,
+        name: code || name,
+        dataUrl: url,
+        desc: desc,
+        brand: brand,
+        status: STATUS.WAIT,
+        supabaseUrl: '',
+        driveFolderName: code || '',
+        provider: provider || 'openai',
+        resolution: nb2Res || '1K'
+      });
+      added++;
+    }
+    if (added > 0) {
+      renderPendingList();
+      updateCost();
+      checkReady();
+      saveState();
+      toast(`Added ${added} selected item(s) to Bulk Queue`, 'success');
+    } else {
+      toast('Selected items already in queue', 'info');
+    }
+    miSelectedIds.clear();
+    updateMiBatchBar();
+    renderMiCards(miData);
+  });
+
+  // ── Batch Cancel ──
+  document.getElementById('miBatchCancelBtn')?.addEventListener('click', () => {
+    miSelectedIds.clear();
+    updateMiBatchBar();
+    renderMiCards(miData);
+  });
+
+  // ── Edit Toggle ──
+  document.getElementById('miEditToggleBtn')?.addEventListener('click', () => {
+    if (!miSelectedImg) return;
+    const el = getMiElements();
+    miEditMode = !miEditMode;
+
+    if (miEditMode) {
+      el.editToggleBtn.textContent = '💾 Save';
+      // Replace text with editable inputs
+      const nameEl = document.getElementById('miEditName');
+      const codeEl = document.getElementById('miEditCode');
+      const brandEl = document.getElementById('miEditBrand');
+      const descEl = document.getElementById('miEditDesc');
+      const imageNameEl = document.getElementById('miEditImageName');
+
+      if (nameEl) {
+        nameEl.outerHTML = `<input class="mi-edit-field" id="miEditNameInput" value="${escapeHtml(miSelectedImg.product_name || '')}" placeholder="Product Name" />`;
+      }
+      if (codeEl) {
+        codeEl.outerHTML = `<input class="mi-edit-field" id="miEditCodeInput" value="${escapeHtml(miSelectedImg.product_code || '')}" placeholder="Product Code" />`;
+      }
+      if (brandEl) {
+        const brandVal = (miSelectedImg.product_brand || '');
+        brandEl.outerHTML = `<input class="mi-edit-field" id="miEditBrandInput" value="${escapeHtml(brandVal)}" placeholder="Brand" />`;
+      }
+      if (descEl) {
+        descEl.outerHTML = `<textarea class="mi-edit-textarea" id="miEditDescInput" rows="4" placeholder="Description">${escapeHtml(miSelectedImg.description || '')}</textarea>`;
+      }
+      if (imageNameEl) {
+        imageNameEl.outerHTML = `<input class="mi-edit-field" id="miEditImageNameInput" value="${escapeHtml(miSelectedImg.image_name || '')}" placeholder="Image Name" />`;
+      }
+    } else {
+      // Save mode - collect values and call API
+      const nameInput = document.getElementById('miEditNameInput');
+      const codeInput = document.getElementById('miEditCodeInput');
+      const brandInput = document.getElementById('miEditBrandInput');
+      const descInput = document.getElementById('miEditDescInput');
+      const imageNameInput = document.getElementById('miEditImageNameInput');
+
+      const updates = {};
+      if (nameInput && nameInput.value !== (miSelectedImg.product_name || '')) updates.product_name = nameInput.value;
+      if (codeInput && codeInput.value !== (miSelectedImg.product_code || '')) updates.product_code = codeInput.value;
+      if (brandInput && brandInput.value !== (miSelectedImg.product_brand || '')) updates.product_brand = brandInput.value;
+      if (descInput && descInput.value !== (miSelectedImg.description || '')) updates.description = descInput.value;
+      if (imageNameInput && imageNameInput.value !== (miSelectedImg.image_name || '')) updates.image_name = imageNameInput.value;
+
+      if (Object.keys(updates).length > 0 && miSelectedImg.id) {
+        updateMatchedImage(miSelectedImg.id, updates).then(result => {
+          if (result.success) {
+            toast('Product details saved successfully', 'success');
+            // Refresh data
+            initMatchedImages().then(() => {
+              // Re-show detail for the same image
+              const refreshed = (miData.images || []).find(i => i.id === miSelectedImg.id);
+              if (refreshed) showMiDetail(refreshed);
+            });
+          } else {
+            toast('Failed to save product details', 'error');
+            el.editToggleBtn.textContent = '✏️ Edit';
+            miEditMode = false;
+          }
+        });
+      } else {
+        toast('No changes detected', 'info');
+      }
+      el.editToggleBtn.textContent = '✏️ Edit';
+    }
+  });
+
+  // ── Detail Prev/Next navigation ──
+  document.getElementById('miDetailPrevBtn')?.addEventListener('click', () => {
+    if (!miSelectedImg) return;
+    const currentIndex = miFiltered.findIndex(i => i.id === miSelectedImg.id);
+    if (currentIndex > 0) {
+      showMiDetail(miFiltered[currentIndex - 1]);
+    }
+  });
+
+  document.getElementById('miDetailNextBtn')?.addEventListener('click', () => {
+    if (!miSelectedImg) return;
+    const currentIndex = miFiltered.findIndex(i => i.id === miSelectedImg.id);
+    if (currentIndex < miFiltered.length - 1) {
+      showMiDetail(miFiltered[currentIndex + 1]);
+    }
   });
 
 logToggle.addEventListener('click', () => {

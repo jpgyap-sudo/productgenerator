@@ -42,6 +42,7 @@ CREATE TABLE IF NOT EXISTS public.batch_jobs (
   current_item      TEXT DEFAULT '',
   last_error        TEXT DEFAULT '',
   activity_log      JSONB DEFAULT '[]'::jsonb,
+  all_images        JSONB DEFAULT '[]'::jsonb,
   created_at        TIMESTAMPTZ DEFAULT NOW(),
   updated_at        TIMESTAMPTZ DEFAULT NOW()
 );
