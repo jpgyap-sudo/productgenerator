@@ -276,6 +276,17 @@ app.patch('/api/agent/matched-images/:id', async (req, res) => {
   }
 });
 
+// DELETE /api/agent/matched-images/:id — delete a matched image record
+app.delete('/api/agent/matched-images/:id', async (req, res) => {
+  try {
+    const result = await agentMatchedImagesHandler(req, res);
+    if (!res.headersSent) res.json(result);
+  } catch (err) {
+    console.error('[MATCHED-IMAGES-DELETE] Error:', err);
+    if (!res.headersSent) res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Permanent Canvas Routes ──
 app.post('/api/agent/save-matched-permanent', async (req, res) => {
   try {

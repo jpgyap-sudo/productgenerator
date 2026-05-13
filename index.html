@@ -2114,6 +2114,21 @@ textarea:focus { outline: none; border-color: var(--text-secondary); }
   border-color: var(--accent);
   color: var(--accent);
 }
+.mi-card-footer .mi-delete-btn {
+  font-size: 10px;
+  padding: 4px 10px;
+  border: 1px solid #e74c3c;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: #e74c3c;
+  cursor: pointer;
+  transition: all var(--transition);
+  margin-left: auto;
+}
+.mi-card-footer .mi-delete-btn:hover {
+  background: #e74c3c;
+  color: #fff;
+}
 .mi-add-btn {
   font-size: 10px;
   padding: 4px 10px;
@@ -2347,6 +2362,16 @@ textarea:focus { outline: none; border-color: var(--text-secondary); }
 }
 .mi-detail-render-btn:hover {
   background: rgba(34, 197, 94, 0.1);
+}
+.mi-detail-delete-btn {
+  background: transparent;
+  color: #e74c3c;
+  border: 1px solid #e74c3c;
+  margin-left: auto;
+}
+.mi-detail-delete-btn:hover {
+  background: #e74c3c;
+  color: #fff;
 }
 .mi-detail-status-badge {
   display: inline-flex;
@@ -8104,6 +8129,29 @@ document.querySelectorAll('.cr-nav-item').forEach(btn => {
     }
   }
 
+  async function deleteMatchedImage(id) {
+    const name = miData?.images?.find(i => i.id === id)?.product_name || `#${id}`;
+    if (!confirm(`Delete "${name}" from matched images?\n\nThis cannot be undone.`)) return;
+
+    try {
+      const res = await fetchApi('/api/agent/matched-images/' + id, {
+        method: 'DELETE'
+      });
+      if (!res.ok) throw new Error('Server returned ' + res.status);
+      const result = await res.json();
+      if (result.success) {
+        toast(`Deleted "${name}"`, 'success');
+        // Refresh the matched images panel
+        await initMatchedImages();
+      } else {
+        toast('Failed to delete: ' + (result.error || 'unknown error'), 'error');
+      }
+    } catch (err) {
+      console.error('[MI] Delete error:', err);
+      toast('Failed to delete matched image', 'error');
+    }
+  }
+
   function computeMiStats(data) {
     const images = data.images || [];
     const total = images.length;
@@ -8259,6 +8307,7 @@ document.querySelectorAll('.cr-nav-item').forEach(btn => {
         </div>
         <div class="mi-card-footer">
           <span>Click to view details</span>
+          <button class="mi-delete-btn" data-id="${img.id}" onclick="event.stopPropagation(); deleteMatchedImage(${img.id})">🗑️ Delete</button>
         </div>
       `;
 
@@ -8335,6 +8384,7 @@ document.querySelectorAll('.cr-nav-item').forEach(btn => {
             <button class="mi-detail-add-btn" data-id="${img.id || ''}" data-name="${escapeHtml(img.product_name)}" data-code="${escapeHtml(img.product_code || '')}" data-desc="${escapeHtml(descFull)}" data-brand="${escapeHtml(img.product_brand || '')}" data-url="${escapeHtml(displayUrl)}" data-imgname="${escapeHtml(img.image_name || '')}">➕ Add to Queue</button>
             <button class="mi-detail-view-btn" data-url="${escapeHtml(displayUrl)}">🔍 View Full Image</button>
             ${hasCompletedRender && completedRenderUrl ? `<button class="mi-detail-render-btn" data-url="${escapeHtml(completedRenderUrl)}">🎨 View Completed Render</button>` : ''}
+            <button class="mi-detail-delete-btn" data-id="${img.id}">🗑️ Delete</button>
           </div>
         </div>
       </div>
@@ -8388,6 +8438,15 @@ document.querySelectorAll('.cr-nav-item').forEach(btn => {
     if (renderBtn) {
       renderBtn.addEventListener('click', () => {
         if (completedRenderUrl) window.open(completedRenderUrl, '_blank');
+      });
+    }
+
+    const deleteBtn = el.detailContent.querySelector('.mi-detail-delete-btn');
+    if (deleteBtn) {
+      deleteBtn.addEventListener('click', () => {
+        const id = parseInt(deleteBtn.dataset.id, 10);
+        if (!id) return;
+        deleteMatchedImage(id);
       });
     }
 

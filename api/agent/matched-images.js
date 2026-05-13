@@ -20,18 +20,23 @@ import { supabase, MATCHED_IMAGES_TABLE } from '../../lib/supabase.js';
 /**
  * GET /api/agent/matched-images
  * PATCH /api/agent/matched-images/:id  — update a matched image record
+ * DELETE /api/agent/matched-images/:id — delete a matched image record
  */
 export default async function handler(req, res) {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, PATCH, OPTIONS');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, PATCH, DELETE, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
     return res.status(204).end();
   }
 
   if (req.method === 'PATCH') {
     return handlePatch(req, res);
+  }
+
+  if (req.method === 'DELETE') {
+    return handleDelete(req, res);
   }
 
   if (req.method !== 'GET') {
@@ -213,5 +218,45 @@ async function handleGet(req, res) {
       error: 'Failed to fetch matched images',
       details: err.message
     });
+  }
+}
+
+/**
+ * DELETE — delete a matched image record by ID
+ */
+async function handleDelete(req, res) {
+  try {
+    // Extract ID from URL path: /api/agent/matched-images/:id
+    const urlParts = req.url.split('/');
+    const id = urlParts[urlParts.length - 1];
+
+    if (!id || id === 'matched-images') {
+      return res.status(400).json({ error: 'Missing image ID in URL path' });
+    }
+
+    console.log(`[MATCHED-IMAGES-DELETE] Deleting id=${id}`);
+
+    const { data, error } = await supabase
+      .from(MATCHED_IMAGES_TABLE)
+      .delete()
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('[MATCHED-IMAGES-DELETE] Delete error:', error.message);
+      return res.status(500).json({ error: 'Failed to delete matched image', details: error.message });
+    }
+
+    if (!data) {
+      return res.status(404).json({ error: 'Matched image not found' });
+    }
+
+    console.log(`[MATCHED-IMAGES-DELETE] Successfully deleted id=${id}`);
+    return res.json({ success: true, image: data });
+
+  } catch (err) {
+    console.error('[MATCHED-IMAGES-DELETE] Error:', err);
+    return res.status(500).json({ error: 'Failed to delete matched image', details: err.message });
   }
 }
