@@ -8,7 +8,7 @@ s<!DOCTYPE html>
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://unpkg.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; connect-src 'self' https://fal.run https://queue.fal.run https://api.fal.ai https://*.fal.ai https://v3.fal.media https://fal.media https://*.fal.media https://*.supabase.co wss://*.supabase.co https://generativelanguage.googleapis.com https://api.stability.ai; font-src 'self' data:;"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
-<style>
+<style id="mainStyles">
 /* ── TOGGLE SWITCH ──────────────────────────────────────────── */
 .toggle-switch {
 position: relative;
@@ -197,6 +197,8 @@ body {
   cursor: pointer; font-size: 18px; padding: 4px 8px;
   border-radius: var(--radius-sm); line-height: 1;
   flex-shrink: 0;
+  z-index: 1001;
+  position: relative;
 }
 .sidebar-toggle:hover { border-color: var(--accent); color: var(--accent); }
 .sidebar-toggle.open { color: var(--accent); border-color: var(--accent); }
@@ -209,6 +211,77 @@ body {
   flex-shrink: 0;
 }
 .dm-toggle:hover { border-color: var(--accent); color: var(--accent); }
+
+/* ── MOBILE OVERLAY ──────────────────────────────────────────────── */
+.mobile-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  z-index: 998;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+}
+.mobile-overlay.active {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* ── MOBILE TOPBAR MENU ──────────────────────────────────────────── */
+.mobile-menu-btn {
+  display: none;
+  background: transparent;
+  border: none;
+  color: var(--text);
+  font-size: 22px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  line-height: 1;
+  z-index: 1002;
+  position: relative;
+}
+.mobile-menu-btn:hover { background: var(--hover-bg); }
+
+.mobile-menu {
+  display: none;
+  position: fixed;
+  top: 52px;
+  left: 0;
+  right: 0;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+  z-index: 999;
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.35s ease, box-shadow 0.35s ease;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+.mobile-menu.open {
+  max-height: 80vh;
+  overflow-y: auto;
+}
+.mobile-menu-inner {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 10px 12px;
+}
+.mobile-menu-inner .tb-btn {
+  flex: 1 1 calc(50% - 4px);
+  min-width: 0;
+  justify-content: center;
+  font-size: 12px;
+  padding: 10px 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mobile-menu-inner .tb-btn.tb-icon-only {
+  flex: 0 0 auto;
+  padding: 10px;
+}
 
 /* ── SUPABASE CONFIG BAR ─────────────────────────────────────── */
 .supa-bar {
@@ -272,29 +345,45 @@ body {
 }
 @media (max-width: 768px) {
   .sidebar-toggle { display: inline-block; }
+  .mobile-menu-btn { display: inline-flex; align-items: center; justify-content: center; }
+  .mobile-menu { display: block; }
+  .mobile-overlay { display: block; }
   .layout {
     grid-template-columns: 1fr;
-    grid-template-rows: auto 1fr;
-    height: auto;
-    min-height: calc(100vh - 52px);
+    height: calc(100vh - 52px);
   }
   .sidebar {
-    height: auto;
-    max-height: 50vh;
-    border-right: none;
-    border-bottom: 1px solid var(--border);
-    transition: max-height 0.3s ease, opacity 0.3s ease;
-    overflow: hidden;
+    position: fixed;
+    top: 52px;
+    left: 0;
+    bottom: 0;
+    width: min(85vw, 320px);
+    height: calc(100vh - 52px);
+    max-height: none;
+    border-right: 1px solid var(--border);
+    border-bottom: none;
+    z-index: 1000;
+    transform: translateX(-100%);
+    transition: transform 0.3s ease;
+    box-shadow: 2px 0 12px rgba(0,0,0,0.2);
+  }
+  .sidebar.open {
+    transform: translateX(0);
   }
   .sidebar.collapsed {
-    max-height: 0;
-    opacity: 0;
-    padding: 0;
+    transform: translateX(-100%);
+    max-height: none;
+    opacity: 1;
+    padding: inherit;
     border-bottom: none;
   }
   .sidebar.collapsed .sidebar-scroll,
   .sidebar.collapsed .sidebar-foot {
-    display: none;
+    display: flex;
+  }
+  .layout.panel-open .sidebar {
+    display: flex;
+    transform: translateX(-100%);
   }
 }
 
@@ -572,6 +661,8 @@ textarea:focus { outline: none; border-color: var(--text-secondary); }
 }
 .tb-btn:hover { border-color: var(--accent); color: var(--accent); }
 .tb-btn.active { background: var(--accent); color: #000; border-color: var(--accent); font-weight: 700; }
+/* Hide desktop topbar buttons on mobile via this class */
+.tb-hide-mobile { display: inline-flex; }
 
 /* ── PRODUCT FEATURE PANEL ───────────────────────────────────── */
 .feature-panel {
@@ -945,6 +1036,64 @@ textarea:focus { outline: none; border-color: var(--text-secondary); }
   min-width: 55px;
 }
 
+/* ── QUEUE ITEM PROGRESS BAR ─────────────────────────────────── */
+.q-progress-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  padding-right: 4px;
+}
+.q-progress-bar {
+  flex: 1;
+  height: 4px;
+  background: var(--border-light);
+  border-radius: 99px;
+  overflow: hidden;
+  max-width: 100px;
+}
+.q-progress-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 99px;
+  transition: width 0.4s ease;
+}
+.q-progress-text {
+  font-size: 9px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  min-width: 50px;
+}
+
+/* ── RE-RENDER PROGRESS BAR ──────────────────────────────────── */
+.rerender-progress-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  width: 100%;
+}
+.rerender-progress-bar {
+  flex: 1;
+  height: 4px;
+  background: var(--border-light);
+  border-radius: 99px;
+  overflow: hidden;
+}
+.rerender-progress-fill {
+  height: 100%;
+  background: #a855f7;
+  border-radius: 99px;
+  transition: width 0.4s ease;
+}
+.rerender-progress-text {
+  font-size: 9px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  min-width: 80px;
+  text-align: right;
+}
+
 /* ── BATCH CARDS ─────────────────────────────────────────────── */
 .batch-card {
   background: var(--surface);
@@ -1037,8 +1186,9 @@ textarea:focus { outline: none; border-color: var(--text-secondary); }
   text-align: center; color: var(--text-secondary); cursor: pointer;
   border: none; width: 100%; font-family: inherit;
   transition: background var(--transition);
+  min-height: 28px;
 }
-.btn-dl1:hover { background: var(--border-light); }
+.btn-dl1:hover { background: var(--border-light); color: var(--text); }
 
 /* ── LIGHTBOX ────────────────────────────────────────────────── */
 .lightbox {
@@ -3355,6 +3505,8 @@ opacity: 0.8;
   .topbar h1 { font-size: 12px; }
   .topbar input[type="password"] { width: 110px; font-size: 11px; padding: 5px 8px; }
   .api-save-btn { padding: 5px 7px; font-size: 11px; }
+  /* Hide desktop topbar buttons on mobile — they're in the hamburger menu */
+  .tb-hide-mobile { display: none !important; }
   .renders-grid { grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 5px; padding: 8px; }
   .batch-grid { grid-template-columns: repeat(auto-fill, minmax(95px, 1fr)); gap: 4px; padding: 6px; }
   .main { padding: 0.5rem; }
@@ -3403,6 +3555,12 @@ opacity: 0.8;
   .par-block label { font-size: 9px; }
   .par-block .par-val { font-size: 10px; }
   .upload-box { padding: 0.75rem; min-height: 80px; }
+  /* Touch-friendly: larger tap targets for download buttons */
+  .btn-dl1, .btn-zip, .btn-dl-all, .btn-retry-batch { min-height: 36px; display: inline-flex; align-items: center; justify-content: center; }
+  /* Larger sidebar toggle on mobile */
+  .sidebar-toggle { font-size: 20px; padding: 6px 10px; }
+  .dm-toggle { font-size: 18px; padding: 6px 9px; }
+  .mobile-menu-btn { font-size: 20px; padding: 6px 10px; }
   .upload-box .icon { font-size: 20px; }
   .upload-box .txt { font-size: 11px; }
   .upload-box .sub { font-size: 10px; }
@@ -3413,6 +3571,46 @@ opacity: 0.8;
   .btn-log-clear { font-size: 9px; padding: 5px 8px; }
   .toast { font-size: 11px; padding: 8px 12px; max-width: 260px; }
   .toast-container { bottom: 12px; right: 12px; gap: 6px; }
+  /* Completed renders panel mobile */
+  .cr-sidebar { display: none; }
+  .cr-main { grid-column: 1 / -1; }
+  .cr-header { flex-direction: column; align-items: flex-start; gap: 6px; }
+  .cr-header-actions { width: 100%; }
+  .cr-header-actions .btn-dl-all { margin-left: 0; }
+  .cr-filters { flex-direction: column; gap: 6px; }
+  .cr-filters select { width: 100%; }
+  .cr-image-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .cr-batch-header { flex-wrap: wrap; }
+  .cr-batch-thumb { display: none; }
+  .cr-batch-actions { width: 100%; justify-content: flex-start; }
+  /* Batch detail modal mobile */
+  .bd-modal-shell { width: 98vw; max-height: 95vh; border-radius: 8px; }
+  .bd-modal-body { padding: 10px; }
+  .bd-pipeline { gap: 4px; }
+  .bd-pipeline-step { font-size: 9px; padding: 4px 6px; }
+  .bd-views-grid { grid-template-columns: 1fr; gap: 8px; }
+  .bd-view-card { min-width: 0; }
+  .bd-view-card img { max-height: 180px; }
+  .bd-stats-grid { grid-template-columns: 1fr 1fr; gap: 6px; }
+  .bd-actions { flex-wrap: wrap; gap: 6px; }
+  .bd-actions button { flex: 1; min-width: 0; font-size: 11px; padding: 8px 10px; }
+  /* Bulk upload panel mobile */
+  .bulk-layout { grid-template-columns: 1fr; }
+  .bulk-hero { flex-direction: column; align-items: flex-start; gap: 8px; }
+  .bulk-hero h2 { font-size: 14px; }
+  /* Render queue panel mobile */
+  .rq-toolbar { flex-direction: column; align-items: stretch; }
+  .rq-toolbar select { width: 100%; }
+  .rq-table-wrap { overflow-x: auto; }
+  .rq-table { font-size: 10px; }
+  .rq-table th, .rq-table td { padding: 4px 6px; }
+  /* Matched images panel mobile */
+  .mi-sidebar { display: none; }
+  .mi-main { grid-column: 1 / -1; }
+  .mi-header { flex-direction: column; align-items: flex-start; gap: 6px; }
+  .mi-header-actions { width: 100%; }
+  .mi-filters { flex-direction: column; gap: 6px; }
+  .mi-filters select { width: 100%; }
 }
 
 /* ── DINING CHAIR MATCHING PANEL ─────────────────────────────── */
@@ -3857,6 +4055,9 @@ a.cr-meta-pill.cr-drive-link:hover { opacity: 0.8; }
 .cr-mini-render .cr-mini-actions { display: flex; gap: 2px; padding: 2px; background: var(--surface-2); border-top: 1px solid var(--border-light); }
 .cr-mini-render .cr-mini-actions button { flex: 1; font-size: 10px; padding: 5px 6px; border-radius: 3px; border: 1px solid var(--border-light); cursor: pointer; font-weight: 600; font-family: inherit; background: var(--surface); color: var(--text-secondary); transition: opacity 0.15s; }
 .cr-mini-render .cr-mini-actions button:hover { opacity: 0.8; }
+.cr-mini-render .cr-mini-actions .btn-rerender { background: #eef2ff; color: #4f46e5; border-color: #c7d2fe; }
+.cr-mini-render .cr-mini-actions .btn-rerender:hover { background: #e0e7ff; }
+.cr-mini-render .cr-mini-actions .btn-rerender:disabled { opacity: 0.45; cursor: not-allowed; background: var(--surface); color: var(--text-muted); border-color: var(--border-light); }
 .cr-batch-meta { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; font-size: 11px; color: var(--text-secondary); margin-top: 2px; }
 
 /* Detail sidebar — hidden (placeholder not yet implemented) */
@@ -4005,22 +4206,44 @@ a.cr-meta-pill.cr-drive-link:hover { opacity: 0.8; }
     <label for="apiKey" hidden>fal.ai Key</label>
     <input type="password" id="apiKey" hidden placeholder="Paste your fal.ai key..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-secure="true"/>
     <button class="api-save-btn" id="apiKeySave" type="button" hidden disabled>Save</button>
-    <button class="tb-btn" id="bulkUploadToggle" title="Bulk upload PDF + ZIP workflow" aria-label="Bulk Upload">Bulk Upload</button>
-    <button class="tb-btn" id="bulkRenderToggle" title="Review bulk items before rendering" aria-label="Bulk Render">Bulk Render</button>
-    <button class="tb-btn" id="batchProcessorToggle" title="Batch process PDF catalog + ZIP images" aria-label="Batch Processor">📦 Batch</button>
-    <button class="tb-btn" id="matchedImagesToggle" title="View saved matched product-image pairs" aria-label="Matched Images">🖼️ Matched</button>
-    <button class="tb-btn" id="diningChairMatchToggle" title="Dining chair PDF + ZIP matching workflow" aria-label="Dining Chair Match">🪑 Chair Match</button>
-    <button class="tb-btn" id="renderProductToggle" title="Generate 4 product renders with QA pipeline" aria-label="Render Product">🎨 Render</button>
-    <button class="tb-btn" id="renderQueueToggle" title="Cloud render queue — permanent, survives browser close" aria-label="Render Queue">☁️ Queue</button>
-    <button class="tb-btn" id="completedToggle" title="Completed render history" aria-label="Completed Batches">✓ Completed</button>
-    <button class="tb-btn" id="monitorToggle" title="API health monitoring" aria-label="API Monitor">📡 Monitor</button>
-    <button class="tb-btn" id="featureToggle" title="View & edit product feature prompts" aria-label="Product Features">📋 Features</button>
-    <button class="tb-btn" id="aboutToggle" title="How to use & AI specifications" aria-label="About">ℹ️ About</button>
-    <button class="tb-btn" id="furnitureRenderToggle" title="Furniture Render Studio — premium AI rendering UI" aria-label="Furniture Render" style="background:linear-gradient(135deg,#d3a64f22,#d3a64f11);border-color:#d3a64f44;color:#d3a64f;">🪑 Furniture Render</button>
+    <button class="tb-btn tb-hide-mobile" id="bulkUploadToggle" title="Bulk upload PDF + ZIP workflow" aria-label="Bulk Upload">Bulk Upload</button>
+    <button class="tb-btn tb-hide-mobile" id="bulkRenderToggle" title="Review bulk items before rendering" aria-label="Bulk Render">Bulk Render</button>
+    <button class="tb-btn tb-hide-mobile" id="batchProcessorToggle" title="Batch process PDF catalog + ZIP images" aria-label="Batch Processor">📦 Batch</button>
+    <button class="tb-btn tb-hide-mobile" id="matchedImagesToggle" title="View saved matched product-image pairs" aria-label="Matched Images">🖼️ Matched</button>
+    <button class="tb-btn tb-hide-mobile" id="diningChairMatchToggle" title="Dining chair PDF + ZIP matching workflow" aria-label="Dining Chair Match">🪑 Chair Match</button>
+    <button class="tb-btn tb-hide-mobile" id="renderProductToggle" title="Generate 4 product renders with QA pipeline" aria-label="Render Product">🎨 Render</button>
+    <button class="tb-btn tb-hide-mobile" id="renderQueueToggle" title="Cloud render queue — permanent, survives browser close" aria-label="Render Queue">☁️ Queue</button>
+    <button class="tb-btn tb-hide-mobile" id="completedToggle" title="Completed render history" aria-label="Completed Batches">✓ Completed</button>
+    <button class="tb-btn tb-hide-mobile" id="monitorToggle" title="API health monitoring" aria-label="API Monitor">📡 Monitor</button>
+    <button class="tb-btn tb-hide-mobile" id="featureToggle" title="View & edit product feature prompts" aria-label="Product Features">📋 Features</button>
+    <button class="tb-btn tb-hide-mobile" id="aboutToggle" title="How to use & AI specifications" aria-label="About">ℹ️ About</button>
+    <button class="tb-btn tb-hide-mobile" id="furnitureRenderToggle" title="Furniture Render Studio — premium AI rendering UI" aria-label="Furniture Render" style="background:linear-gradient(135deg,#d3a64f22,#d3a64f11);border-color:#d3a64f44;color:#d3a64f;">🪑 Furniture Render</button>
+    <button class="mobile-menu-btn" id="mobileMenuBtn" title="Toggle navigation menu" aria-label="Toggle navigation menu">☰</button>
     <button class="sidebar-toggle" id="sidebarToggle" title="Toggle sidebar" aria-label="Toggle sidebar">☰</button>
     <button class="dm-toggle" id="dmToggle" title="Toggle dark mode" aria-label="Toggle dark mode">🌙</button>
   </div>
 </div>
+
+<!-- ── MOBILE MENU ─────────────────────────────────────────────── -->
+<div class="mobile-menu" id="mobileMenu">
+  <div class="mobile-menu-inner">
+    <button class="tb-btn" id="bulkUploadToggleMob" title="Bulk upload PDF + ZIP workflow" aria-label="Bulk Upload">Bulk Upload</button>
+    <button class="tb-btn" id="bulkRenderToggleMob" title="Review bulk items before rendering" aria-label="Bulk Render">Bulk Render</button>
+    <button class="tb-btn" id="batchProcessorToggleMob" title="Batch process PDF catalog + ZIP images" aria-label="Batch Processor">📦 Batch</button>
+    <button class="tb-btn" id="matchedImagesToggleMob" title="View saved matched product-image pairs" aria-label="Matched Images">🖼️ Matched</button>
+    <button class="tb-btn" id="diningChairMatchToggleMob" title="Dining chair PDF + ZIP matching workflow" aria-label="Dining Chair Match">🪑 Chair Match</button>
+    <button class="tb-btn" id="renderProductToggleMob" title="Generate 4 product renders with QA pipeline" aria-label="Render Product">🎨 Render</button>
+    <button class="tb-btn" id="renderQueueToggleMob" title="Cloud render queue — permanent, survives browser close" aria-label="Render Queue">☁️ Queue</button>
+    <button class="tb-btn" id="completedToggleMob" title="Completed render history" aria-label="Completed Batches">✓ Completed</button>
+    <button class="tb-btn" id="monitorToggleMob" title="API health monitoring" aria-label="API Monitor">📡 Monitor</button>
+    <button class="tb-btn" id="featureToggleMob" title="View & edit product feature prompts" aria-label="Product Features">📋 Features</button>
+    <button class="tb-btn" id="aboutToggleMob" title="How to use & AI specifications" aria-label="About">ℹ️ About</button>
+    <button class="tb-btn" id="furnitureRenderToggleMob" title="Furniture Render Studio — premium AI rendering UI" aria-label="Furniture Render" style="background:linear-gradient(135deg,#d3a64f22,#d3a64f11);border-color:#d3a64f44;color:#d3a64f;">🪑 Furniture Render</button>
+  </div>
+</div>
+
+<!-- ── MOBILE OVERLAY ──────────────────────────────────────────── -->
+<div class="mobile-overlay" id="mobileOverlay"></div>
 
 <!-- ── SUPABASE CONFIG BAR ────────────────────────────────────── -->
 <div class="supa-bar" id="supaBar">
@@ -5288,13 +5511,16 @@ const API_BASE_CANDIDATES = (() => {
     const base = (value || '').replace(/\/$/, '');
     if (base && !bases.includes(base)) bases.push(base);
   };
-  // Primary: the detected API base URL
+  // Primary: the detected API base URL (same origin — works for both HTTP and HTTPS)
   add(API_BASE_URL);
-  // Fallback: try localhost:3000 directly (useful when frontend is on Vercel/HTTPS
-  // and the VPS is reachable via direct IP)
-  add('http://104.248.225.250:3000');
-  // Last resort: localhost for local development
-  add('http://localhost:3000');
+  // On HTTPS pages, NEVER add HTTP fallbacks — browsers block mixed-content requests.
+  // The same-origin URL above is the only valid candidate.
+  if (window.location.protocol !== 'https:') {
+    // Fallback: direct IP (only for HTTP pages)
+    add('http://104.248.225.250:3000');
+    // Localhost for local development
+    add('http://localhost:3000');
+  }
   return bases;
 })();
 
@@ -5572,14 +5798,103 @@ document.addEventListener('keydown', (e) => {
 // ── SIDEBAR TOGGLE (MOBILE) ─────────────────────────────────────────
 const sidebarToggle = document.getElementById('sidebarToggle');
 const sidebar = document.querySelector('.sidebar');
+const mobileOverlay = document.getElementById('mobileOverlay');
 let sidebarOpen = true;
 
+function openSidebar() {
+  sidebarOpen = true;
+  sidebar.classList.remove('collapsed');
+  sidebar.classList.add('open');
+  sidebarToggle.classList.add('open');
+  if (mobileOverlay) mobileOverlay.classList.add('active');
+}
+
+function closeSidebar() {
+  sidebarOpen = false;
+  sidebar.classList.add('collapsed');
+  sidebar.classList.remove('open');
+  sidebarToggle.classList.remove('open');
+  if (mobileOverlay) mobileOverlay.classList.remove('active');
+}
+
 sidebarToggle.addEventListener('click', () => {
-  sidebarOpen = !sidebarOpen;
-  sidebar.classList.toggle('collapsed', !sidebarOpen);
-  sidebarToggle.textContent = sidebarOpen ? '☰' : '☰';
-  sidebarToggle.classList.toggle('open', sidebarOpen);
+  if (sidebarOpen) {
+    closeSidebar();
+  } else {
+    openSidebar();
+  }
 });
+
+// Close sidebar when overlay is clicked
+if (mobileOverlay) {
+  mobileOverlay.addEventListener('click', closeSidebar);
+}
+
+// ── MOBILE MENU TOGGLE ──────────────────────────────────────────────
+const mobileMenuBtn = document.getElementById('mobileMenuBtn');
+const mobileMenu = document.getElementById('mobileMenu');
+let mobileMenuOpen = false;
+
+function openMobileMenu() {
+  mobileMenuOpen = true;
+  mobileMenu.classList.add('open');
+  mobileMenuBtn.textContent = '✕';
+  if (mobileOverlay) mobileOverlay.classList.add('active');
+}
+
+function closeMobileMenu() {
+  mobileMenuOpen = false;
+  mobileMenu.classList.remove('open');
+  mobileMenuBtn.textContent = '☰';
+  if (mobileOverlay) mobileOverlay.classList.remove('active');
+}
+
+if (mobileMenuBtn && mobileMenu) {
+  mobileMenuBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (mobileMenuOpen) {
+      closeMobileMenu();
+    } else {
+      // Close sidebar first if open
+      if (sidebarOpen) closeSidebar();
+      openMobileMenu();
+    }
+  });
+
+  // Close mobile menu when overlay is clicked
+  if (mobileOverlay) {
+    mobileOverlay.addEventListener('click', () => {
+      if (mobileMenuOpen) closeMobileMenu();
+    });
+  }
+
+  // Wire up mobile menu buttons to trigger their desktop counterparts
+  const mobButtonMap = {
+    'bulkUploadToggleMob': 'bulkUploadToggle',
+    'bulkRenderToggleMob': 'bulkRenderToggle',
+    'batchProcessorToggleMob': 'batchProcessorToggle',
+    'matchedImagesToggleMob': 'matchedImagesToggle',
+    'diningChairMatchToggleMob': 'diningChairMatchToggle',
+    'renderProductToggleMob': 'renderProductToggle',
+    'renderQueueToggleMob': 'renderQueueToggle',
+    'completedToggleMob': 'completedToggle',
+    'monitorToggleMob': 'monitorToggle',
+    'featureToggleMob': 'featureToggle',
+    'aboutToggleMob': 'aboutToggle',
+    'furnitureRenderToggleMob': 'furnitureRenderToggle',
+  };
+
+  Object.entries(mobButtonMap).forEach(([mobId, desktopId]) => {
+    const mobBtn = document.getElementById(mobId);
+    const desktopBtn = document.getElementById(desktopId);
+    if (mobBtn && desktopBtn) {
+      mobBtn.addEventListener('click', () => {
+        desktopBtn.click();
+        closeMobileMenu();
+      });
+    }
+  });
+}
 
 // ── FAILURE LOG ────────────────────────────────────────────────────
 function getFailureLog() {
@@ -6662,26 +6977,172 @@ function renderCrBatches(data) {
 
 async function rerenderCrView(btn, itemId, viewId) {
   if (!btn) return;
+  if (!viewId || viewId === 'undefined' || viewId === 'null') {
+    console.error('[RERENDER] Invalid viewId:', viewId, 'for item', itemId);
+    toast('Re-render failed: invalid view ID', 'error');
+    return;
+  }
   btn.disabled = true;
   btn.textContent = '...';
+  console.log('[RERENDER] Starting re-render for item', itemId, 'view', viewId);
+
+  // ── Add progress bar below the button ──
+  const parentDiv = btn.closest('.cr-mini-actions') || btn.parentElement;
+  let progWrap = document.getElementById(`rrpw-${itemId}-${viewId}`);
+  if (!progWrap) {
+    progWrap = document.createElement('div');
+    progWrap.id = `rrpw-${itemId}-${viewId}`;
+    progWrap.className = 'rerender-progress-wrap';
+    progWrap.innerHTML = `<div class="rerender-progress-bar"><div class="rerender-progress-fill" id="rrpf-${itemId}-${viewId}" style="width:0%"></div></div><span class="rerender-progress-text" id="rrpt-${itemId}-${viewId}">Starting...</span>`;
+    parentDiv?.appendChild(progWrap);
+  } else {
+    progWrap.style.display = 'flex';
+    const fill = document.getElementById(`rrpf-${itemId}-${viewId}`);
+    const txt = document.getElementById(`rrpt-${itemId}-${viewId}`);
+    if (fill) fill.style.width = '0%';
+    if (txt) txt.textContent = 'Starting...';
+  }
+
+  // ── Start polling for progress ──
+  let pollTimer = null;
+  let stopped = false;
+  function startProgressPoll() {
+    if (stopped) return;
+    pollTimer = setInterval(async () => {
+      if (stopped) { clearInterval(pollTimer); return; }
+      try {
+        const res = await fetchApi(`/api/queue/rerender-view?itemId=${itemId}&viewId=${viewId}`, { method: 'GET' });
+        if (!res.ok) return;
+        const data = await res.json();
+        const fill = document.getElementById(`rrpf-${itemId}-${viewId}`);
+        const txt = document.getElementById(`rrpt-${itemId}-${viewId}`);
+        if (fill && data.progress !== undefined) fill.style.width = data.progress + '%';
+        if (txt && data.message) txt.textContent = data.message;
+        if (data.status === 'done' || data.status === 'error') {
+          clearInterval(pollTimer);
+          pollTimer = null;
+        }
+      } catch (_) { /* ignore poll errors */ }
+    }, 1500);
+  }
+  startProgressPoll();
+
   try {
-    const res = await fetchApi('/api/queue/rerender-view', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ itemId, viewId, provider: 'gemini' })
-    });
+    // Race fetchApi against a 90-second timeout to prevent hanging indefinitely
+    const res = await Promise.race([
+      fetchApi('/api/queue/rerender-view', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ itemId, viewId, provider: 'gemini' })
+      }),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Request timed out after 90 seconds')), 90000)
+      )
+    ]);
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'HTTP ' + res.status);
+
+    // Mark progress as complete
+    stopped = true;
+    if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+    const fill = document.getElementById(`rrpf-${itemId}-${viewId}`);
+    const txt = document.getElementById(`rrpt-${itemId}-${viewId}`);
+    if (fill) fill.style.width = '100%';
+    if (txt) txt.textContent = 'Complete!';
+
     toast('View ' + viewId + ' re-rendered with ' + (data.providerUsed || 'Gemini Flash'), 'success');
-    // Refresh the completed batches view to show updated image
-    await initCompletedRenders();
+    // Surgically update the image in the batch card instead of rebuilding the entire panel
+    const { imageUrl, providerUsed } = data;
+    if (imageUrl) {
+      // Find the batch card for this item
+      const batchCard = document.querySelector(`.cr-batch-card[data-batch-id="${itemId}"]`);
+      if (batchCard) {
+        // Find the specific view image within the batch card
+        const imageStrip = batchCard.querySelector('.cr-image-strip');
+        if (imageStrip) {
+          const miniRenders = imageStrip.querySelectorAll('.cr-mini-render');
+          // View IDs are 1-based (1=front, 2=side, 3=isometric, 4=interior)
+          const viewIndex = parseInt(viewId, 10) - 1;
+          const targetRender = miniRenders[viewIndex];
+          if (targetRender) {
+            // Update the image
+            const img = targetRender.querySelector('img');
+            if (img) {
+              img.src = imageUrl;
+              img.onclick = () => openLightbox(imageUrl);
+            } else {
+              // Replace the error placeholder with an image
+              const placeholder = targetRender.querySelector('div[style*="aspect-ratio"]');
+              if (placeholder) {
+                const newImg = document.createElement('img');
+                newImg.src = imageUrl;
+                newImg.alt = `View ${viewId}`;
+                newImg.style.cssText = 'width:100%;display:block;cursor:pointer;aspect-ratio:1;object-fit:cover;';
+                newImg.addEventListener('click', () => openLightbox(imageUrl));
+                placeholder.replaceWith(newImg);
+              }
+            }
+            // Update provider badge
+            const label = targetRender.querySelector('.cr-mini-label');
+            if (label) {
+              const badge = label.querySelector('.bslot-provider');
+              if (badge) {
+                badge.className = 'bslot-provider bslot-provider-gemini';
+                badge.textContent = 'Gemini';
+              }
+            }
+            // Add download button if missing
+            const actions = targetRender.querySelector('.cr-mini-actions');
+            if (actions) {
+              const dlBtn = actions.querySelector('.btn-dl1');
+              if (!dlBtn) {
+                const newDl = document.createElement('button');
+                newDl.className = 'btn-dl1';
+                newDl.dataset.url = imageUrl;
+                newDl.textContent = '⬇';
+                newDl.title = 'Download';
+                newDl.onclick = () => downloadImage(newDl);
+                actions.insertBefore(newDl, actions.firstChild);
+              } else {
+                dlBtn.dataset.url = imageUrl;
+              }
+            }
+          }
+        }
+        // Update the batch card status (e.g., partial → done)
+        const header = batchCard.querySelector('.cr-batch-header');
+        if (header) {
+          const badge = header.querySelector('.cr-badge');
+          if (badge) {
+            const doneViews = batchCard.querySelectorAll('.cr-mini-render img').length;
+            if (doneViews >= 4) {
+              badge.className = 'cr-badge done';
+              badge.textContent = '✓ done';
+            } else {
+              badge.className = 'cr-badge partial';
+              badge.textContent = doneViews + '/4';
+            }
+          }
+        }
+      }
+    }
   } catch (err) {
+    stopped = true;
+    if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+    console.error('[RERENDER] Failed for item', itemId, 'view', viewId, ':', err.message);
     toast('Re-render failed: ' + formatError(err), 'error');
+    const txt = document.getElementById(`rrpt-${itemId}-${viewId}`);
+    if (txt) txt.textContent = 'Failed: ' + err.message.substring(0, 40);
   } finally {
     if (btn) {
       btn.disabled = false;
       btn.textContent = '↻';
     }
+    // Hide progress bar after 5 seconds
+    setTimeout(() => {
+      const pw = document.getElementById(`rrpw-${itemId}-${viewId}`);
+      if (pw) pw.style.display = 'none';
+    }, 5000);
   }
 }
 
@@ -8482,9 +8943,15 @@ function showBatchProcessorPanel() {
   monitorPanelOpen = false;
   if (monitorInterval) { clearInterval(monitorInterval); monitorInterval = null; }
 
+  // ── Reset batch panel to clean Step 1 state ──
+  if (batchStep1) batchStep1.style.display = 'block';
+  if (batchStep2) { batchStep2.style.display = 'none'; batchProductGrid.innerHTML = ''; batchImageGallery.innerHTML = ''; }
+  if (batchStep3) { batchStep3.style.display = 'none'; batchMatchGrid.innerHTML = ''; }
+  if (batchMatchBtn) batchMatchBtn.disabled = true;
+  const recentBanner = document.getElementById('recentBatchBanner');
+  if (recentBanner) recentBanner.style.display = 'none';
+
   // ── Check for recent completed batch ──
-  // checkRecentBatch is now defined inside initBatchProcessor()
-  // We trigger it via a custom event that initBatchProcessor listens for
   document.dispatchEvent(new CustomEvent('batch-panel-shown'));
 }
 
@@ -8954,6 +9421,10 @@ function renderQueue() {
     const div = document.createElement('div');
     div.className = `q-item ${sc.item}`;
     div.id = `qi-${item.id}`;
+    // Determine progress for active items (from render results if available)
+    const viewProgress = item._viewProgress || 0;
+    const viewProgressText = item._viewProgressText || '';
+    const showProgress = item.status === STATUS.ACTIVE || item.status === 'generating';
     div.innerHTML = `
       ${thumbSrc
         ? `<img class="q-thumb" src="${thumbSrc}" alt="${item.name}"/>`
@@ -8962,6 +9433,10 @@ function renderQueue() {
       <div class="q-info">
         <div class="q-name">${escHtml(item.name)}${needsReupload ? ' <span style="color:var(--error);font-size:9px;">(re-upload needed)</span>' : ''}</div>
         <div class="q-sub" id="qsub-${item.id}">4 renders · ~$${(NB2_PRICES[nb2Res]*4).toFixed(2)}</div>
+        ${showProgress ? `<div class="q-progress-wrap" id="qpw-${item.id}">
+          <div class="q-progress-bar"><div class="q-progress-fill" id="qpf-${item.id}" style="width:${viewProgress}%"></div></div>
+          <span class="q-progress-text" id="qpt-${item.id}">${viewProgressText || '0/4 views'}</span>
+        </div>` : ''}
         <div class="q-desc-wrap" id="qdescw-${item.id}">
           <div class="q-desc-text" id="qdesct-${item.id}" onclick="editDesc(${item.id})" title="Click to edit description">${escHtml(itemDesc || 'No description')}</div>
           <textarea class="q-desc-edit" id="qdesce-${item.id}" style="display:none;" placeholder="Enter description for this image..." onblur="saveDesc(${item.id})" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();this.blur();}">${escHtml(itemDesc)}</textarea>
@@ -10550,6 +11025,17 @@ async function pollStatus() {
               badge.className = `q-badge ${sc.badge}`;
               badge.textContent = sl;
             }
+            // Add progress bar to queue item when it becomes active
+            if (serverItem.status === 'active' || serverItem.status === 'generating') {
+              const qInfo = el?.querySelector('.q-info');
+              if (qInfo && !document.getElementById(`qpw-${serverItem.id}`)) {
+                const pw = document.createElement('div');
+                pw.className = 'q-progress-wrap';
+                pw.id = `qpw-${serverItem.id}`;
+                pw.innerHTML = `<div class="q-progress-bar"><div class="q-progress-fill" id="qpf-${serverItem.id}" style="width:0%"></div></div><span class="q-progress-text" id="qpt-${serverItem.id}">0/4 views</span>`;
+                qInfo.appendChild(pw);
+              }
+            }
           }
           updateBatchDriveStatus(localItem);
         }
@@ -10571,7 +11057,8 @@ async function pollStatus() {
         if (activeItem && !document.getElementById('active-section')) {
           createActiveCard(activeItem);
         }
-        // Update each view slot
+        // Update each view slot and count progress
+        let doneCount = 0;
         for (const r of results) {
           const badge = document.getElementById(`rb-${r.viewId}`);
           const body = document.getElementById(`rbody-${r.viewId}`);
@@ -10595,14 +11082,29 @@ async function pollStatus() {
             dlBtn.addEventListener('click', () => dlOneUrl(r.imageUrl, `view_${r.viewId}`));
             body.appendChild(dlBtn);
             body.className = 'rslot-body';
+            doneCount++;
           } else if (r.status === 'error') {
             badge.textContent = 'error';
             badge.className = 'rbadge rb-err';
             body.innerHTML = `<span class="rerr">${escHtml(r.errorMessage || 'Error')}</span>`;
             body.className = 'rslot-body';
+            doneCount++;
           }
         }
         updateActiveProgress();
+
+        // ── Update queue list progress bar for active item ──
+        const totalViews = results.length || 4;
+        const viewPct = Math.round((doneCount / totalViews) * 100);
+        const viewText = `${doneCount}/${totalViews} views`;
+        const qpf = document.getElementById(`qpf-${activeItemId}`);
+        const qpt = document.getElementById(`qpt-${activeItemId}`);
+        if (qpf) qpf.style.width = viewPct + '%';
+        if (qpt) qpt.textContent = viewText;
+        if (activeItem) {
+          activeItem._viewProgress = viewPct;
+          activeItem._viewProgressText = viewText;
+        }
       }
     }
 
@@ -12907,12 +13409,15 @@ function initBatchProcessor() {
       });
     }
 
-    // Render match results in Step 3
-    renderBatchMatchGrid(data.matches || [], data.allImages || []);
-    batchStep2.style.display = 'none';
+    // Show all completed steps in sequence (Step 2 + Step 3)
+    batchStep1.style.display = 'none';
+    batchStep2.style.display = 'block';
     batchStep3.style.display = 'block';
     batchMatchBtn.disabled = true;
     batchMatchBtn.textContent = 'Batch Complete';
+
+    // Render match results in Step 3
+    renderBatchMatchGrid(data.matches || [], data.allImages || []);
 
     const stats = data.matchStats || {};
     toast(`Batch complete: ${stats.autoAccepted || 0} auto-accepted, ${stats.needsReview || 0} need review`, 'success');
@@ -13571,7 +14076,7 @@ function escapeHtml(str) {
 //  DINING CHAIR MATCHING — Vanilla JS port of React UI
 // ══════════════════════════════════════════════════════════════════
 
-const DCM_CANVAS_KEY = 'dcm-canvas-records-v1';
+const DCM_CANVAS_KEY = 'dcm-canvas-records-v2';
 
 // ── Data (populated after PDF+ZIP upload) ──
 const dcmProducts = [];
