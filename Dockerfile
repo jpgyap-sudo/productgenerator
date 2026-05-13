@@ -8,7 +8,7 @@
 #  Resource limits are set in docker-compose.yml
 # ═══════════════════════════════════════════════════════════════════
 
-FROM node:20-slim AS deps
+FROM node:22-slim AS deps
 
 WORKDIR /app
 
@@ -19,7 +19,7 @@ COPY package.json package-lock.json ./
 RUN npm ci --omit=dev --ignore-scripts
 
 # ── Runtime stage ──
-FROM node:20-slim AS runner
+FROM node:22-slim AS runner
 
 WORKDIR /app
 

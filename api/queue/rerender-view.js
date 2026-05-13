@@ -4,6 +4,9 @@
 //
 // The item may no longer exist in the product_queue table (cleaned up after completion),
 // so we also fall back to completed-batches.json data.
+//
+// Progress tracking: stores progress in a shared in-memory store so the frontend
+// can poll for re-render progress via GET /api/queue/rerender-view/:itemId/:viewId
 
 import { supabase, QUEUE_TABLE, RESULTS_TABLE } from '../../lib/supabase.js';
 import { VIEWS } from '../../lib/fal.js';
@@ -11,7 +14,33 @@ import { generateGeminiView } from '../../lib/gemini.js';
 import { saveRenderImageToVps, saveRenderImageBufferToVps } from '../../lib/vps-storage.js';
 import { saveCompletedBatch, listCompletedBatches } from '../../lib/completed-batches.js';
 
+// ── In-memory re-render progress store ──────────────────────────────
+// Key: `${itemId}:${viewId}`, Value: { status, progress, message, imageUrl?, error? }
+export const rerenderProgressStore = new Map();
+
+function setRerenderProgress(itemId, viewId, data) {
+  const key = `${itemId}:${viewId}`;
+  rerenderProgressStore.set(key, { ...data, updatedAt: Date.now() });
+  // Auto-cleanup after 5 minutes
+  setTimeout(() => rerenderProgressStore.delete(key), 5 * 60 * 1000);
+}
+
 export default async function handler(req, res) {
+  // ── GET: Poll re-render progress ──
+  if (req.method === 'GET') {
+    const itemId = req.query.itemId || req.params?.itemId;
+    const viewId = req.query.viewId || req.params?.viewId;
+    if (!itemId || !viewId) {
+      return res.status(400).json({ error: 'itemId and viewId are required' });
+    }
+    const key = `${itemId}:${viewId}`;
+    const progress = rerenderProgressStore.get(key);
+    if (!progress) {
+      return res.json({ status: 'unknown', progress: 0, message: 'No re-render in progress' });
+    }
+    return res.json(progress);
+  }
+
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
@@ -26,6 +55,9 @@ export default async function handler(req, res) {
   if (!view) {
     return res.status(400).json({ error: `Invalid viewId: ${viewId}` });
   }
+
+  // Set initial progress
+  setRerenderProgress(itemId, viewId, { status: 'starting', progress: 0, message: 'Starting re-render...' });
 
   // Try to fetch the queue item from Supabase first
   let item = null;
@@ -55,28 +87,60 @@ export default async function handler(req, res) {
       if (batch) {
         itemName = batch.name || itemName;
         itemImageUrl = batch.imageUrl || '';
-        // Description and brand are not stored in completed-batches.json,
-        // but we can still rerender with what we have
         console.log(`[RERENDER] Found item ${itemId} in completed-batches.json`);
       } else {
+        setRerenderProgress(itemId, viewId, { status: 'error', progress: 0, message: 'Item not found' });
         return res.status(404).json({ error: 'Item not found in queue table or completed batches' });
       }
     } catch (listErr) {
+      setRerenderProgress(itemId, viewId, { status: 'error', progress: 0, message: listErr.message });
       console.warn(`[RERENDER] Failed to list completed batches: ${listErr.message}`);
       return res.status(404).json({ error: 'Item not found' });
     }
   }
 
   if (!itemImageUrl) {
+    setRerenderProgress(itemId, viewId, { status: 'error', progress: 0, message: 'No reference image' });
     return res.status(400).json({ error: 'Item has no reference image' });
+  }
+
+  // Mark the render_results row as 'generating' so the frontend can show progress
+  try {
+    await supabase
+      .from(RESULTS_TABLE)
+      .update({ status: 'generating', error_message: '', updated_at: new Date().toISOString() })
+      .eq('queue_item_id', itemId)
+      .eq('view_id', viewId);
+  } catch (_) {
+    // Non-critical — continue even if update fails
+  }
+
+  // Probe the reference image URL to check it's reachable (non-blocking warning only)
+  setRerenderProgress(itemId, viewId, { status: 'generating', progress: 10, message: 'Checking reference image...' });
+  try {
+    const ac = new AbortController();
+    const probeTimer = setTimeout(() => ac.abort(), 8000);
+    const probe = await fetch(itemImageUrl, { method: 'HEAD', signal: ac.signal });
+    clearTimeout(probeTimer);
+    if (!probe.ok) {
+      console.warn(`[RERENDER] Reference image URL returned HTTP ${probe.status} for item ${itemId}`);
+    }
+  } catch (probeErr) {
+    console.warn(`[RERENDER] Reference image URL unreachable for item ${itemId}: ${probeErr.message}`);
+    // Continue anyway — the Gemini module will try to fetch it and may still succeed
   }
 
   try {
     // Generate the view with Gemini Flash
+    setRerenderProgress(itemId, viewId, { status: 'generating', progress: 30, message: 'Generating with Gemini Flash...' });
     console.log(`[RERENDER] Item ${itemId} view ${viewId} with ${provider}`);
-    const result = await generateGeminiView(view, itemDescription, itemImageUrl, '1K', itemBrand, { forceFlash: true });
+    const result = await generateGeminiView(view, itemDescription, itemImageUrl, '1K', itemBrand);
 
     if (!result?.cdnUrl) throw new Error('Generator returned no image URL');
+
+    console.log(`[RERENDER] Gemini succeeded for item ${itemId} view ${viewId}, cdnUrl: ${result.cdnUrl?.slice(0, 80)}...`);
+
+    setRerenderProgress(itemId, viewId, { status: 'saving', progress: 70, message: 'Saving rendered image...' });
 
     const providerUsed = 'gemini-flash';
 
@@ -84,12 +148,16 @@ export default async function handler(req, res) {
     // and store it locally so it is served by the Express static server
     let publicUrl;
     try {
+      console.log(`[RERENDER] Saving image to VPS for item ${itemId} view ${viewId}...`);
       const stored = await saveRenderImageToVps(result.cdnUrl, itemId, view, itemName);
       publicUrl = stored.publicUrl;
+      console.log(`[RERENDER] Image saved to VPS: ${publicUrl}`);
     } catch (saveErr) {
       console.warn(`[RERENDER] saveRenderImageToVps failed: ${saveErr.message}`);
       throw new Error(`Failed to save render image to VPS: ${saveErr.message}`);
     }
+
+    setRerenderProgress(itemId, viewId, { status: 'saving', progress: 85, message: 'Updating database...' });
 
     // Update render_results in Supabase (if the row exists)
     const updatePayload = {
@@ -101,6 +169,7 @@ export default async function handler(req, res) {
       provider_used: providerUsed
     };
 
+    console.log(`[RERENDER] Updating Supabase render_results for item ${itemId} view ${viewId}...`);
     const { error: saveError } = await supabase
       .from(RESULTS_TABLE)
       .update(updatePayload)
@@ -120,10 +189,15 @@ export default async function handler(req, res) {
       }
     } else if (saveError) {
       console.warn(`[RERENDER] Failed to update render_results: ${saveError.message}`);
+    } else {
+      console.log(`[RERENDER] Supabase render_results updated successfully for item ${itemId} view ${viewId}`);
     }
+
+    setRerenderProgress(itemId, viewId, { status: 'saving', progress: 95, message: 'Refreshing completed batches...' });
 
     // Refresh completed-batches.json with updated view
     try {
+      console.log(`[RERENDER] Refreshing completed-batches for item ${itemId}...`);
       const { data: allRows } = await supabase
         .from(RESULTS_TABLE)
         .select('*')
@@ -136,7 +210,7 @@ export default async function handler(req, res) {
           imageUrl: itemImageUrl,
           status: 'done',
           provider: item?.provider || 'openai-mini',
-          apiModel: item?.api_model || 'gpt-image-1-mini + Gemini Flash fallback',
+          apiModel: item?.api_model || 'gemini-2.5-flash-image',
           updatedAt: new Date().toISOString(),
           viewResults: allRows.map(row => ({
             viewId: row.view_id,
@@ -147,8 +221,10 @@ export default async function handler(req, res) {
             providerUsed: row.provider_used || (Number(row.view_id) === Number(viewId) ? providerUsed : null)
           }))
         });
+        console.log(`[RERENDER] completed-batches updated from Supabase rows for item ${itemId}`);
       } else {
         // No rows in Supabase - update the batch in completed-batches.json directly
+        console.log(`[RERENDER] No Supabase rows for item ${itemId}, updating from local store...`);
         const batches = await listCompletedBatches();
         const existing = batches.find(b => Number(b.id) === Number(itemId));
         if (existing) {
@@ -162,16 +238,27 @@ export default async function handler(req, res) {
             updatedAt: new Date().toISOString(),
             viewResults: updatedViewResults
           });
+          console.log(`[RERENDER] completed-batches updated from local store for item ${itemId}`);
+        } else {
+          console.warn(`[RERENDER] Item ${itemId} not found in local store either`);
         }
       }
     } catch (storeErr) {
       console.warn(`[RERENDER] Failed to update completed-batches for item ${itemId}:`, storeErr.message);
     }
 
+    // Mark as complete
+    console.log(`[RERENDER] Re-render complete for item ${itemId} view ${viewId}!`);
+    setRerenderProgress(itemId, viewId, { status: 'done', progress: 100, message: 'Re-render complete!', imageUrl: publicUrl });
     return res.json({ success: true, imageUrl: publicUrl, providerUsed });
   } catch (err) {
     console.error(`[RERENDER] Failed for item ${itemId} view ${viewId}:`, err.message);
-    return res.status(500).json({ error: err.message || 'Rerender failed' });
+    console.error(`[RERENDER] Stack:`, err.stack);
+    setRerenderProgress(itemId, viewId, { status: 'error', progress: 0, message: err.message || 'Rerender failed' });
+    // Only send error response if headers haven't been sent yet
+    if (!res.headersSent) {
+      return res.status(500).json({ error: err.message || 'Rerender failed' });
+    }
   }
 }
 
