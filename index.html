@@ -6642,12 +6642,15 @@ async function rerenderHistoryView(btn, itemId, viewId, slot) {
 
     const { imageUrl, providerUsed } = data;
 
+    // Add cache-busting query param so the browser fetches the new image
+    const cacheBustUrl = imageUrl + (imageUrl.includes('?') ? '&' : '?') + '_t=' + Date.now();
+
     // Update the image in the slot (if slot still exists in DOM)
     if (slot && document.body.contains(slot)) {
       const img = slot.querySelector('img');
       const unavailableDiv = img?.nextElementSibling;
       if (img) {
-        img.src = imageUrl;
+        img.src = cacheBustUrl;
         img.style.display = '';
         if (unavailableDiv) unavailableDiv.style.display = 'none';
         img.onclick = () => openLightbox(imageUrl);
@@ -6656,7 +6659,7 @@ async function rerenderHistoryView(btn, itemId, viewId, slot) {
         const placeholder = slot.querySelector('div[style*="min-height"]');
         if (placeholder) {
           const newImg = document.createElement('img');
-          newImg.src = imageUrl;
+          newImg.src = cacheBustUrl;
           newImg.alt = `View ${viewId}`;
           newImg.style.width = '100%';
           newImg.addEventListener('click', () => openLightbox(imageUrl));
@@ -7054,6 +7057,8 @@ async function rerenderCrView(btn, itemId, viewId) {
     // Surgically update the image in the batch card instead of rebuilding the entire panel
     const { imageUrl, providerUsed } = data;
     if (imageUrl) {
+      // Add cache-busting query param so the browser fetches the new image
+      const cacheBustUrl = imageUrl + (imageUrl.includes('?') ? '&' : '?') + '_t=' + Date.now();
       // Find the batch card for this item
       const batchCard = document.querySelector(`.cr-batch-card[data-batch-id="${itemId}"]`);
       if (batchCard) {
@@ -7065,17 +7070,17 @@ async function rerenderCrView(btn, itemId, viewId) {
           const viewIndex = parseInt(viewId, 10) - 1;
           const targetRender = miniRenders[viewIndex];
           if (targetRender) {
-            // Update the image
+            // Update the image with cache-busting URL
             const img = targetRender.querySelector('img');
             if (img) {
-              img.src = imageUrl;
+              img.src = cacheBustUrl;
               img.onclick = () => openLightbox(imageUrl);
             } else {
               // Replace the error placeholder with an image
               const placeholder = targetRender.querySelector('div[style*="aspect-ratio"]');
               if (placeholder) {
                 const newImg = document.createElement('img');
-                newImg.src = imageUrl;
+                newImg.src = cacheBustUrl;
                 newImg.alt = `View ${viewId}`;
                 newImg.style.cssText = 'width:100%;display:block;cursor:pointer;aspect-ratio:1;object-fit:cover;';
                 newImg.addEventListener('click', () => openLightbox(imageUrl));
