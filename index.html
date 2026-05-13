@@ -1863,53 +1863,10 @@ textarea:focus { outline: none; border-color: var(--text-secondary); }
   margin: 0 auto;
 }
 .mi-shell {
-  display: grid;
-  grid-template-columns: 200px 1fr;
-  gap: 0;
-  min-height: 400px;
   background: var(--surface);
   border-radius: var(--radius);
   border: 1px solid var(--border);
   overflow: hidden;
-}
-.mi-sidebar {
-  background: var(--surface-2);
-  border-right: 1px solid var(--border);
-  padding: 16px 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.mi-sidebar-head {
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.8px;
-  color: var(--text-muted);
-  padding: 0 10px 8px;
-  border-bottom: 1px solid var(--border-light);
-  margin-bottom: 8px;
-}
-.mi-nav-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 10px;
-  border: none;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--text-secondary);
-  font-size: 12px;
-  cursor: pointer;
-  text-align: left;
-  transition: all var(--transition);
-}
-.mi-nav-item:hover {
-  background: var(--surface);
-  color: var(--text);
-}
-.mi-nav-item.active {
-  background: var(--accent);
-  color: #fff;
 }
 .mi-main {
   padding: 20px;
@@ -2692,21 +2649,6 @@ textarea:focus { outline: none; border-color: var(--text-secondary); }
 
 /* ── MI Responsive ───────────────────────────────────────────── */
 @media (max-width: 900px) {
-  .mi-shell {
-    grid-template-columns: 1fr;
-  }
-  .mi-sidebar {
-    display: flex;
-    flex-direction: row;
-    flex-wrap: wrap;
-    gap: 4px;
-    padding: 10px;
-    border-right: none;
-    border-bottom: 1px solid var(--border);
-    overflow-x: auto;
-  }
-  .mi-sidebar-head { display: none; }
-  .mi-nav-item { white-space: nowrap; font-size: 11px; padding: 6px 10px; }
   .mi-main { max-height: none; padding: 14px; }
   .mi-grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 8px; }
   .mi-card-img { height: 160px; }
@@ -3931,8 +3873,6 @@ opacity: 0.8;
   .rq-table { font-size: 10px; }
   .rq-table th, .rq-table td { padding: 4px 6px; }
   /* Matched images panel mobile */
-  .mi-sidebar { display: none; }
-  .mi-main { grid-column: 1 / -1; }
   .mi-header { flex-direction: column; align-items: flex-start; gap: 6px; }
   .mi-header-actions { width: 100%; }
   .mi-filters { flex-direction: column; gap: 6px; }
@@ -5075,15 +5015,6 @@ a.cr-meta-pill.cr-drive-link:hover { opacity: 0.8; }
       <div class="about-section">
         <div class="about-card" style="padding:0;">
           <div class="mi-shell">
-            <!-- Sidebar Navigation -->
-            <div class="mi-sidebar" id="miSidebar">
-              <div class="mi-sidebar-head">Navigation</div>
-              <button class="mi-nav-item active" data-mi-view="gallery"><span>🖼️</span> Gallery</button>
-              <button class="mi-nav-item" data-mi-view="stats"><span>📊</span> Statistics</button>
-              <button class="mi-nav-item" data-mi-view="detail"><span>🔍</span> Detail View</button>
-            </div>
-
-            <!-- Main Content Area -->
             <div class="mi-main" id="miMain">
               <!-- Canvas view: gallery grid -->
               <div id="matchedCanvasView">
@@ -8108,7 +8039,6 @@ document.querySelectorAll('.cr-nav-item').forEach(btn => {
 
   function getMiElements() {
     return {
-      sidebar: document.getElementById('miSidebar'),
       main: document.getElementById('miMain'),
       canvasView: document.getElementById('matchedCanvasView'),
       detailView: document.getElementById('matchedDetailView'),
@@ -8134,7 +8064,6 @@ document.querySelectorAll('.cr-nav-item').forEach(btn => {
       statPending: document.getElementById('miStatPending'),
       statBrands: document.getElementById('miStatBrands'),
       statSources: document.getElementById('miStatSources'),
-      navItems: document.querySelectorAll('.mi-nav-item'),
       batchBar: document.getElementById('miBatchBar'),
       batchCount: document.getElementById('miBatchCount'),
       batchAddBtn: document.getElementById('miBatchAddBtn'),
@@ -8465,11 +8394,6 @@ document.querySelectorAll('.cr-nav-item').forEach(btn => {
     // Switch to detail view
     el.canvasView.style.display = 'none';
     el.detailView.style.display = 'block';
-
-    // Update sidebar active state
-    el.navItems.forEach(n => n.classList.remove('active'));
-    const detailNav = [...el.navItems].find(n => n.dataset.miView === 'detail');
-    if (detailNav) detailNav.classList.add('active');
   }
 
   function renderMiPagination(totalPages) {
@@ -8542,10 +8466,6 @@ document.querySelectorAll('.cr-nav-item').forEach(btn => {
     const el = getMiElements();
     if (el.canvasView) el.canvasView.style.display = 'block';
     if (el.detailView) el.detailView.style.display = 'none';
-    // Update sidebar active state
-    el.navItems.forEach(n => n.classList.remove('active'));
-    const galleryNav = [...el.navItems].find(n => n.dataset.miView === 'gallery');
-    if (galleryNav) galleryNav.classList.add('active');
   });
 
   // ── Filter event handlers ──
@@ -8634,38 +8554,6 @@ document.querySelectorAll('.cr-nav-item').forEach(btn => {
     } else {
       toast('No new items to add (all already in queue)', 'info');
     }
-  });
-
-  // ── Sidebar navigation ──
-  document.querySelectorAll('.mi-nav-item').forEach(item => {
-    item.addEventListener('click', () => {
-      const view = item.dataset.miView;
-      const el = getMiElements();
-      el.navItems.forEach(n => n.classList.remove('active'));
-      item.classList.add('active');
-
-      if (view === 'gallery') {
-        if (el.canvasView) el.canvasView.style.display = 'block';
-        if (el.detailView) el.detailView.style.display = 'none';
-      } else if (view === 'stats') {
-        // Show stats overlay
-        if (el.canvasView) el.canvasView.style.display = 'block';
-        if (el.detailView) el.detailView.style.display = 'none';
-        // Scroll to stats
-        const statsEl = document.getElementById('miStats');
-        if (statsEl) statsEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      } else if (view === 'detail') {
-        if (miSelectedImg) {
-          showMiDetail(miSelectedImg);
-        } else {
-          toast('Select an image first to view details', 'info');
-          // Switch back to gallery
-          el.navItems.forEach(n => n.classList.remove('active'));
-          const galleryNav = [...el.navItems].find(n => n.dataset.miView === 'gallery');
-          if (galleryNav) galleryNav.classList.add('active');
-        }
-      }
-    });
   });
 
   // ── Search clear button ──
