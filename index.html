@@ -2030,6 +2030,26 @@ textarea:focus { outline: none; border-color: var(--text-secondary); }
 .mi-search-clear:hover { color: var(--text); background: var(--surface-2); }
 .mi-filters select { min-width: 100px; }
 .mi-filters .mi-per-page { width: 70px; }
+.mi-select-all-btn {
+  font-size: 11px;
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+  transition: all var(--transition);
+  white-space: nowrap;
+}
+.mi-select-all-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.mi-select-all-btn.active {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
 .mi-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
@@ -2558,6 +2578,37 @@ textarea:focus { outline: none; border-color: var(--text-secondary); }
   background: var(--accent);
   border-color: var(--accent);
   opacity: 1;
+}
+
+/* ── ARCHIVED IMAGES SUBPAGE (reuses mi-* classes) ──────────── */
+.arch-restore-btn {
+  font-size: 10px;
+  padding: 4px 10px;
+  border: 1px solid #16a34a;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: #16a34a;
+  cursor: pointer;
+  transition: all var(--transition);
+  margin-left: auto;
+}
+.arch-restore-btn:hover {
+  background: #16a34a;
+  color: #fff;
+}
+.arch-delete-btn {
+  font-size: 10px;
+  padding: 4px 10px;
+  border: 1px solid #e74c3c;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: #e74c3c;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+.arch-delete-btn:hover {
+  background: #e74c3c;
+  color: #fff;
 }
 
 /* ── MI Edit Mode ────────────────────────────────────────────── */
@@ -4559,6 +4610,7 @@ a.cr-meta-pill.cr-drive-link:hover { opacity: 0.8; }
     <button class="tb-btn tb-hide-mobile" id="bulkRenderToggle" title="Review bulk items before rendering" aria-label="Bulk Render">Bulk Render</button>
     <button class="tb-btn tb-hide-mobile" id="batchProcessorToggle" title="Batch process PDF catalog + ZIP images" aria-label="Batch Processor">📦 Batch</button>
     <button class="tb-btn tb-hide-mobile" id="matchedImagesToggle" title="View saved matched product-image pairs" aria-label="Matched Images">🖼️ Matched</button>
+    <button class="tb-btn tb-hide-mobile" id="archivedImagesToggle" title="View archived matched images" aria-label="Archived Images">📦 Archived</button>
     <button class="tb-btn tb-hide-mobile" id="diningChairMatchToggle" title="Dining chair PDF + ZIP matching workflow" aria-label="Dining Chair Match">🪑 Chair Match</button>
     <button class="tb-btn tb-hide-mobile" id="renderProductToggle" title="Generate 4 product renders with QA pipeline" aria-label="Render Product">🎨 Render</button>
     <button class="tb-btn tb-hide-mobile" id="renderQueueToggle" title="Cloud render queue — permanent, survives browser close" aria-label="Render Queue">☁️ Queue</button>
@@ -4580,6 +4632,7 @@ a.cr-meta-pill.cr-drive-link:hover { opacity: 0.8; }
     <button class="tb-btn" id="bulkRenderToggleMob" title="Review bulk items before rendering" aria-label="Bulk Render">Bulk Render</button>
     <button class="tb-btn" id="batchProcessorToggleMob" title="Batch process PDF catalog + ZIP images" aria-label="Batch Processor">📦 Batch</button>
     <button class="tb-btn" id="matchedImagesToggleMob" title="View saved matched product-image pairs" aria-label="Matched Images">🖼️ Matched</button>
+    <button class="tb-btn" id="archivedImagesToggleMob" title="View archived matched images" aria-label="Archived Images">📦 Archived</button>
     <button class="tb-btn" id="diningChairMatchToggleMob" title="Dining chair PDF + ZIP matching workflow" aria-label="Dining Chair Match">🪑 Chair Match</button>
     <button class="tb-btn" id="renderProductToggleMob" title="Generate 4 product renders with QA pipeline" aria-label="Render Product">🎨 Render</button>
     <button class="tb-btn" id="renderQueueToggleMob" title="Cloud render queue — permanent, survives browser close" aria-label="Render Queue">☁️ Queue</button>
@@ -5108,8 +5161,8 @@ a.cr-meta-pill.cr-drive-link:hover { opacity: 0.8; }
                   </div>
                   <div class="mi-header-actions">
                     <button id="miRefreshBtn">🔄 Refresh</button>
-                    <button class="primary" id="miAddAllBtn">➕ Add All to Queue</button>
-                    <button class="primary" id="miCloudAddAllBtn" style="background:var(--accent);">☁️ Add All to Cloud Queue</button>
+                    <button class="primary" id="miAddAllBtn">➕ Add Selected to Queue</button>
+                    <button class="primary" id="miCloudAddAllBtn" style="background:var(--accent);">☁️ Add Selected to Cloud Queue</button>
                   </div>
                 </div>
 
@@ -5128,6 +5181,7 @@ a.cr-meta-pill.cr-drive-link:hover { opacity: 0.8; }
                   <span class="mi-batch-count" id="miBatchCount">0 selected</span>
                   <button id="miBatchAddBtn">➕ Add Selected to Queue</button>
                   <button id="miBatchCloudAddBtn" style="background:var(--accent);color:#fff;border:none;padding:6px 12px;border-radius:6px;cursor:pointer;font-size:12px;">☁️ Add Selected to Cloud Queue</button>
+                  <button id="miBatchArchiveBtn" style="background:#e74c3c;color:#fff;border:none;padding:6px 12px;border-radius:6px;cursor:pointer;font-size:12px;">📦 Migrate Selected to Archives</button>
                   <button class="mi-batch-cancel" id="miBatchCancelBtn">✕ Cancel</button>
                 </div>
 
@@ -5150,6 +5204,7 @@ a.cr-meta-pill.cr-drive-link:hover { opacity: 0.8; }
                     <option value="48">48</option>
                     <option value="96">96</option>
                   </select>
+                  <button id="miSelectAllBtn" class="mi-select-all-btn" title="Select/deselect all visible images">☐ Select All</button>
                 </div>
 
                 <!-- Content Area -->
@@ -5182,6 +5237,85 @@ a.cr-meta-pill.cr-drive-link:hover { opacity: 0.8; }
                 </div>
                 <div class="mi-detail-content" id="matchedDetailContent">
                   <!-- populated by JS -->
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── ARCHIVED IMAGES SUBPAGE ─────────────────────────────────── -->
+    <div class="mi-panel" id="archivedImagesPanel" style="display:none;">
+      <div class="sec-title">
+        <span>📦 Archived Images</span>
+        <span style="font-size:11px;font-weight:400;color:var(--text-secondary);margin-left:auto;">Previously archived matched images — restore or permanently delete</span>
+        <button class="btn-dl-all" id="archivedImagesRefreshBtn" type="button" style="margin-left:8px;">Refresh</button>
+      </div>
+      <div class="about-section">
+        <div class="about-card" style="padding:0;">
+          <div class="mi-shell">
+            <div class="mi-main" id="archMain">
+              <div id="archivedCanvasView">
+                <div class="mi-header">
+                  <div>
+                    <h2>Archived Images Gallery</h2>
+                    <p id="archHeaderSub">Browse and manage archived matched images</p>
+                  </div>
+                  <div class="mi-header-actions">
+                    <button id="archRefreshBtn">🔄 Refresh</button>
+                    <button class="primary" id="archRestoreAllBtn" style="background:#16a34a;">♻️ Restore Selected</button>
+                  </div>
+                </div>
+
+                <!-- Stats Cards -->
+                <div class="mi-stats" id="archStats">
+                  <div class="mi-stat-card"><span class="mi-stat-label">Total Archived</span><span class="mi-stat-value" id="archStatTotal">—</span><span class="mi-stat-sub">archived records</span></div>
+                  <div class="mi-stat-card"><span class="mi-stat-label">Rendered</span><span class="mi-stat-value" id="archStatRendered">—</span><span class="mi-stat-sub">completed renders</span></div>
+                  <div class="mi-stat-card"><span class="mi-stat-label">Processing</span><span class="mi-stat-value" id="archStatProcessing">—</span><span class="mi-stat-sub">in queue</span></div>
+                  <div class="mi-stat-card"><span class="mi-stat-label">Pending</span><span class="mi-stat-value" id="archStatPending">—</span><span class="mi-stat-sub">not yet rendered</span></div>
+                  <div class="mi-stat-card"><span class="mi-stat-label">Brands</span><span class="mi-stat-value" id="archStatBrands">—</span><span class="mi-stat-sub">unique brands</span></div>
+                  <div class="mi-stat-card"><span class="mi-stat-label">Sources</span><span class="mi-stat-value" id="archStatSources">—</span><span class="mi-stat-sub">PDF+ZIP batches</span></div>
+                </div>
+
+                <!-- Batch Action Bar -->
+                <div class="mi-batch-bar" id="archBatchBar">
+                  <span class="mi-batch-count" id="archBatchCount">0 selected</span>
+                  <button id="archBatchRestoreBtn" style="background:#16a34a;color:#fff;border:none;padding:6px 12px;border-radius:6px;cursor:pointer;font-size:12px;">♻️ Restore Selected</button>
+                  <button id="archBatchDeleteBtn" style="background:#e74c3c;color:#fff;border:none;padding:6px 12px;border-radius:6px;cursor:pointer;font-size:12px;">🗑️ Delete Selected Permanently</button>
+                  <button class="mi-batch-cancel" id="archBatchCancelBtn">✕ Cancel</button>
+                </div>
+
+                <!-- Filters -->
+                <div class="mi-filters">
+                  <div class="mi-search-wrap">
+                    <input type="text" id="archSearch" placeholder="Search by product name, code, or brand..." />
+                    <button class="mi-search-clear" id="archSearchClear" type="button">✕</button>
+                  </div>
+                  <select id="archBrandFilter"><option value="">All Brands</option></select>
+                  <select id="archStatusFilter">
+                    <option value="">All Statuses</option>
+                    <option value="rendered">✅ Rendered</option>
+                    <option value="processing">⏳ Processing</option>
+                    <option value="pending">⏸ Pending</option>
+                  </select>
+                  <select class="mi-per-page" id="archPerPage">
+                    <option value="12">12</option>
+                    <option value="24">24</option>
+                    <option value="48">48</option>
+                    <option value="96">96</option>
+                  </select>
+                  <button id="archSelectAllBtn" class="mi-select-all-btn" title="Select/deselect all visible archived images">☐ Select All</button>
+                </div>
+
+                <!-- Content Area -->
+                <div id="archContent"><div class="mi-loading">Loading archived images...</div></div>
+
+                <!-- Pagination -->
+                <div class="mi-pagination" id="archPagination" style="display:none;">
+                  <button id="archPrevPage" disabled>← Prev</button>
+                  <span class="mi-page-info" id="archPageInfo">Page 1</span>
+                  <button id="archNextPage" disabled>Next →</button>
                 </div>
               </div>
             </div>
@@ -6288,6 +6422,7 @@ if (mobileMenuBtn && mobileMenu) {
     'bulkRenderToggleMob': 'bulkRenderToggle',
     'batchProcessorToggleMob': 'batchProcessorToggle',
     'matchedImagesToggleMob': 'matchedImagesToggle',
+    'archivedImagesToggleMob': 'archivedImagesToggle',
     'diningChairMatchToggleMob': 'diningChairMatchToggle',
     'renderProductToggleMob': 'renderProductToggle',
     'renderQueueToggleMob': 'renderQueueToggle',
@@ -8215,7 +8350,10 @@ document.querySelectorAll('.cr-nav-item').forEach(btn => {
       batchBar: document.getElementById('miBatchBar'),
       batchCount: document.getElementById('miBatchCount'),
       batchAddBtn: document.getElementById('miBatchAddBtn'),
+      batchCloudAddBtn: document.getElementById('miBatchCloudAddBtn'),
+      batchArchiveBtn: document.getElementById('miBatchArchiveBtn'),
       batchCancelBtn: document.getElementById('miBatchCancelBtn'),
+      selectAllBtn: document.getElementById('miSelectAllBtn'),
       editToggleBtn: document.getElementById('miEditToggleBtn'),
       detailNav: document.getElementById('miDetailNav'),
       detailPrevBtn: document.getElementById('miDetailPrevBtn'),
@@ -8357,6 +8495,33 @@ document.querySelectorAll('.cr-nav-item').forEach(btn => {
     }
     updateMiBatchBar();
     // Re-render current cards to update checkbox states
+    renderMiCards(miData);
+  }
+
+  function toggleMiSelectAll() {
+    const el = getMiElements();
+    const pageItems = miFiltered.slice((miPage - 1) * miPerPage, miPage * miPerPage);
+    const allSelected = pageItems.every(img => miSelectedIds.has(img.id));
+    if (allSelected) {
+      // Deselect all on current page
+      for (const img of pageItems) {
+        miSelectedIds.delete(img.id);
+      }
+      if (el.selectAllBtn) {
+        el.selectAllBtn.textContent = '☐ Select All';
+        el.selectAllBtn.classList.remove('active');
+      }
+    } else {
+      // Select all on current page
+      for (const img of pageItems) {
+        miSelectedIds.add(img.id);
+      }
+      if (el.selectAllBtn) {
+        el.selectAllBtn.textContent = '☑ Selected';
+        el.selectAllBtn.classList.add('active');
+      }
+    }
+    updateMiBatchBar();
     renderMiCards(miData);
   }
 
@@ -8636,6 +8801,47 @@ document.querySelectorAll('.cr-nav-item').forEach(btn => {
     }
   });
 
+  // ── Archived Images Toggle ──
+  const archivedImagesToggle = document.getElementById('archivedImagesToggle');
+  const archivedImagesPanel = document.getElementById('archivedImagesPanel');
+  const archivedImagesRefreshBtn = document.getElementById('archivedImagesRefreshBtn');
+  let archivedImagesPanelOpen = false;
+
+  archivedImagesToggle?.addEventListener('click', () => {
+    archivedImagesPanelOpen = !archivedImagesPanelOpen;
+    archivedImagesToggle.classList.toggle('active', archivedImagesPanelOpen);
+    archivedImagesPanel.style.display = archivedImagesPanelOpen ? 'block' : 'none';
+    welcomeState.style.display = archivedImagesPanelOpen ? 'none' : 'flex';
+    hideWorkspacePanels();
+    document.getElementById('queueLogPanel').style.display = 'none';
+    document.getElementById('logPanel').style.display = 'none';
+    document.getElementById('featurePanel').style.display = 'none';
+    document.getElementById('aboutPanel').style.display = 'none';
+    completedPanel.style.display = 'none';
+    completedToggle.classList.remove('active');
+    featureToggle.classList.remove('active');
+    if (aboutToggle) aboutToggle.classList.remove('active');
+    featurePanelOpen = false;
+    aboutPanelOpen = false;
+    completedPanelOpen = false;
+    monitorPanel.style.display = 'none';
+    monitorToggle?.classList.remove('active');
+    monitorPanelOpen = false;
+    if (monitorInterval) { clearInterval(monitorInterval); monitorInterval = null; }
+    if (archivedImagesPanelOpen) {
+      setPanelOpen();
+      initArchivedImages();
+    } else {
+      clearPanelOpen();
+    }
+  });
+
+  archivedImagesRefreshBtn?.addEventListener('click', async () => {
+    if (archivedImagesPanelOpen) {
+      await initArchivedImages();
+    }
+  });
+
   matchedImagesRefreshBtn?.addEventListener('click', async () => {
     if (matchedImagesPanelOpen) {
       await initMatchedImages();
@@ -8696,10 +8902,12 @@ document.querySelectorAll('.cr-nav-item').forEach(btn => {
     }
   });
 
-  // ── Add All to Queue button ──
+  // ── Add Selected to Queue button (uses selection, falls back to all) ──
   document.getElementById('miAddAllBtn')?.addEventListener('click', () => {
     if (!matchedImagesPanelOpen || !miData || !miData.images) return;
-    const images = miData.images || [];
+    const images = miSelectedIds.size > 0
+      ? miData.images.filter(img => miSelectedIds.has(img.id))
+      : miData.images;
     let added = 0;
     for (const img of images) {
       const code = img.product_code || '';
@@ -8736,18 +8944,30 @@ document.querySelectorAll('.cr-nav-item').forEach(btn => {
     } else {
       toast('No new items to add (all already in queue)', 'info');
     }
+    if (miSelectedIds.size > 0) {
+      miSelectedIds.clear();
+      updateMiBatchBar();
+      renderMiCards(miData);
+    }
   });
 
-  // ── Add All to Cloud Queue button (permanent render queue) ──
+  // ── Add Selected to Cloud Queue button (uses selection, falls back to all) ──
   document.getElementById('miCloudAddAllBtn')?.addEventListener('click', async () => {
     if (!matchedImagesPanelOpen || !miData || !miData.images) return;
-    const images = miData.images || [];
+    const images = miSelectedIds.size > 0
+      ? miData.images.filter(img => miSelectedIds.has(img.id))
+      : miData.images;
     const matchedImageIds = images.map(img => img.id).filter(id => id != null);
     if (matchedImageIds.length === 0) {
       toast('No images to add to cloud queue', 'info');
       return;
     }
     await sendToCloudQueue(matchedImageIds);
+    if (miSelectedIds.size > 0) {
+      miSelectedIds.clear();
+      updateMiBatchBar();
+      renderMiCards(miData);
+    }
   });
 
   // ── Search clear button ──
@@ -8829,6 +9049,50 @@ document.querySelectorAll('.cr-nav-item').forEach(btn => {
     miSelectedIds.clear();
     updateMiBatchBar();
     renderMiCards(miData);
+  });
+
+  // ── Select All / Deselect All toggle ──
+  document.getElementById('miSelectAllBtn')?.addEventListener('click', () => {
+    toggleMiSelectAll();
+  });
+
+  // ── Batch Migrate Selected to Archives (soft-delete via POST) ──
+  document.getElementById('miBatchArchiveBtn')?.addEventListener('click', async () => {
+    if (!miData || !miData.images) return;
+    const selectedImages = miData.images.filter(img => miSelectedIds.has(img.id));
+    if (selectedImages.length === 0) {
+      toast('No images selected', 'info');
+      return;
+    }
+    const count = selectedImages.length;
+    if (!confirm(`Migrate ${count} selected image(s) to archives?\n\nThey will be moved to the Archived tab and hidden from the main view.`)) return;
+
+    const btn = document.getElementById('miBatchArchiveBtn');
+    if (btn) { btn.disabled = true; btn.textContent = '📦 Archiving...'; }
+
+    try {
+      const ids = selectedImages.map(img => img.id);
+      const res = await fetchApi('/api/agent/matched-images/archive', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids })
+      });
+      const result = await res.json();
+      if (result.success) {
+        toast(`Archived ${result.archived} image(s) successfully`, 'success');
+      } else {
+        toast('Failed to archive images: ' + (result.error || 'unknown error'), 'error');
+      }
+    } catch (err) {
+      toast('Error archiving images: ' + err.message, 'error');
+      console.error('[MI-ARCHIVE] Error:', err);
+    }
+
+    if (btn) { btn.disabled = false; btn.textContent = '📦 Migrate Selected to Archives'; }
+
+    miSelectedIds.clear();
+    updateMiBatchBar();
+    await initMatchedImages();
   });
 
   // ── Edit Toggle ──
@@ -9508,6 +9772,9 @@ function hideWorkspacePanels() {
   if (bulkUploadPanel) bulkUploadPanel.style.display = 'none';
   if (bulkRenderPanel) bulkRenderPanel.style.display = 'none';
   if (batchProcessorPanel) batchProcessorPanel.style.display = 'none';
+  const archivedPanel = document.getElementById('archivedImagesPanel');
+  if (archivedPanel) archivedPanel.style.display = 'none';
+  document.getElementById('archivedImagesToggle')?.classList.remove('active');
   const renderQueuePanel = document.getElementById('renderQueuePanel');
   if (renderQueuePanel) renderQueuePanel.style.display = 'none';
   bulkUploadToggle?.classList.remove('active');
@@ -15786,7 +16053,7 @@ async function sendToCloudQueue(matchedImageIds) {
   } catch (err) {
     toast(`Cloud queue failed: ${err.message}`, 'error');
   } finally {
-    if (btn) { btn.disabled = false; btn.textContent = btn.id === 'miCloudAddAllBtn' ? '☁️ Add All to Cloud Queue' : '☁️ Add Selected to Cloud Queue'; }
+    if (btn) { btn.disabled = false; btn.textContent = btn.id === 'miCloudAddAllBtn' ? '☁️ Add Selected to Cloud Queue' : '☁️ Add Selected to Cloud Queue'; }
   }
 }
 
@@ -15822,7 +16089,7 @@ async function sendToCloudQueueWithForce(matchedImageIds) {
   } catch (err) {
     toast(`Cloud queue failed: ${err.message}`, 'error');
   } finally {
-    if (btn) { btn.disabled = false; btn.textContent = btn.id === 'miCloudAddAllBtn' ? '☁️ Add All to Cloud Queue' : '☁️ Add Selected to Cloud Queue'; }
+    if (btn) { btn.disabled = false; btn.textContent = btn.id === 'miCloudAddAllBtn' ? '☁️ Add Selected to Cloud Queue' : '☁️ Add Selected to Cloud Queue'; }
   }
 }
 
@@ -16022,6 +16289,414 @@ function showToast(msg, type) {
   toast.appendChild(el);
   setTimeout(() => el.remove(), 3000);
 }
+
+// ═══════════════════════════════════════════════════════════════════
+//  ARCHIVED IMAGES — fetch, render, select, restore, delete
+// ═══════════════════════════════════════════════════════════════════
+
+let archData = null;
+let archFiltered = [];
+let archPage = 1;
+let archPerPage = 12;
+let archSelectedIds = new Set();
+
+function getArchElements() {
+  return {
+    content: document.getElementById('archContent'),
+    headerSub: document.getElementById('archHeaderSub'),
+    stats: document.getElementById('archStats'),
+    statTotal: document.getElementById('archStatTotal'),
+    statRendered: document.getElementById('archStatRendered'),
+    statProcessing: document.getElementById('archStatProcessing'),
+    statPending: document.getElementById('archStatPending'),
+    statBrands: document.getElementById('archStatBrands'),
+    statSources: document.getElementById('archStatSources'),
+    batchBar: document.getElementById('archBatchBar'),
+    batchCount: document.getElementById('archBatchCount'),
+    batchRestoreBtn: document.getElementById('archBatchRestoreBtn'),
+    batchDeleteBtn: document.getElementById('archBatchDeleteBtn'),
+    batchCancelBtn: document.getElementById('archBatchCancelBtn'),
+    search: document.getElementById('archSearch'),
+    searchClear: document.getElementById('archSearchClear'),
+    brandFilter: document.getElementById('archBrandFilter'),
+    statusFilter: document.getElementById('archStatusFilter'),
+    perPage: document.getElementById('archPerPage'),
+    selectAllBtn: document.getElementById('archSelectAllBtn'),
+    pagination: document.getElementById('archPagination'),
+    prevPage: document.getElementById('archPrevPage'),
+    nextPage: document.getElementById('archNextPage'),
+    pageInfo: document.getElementById('archPageInfo'),
+    refreshBtn: document.getElementById('archRefreshBtn'),
+    restoreAllBtn: document.getElementById('archRestoreAllBtn')
+  };
+}
+
+async function fetchArchivedImages(search = '') {
+  try {
+    const params = new URLSearchParams({ limit: '200', archived: 'true' });
+    if (search) params.set('search', search);
+    const res = await fetchApi('/api/agent/matched-images?' + params.toString());
+    if (!res.ok) throw new Error('Server returned ' + res.status);
+    return await res.json();
+  } catch (err) {
+    console.error('[ARCH] Fetch error:', err);
+    return { success: false, images: [], total: 0 };
+  }
+}
+
+async function initArchivedImages() {
+  const data = await fetchArchivedImages();
+  if (!data.success) {
+    const el = getArchElements();
+    if (el.content) el.content.innerHTML = '<div class="mi-empty"><div class="mi-empty-icon">⚠️</div>Failed to load archived images. Check server connection.</div>';
+    return;
+  }
+  archData = data;
+  archPage = 1;
+  archPerPage = parseInt(getArchElements().perPage?.value || '12', 10);
+  renderArchStats(data);
+  populateArchBrands(data);
+  renderArchCards(data);
+}
+
+function renderArchStats(data) {
+  const el = getArchElements();
+  if (!el.stats) return;
+  const images = data.images || [];
+  const total = data.total || images.length;
+  const rendered = images.filter(i => i.has_completed_render).length;
+  const processing = images.filter(i => i.queue_status === 'processing' || i.queue_status === 'generating').length;
+  const pending = images.filter(i => !i.has_completed_render && i.queue_status !== 'processing' && i.queue_status !== 'generating').length;
+  const brands = new Set(images.map(i => i.product_brand).filter(Boolean));
+  const sources = new Set(images.map(i => i.source_batch).filter(Boolean));
+  if (el.statTotal) el.statTotal.textContent = total;
+  if (el.statRendered) { el.statRendered.textContent = rendered; el.statRendered.className = 'mi-stat-value stat-rendered'; }
+  if (el.statProcessing) { el.statProcessing.textContent = processing; el.statProcessing.className = 'mi-stat-value stat-processing'; }
+  if (el.statPending) { el.statPending.textContent = pending; el.statPending.className = 'mi-stat-value stat-pending'; }
+  if (el.statBrands) el.statBrands.textContent = brands.size;
+  if (el.statSources) el.statSources.textContent = sources.size;
+}
+
+function populateArchBrands(data) {
+  const el = getArchElements();
+  if (!el.brandFilter) return;
+  const brands = [...new Set((data.images || []).map(i => i.product_brand).filter(Boolean))].sort();
+  el.brandFilter.innerHTML = '<option value="">All Brands</option>' + brands.map(b => `<option value="${escapeHtml(b)}">${escapeHtml(b)}</option>`).join('');
+}
+
+function filterArchData(data) {
+  const el = getArchElements();
+  let images = data.images || [];
+  const search = (el.search?.value || '').toLowerCase().trim();
+  const brand = el.brandFilter?.value || '';
+  const status = el.statusFilter?.value || '';
+  if (search) {
+    images = images.filter(i =>
+      (i.product_name || '').toLowerCase().includes(search) ||
+      (i.product_code || '').toLowerCase().includes(search) ||
+      (i.product_brand || '').toLowerCase().includes(search)
+    );
+  }
+  if (brand) images = images.filter(i => i.product_brand === brand);
+  if (status === 'rendered') images = images.filter(i => i.has_completed_render);
+  else if (status === 'processing') images = images.filter(i => i.queue_status === 'processing' || i.queue_status === 'generating');
+  else if (status === 'pending') images = images.filter(i => !i.has_completed_render && i.queue_status !== 'processing' && i.queue_status !== 'generating');
+  return images;
+}
+
+function renderArchCards(data) {
+  const el = getArchElements();
+  if (!el.content) return;
+  archFiltered = filterArchData(data);
+  const totalPages = Math.max(1, Math.ceil(archFiltered.length / archPerPage));
+  if (archPage > totalPages) archPage = totalPages;
+  const start = (archPage - 1) * archPerPage;
+  const pageItems = archFiltered.slice(start, start + archPerPage);
+  if (el.headerSub) {
+    el.headerSub.textContent = `${archFiltered.length} archived image(s) — Page ${archPage} of ${totalPages}`;
+  }
+  if (pageItems.length === 0) {
+    el.content.innerHTML = '<div class="mi-empty"><div class="mi-empty-icon">📦</div>No archived images found.</div>';
+    renderArchPagination(totalPages);
+    return;
+  }
+  el.content.innerHTML = '<div class="mi-grid"></div>';
+  const grid = el.content.querySelector('.mi-grid');
+  for (const img of pageItems) {
+    const card = document.createElement('div');
+    const isSelected = archSelectedIds.has(img.id);
+    card.className = 'mi-card' + (isSelected ? ' selected' : '');
+    const displayUrl = img.image_url || img.image_data_url || '';
+    const createdDate = img.created_at ? new Date(img.created_at).toLocaleString() : '';
+    const hasCompletedRender = img.has_completed_render === true;
+    const queueStatus = img.queue_status || '';
+    const descPreview = (img.description || '').substring(0, 100);
+    const descFull = img.description || '';
+    let statusBadge = '';
+    if (hasCompletedRender) {
+      statusBadge = '<span class="mi-badge rendered">✅ Rendered</span>';
+    } else if (queueStatus === 'processing' || queueStatus === 'generating') {
+      statusBadge = '<span class="mi-badge processing">⏳ Processing</span>';
+    } else {
+      statusBadge = '<span class="mi-badge pending">⏳ Pending</span>';
+    }
+    card.innerHTML = `
+      <div class="mi-card-img-wrap">
+        <img class="mi-card-img" src="${escapeHtml(displayUrl)}" alt="${escapeHtml(img.product_name)}" onerror="this.style.display='none'" loading="lazy" decoding="async"/>
+        ${statusBadge}
+        <label class="mi-card-select" onclick="event.stopPropagation(); toggleArchSelect(${img.id})">
+          <input type="checkbox" ${isSelected ? 'checked' : ''} />
+          <span class="mi-checkmark"></span>
+        </label>
+      </div>
+      <div class="mi-card-body">
+        <div class="mi-card-name" title="${escapeHtml(img.product_name)}">${escapeHtml(img.product_name)}</div>
+        ${img.product_code ? `<div class="mi-card-code">${escapeHtml(img.product_code)}</div>` : ''}
+        ${img.product_brand ? `<div class="mi-card-brand">🏷️ ${escapeHtml(img.product_brand)}</div>` : ''}
+        <div class="mi-card-desc" title="${escapeHtml(descFull)}">${escapeHtml(descPreview)}${descFull.length > 100 ? '...' : ''}</div>
+        <div class="mi-card-meta">
+          ${img.match_type ? `<span>🔗 ${escapeHtml(img.match_type)}</span>` : ''}
+          ${img.match_score ? `<span>⭐ ${img.match_score}</span>` : ''}
+          ${createdDate ? `<span>🕐 ${createdDate}</span>` : ''}
+        </div>
+      </div>
+      <div class="mi-card-footer">
+        <button class="arch-restore-btn" onclick="event.stopPropagation(); restoreArchivedImage(${img.id})">♻️ Restore</button>
+        <button class="arch-delete-btn" onclick="event.stopPropagation(); deleteArchivedImage(${img.id})">🗑️ Delete</button>
+      </div>
+    `;
+    grid.appendChild(card);
+  }
+  renderArchPagination(totalPages);
+}
+
+function renderArchPagination(totalPages) {
+  const el = getArchElements();
+  if (!el.pagination) return;
+  if (totalPages <= 1) {
+    el.pagination.style.display = 'none';
+    return;
+  }
+  el.pagination.style.display = 'flex';
+  if (el.pageInfo) el.pageInfo.textContent = `Page ${archPage} of ${totalPages}`;
+  if (el.prevPage) { el.prevPage.disabled = archPage <= 1; }
+  if (el.nextPage) { el.nextPage.disabled = archPage >= totalPages; }
+}
+
+function toggleArchSelect(imgId) {
+  if (archSelectedIds.has(imgId)) {
+    archSelectedIds.delete(imgId);
+  } else {
+    archSelectedIds.add(imgId);
+  }
+  updateArchBatchBar();
+  renderArchCards(archData);
+}
+
+function toggleArchSelectAll() {
+  const el = getArchElements();
+  const pageItems = archFiltered.slice((archPage - 1) * archPerPage, archPage * archPerPage);
+  const allSelected = pageItems.every(img => archSelectedIds.has(img.id));
+  if (allSelected) {
+    for (const img of pageItems) {
+      archSelectedIds.delete(img.id);
+    }
+  } else {
+    for (const img of pageItems) {
+      archSelectedIds.add(img.id);
+    }
+  }
+  updateArchBatchBar();
+  renderArchCards(archData);
+}
+
+function updateArchBatchBar() {
+  const el = getArchElements();
+  if (!el.batchBar) return;
+  const count = archSelectedIds.size;
+  if (el.batchCount) el.batchCount.textContent = count + ' selected';
+  el.batchBar.classList.toggle('visible', count > 0);
+}
+
+async function restoreArchivedImage(id) {
+  try {
+    const res = await fetchApi('/api/agent/matched-images/archive', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids: [id] })
+    });
+    const result = await res.json();
+    if (result.success) {
+      toast('Image restored successfully', 'success');
+      archSelectedIds.delete(id);
+      updateArchBatchBar();
+      await initArchivedImages();
+    } else {
+      toast('Failed to restore: ' + (result.error || 'unknown error'), 'error');
+    }
+  } catch (err) {
+    toast('Error restoring image: ' + err.message, 'error');
+  }
+}
+
+async function deleteArchivedImage(id) {
+  const name = archData?.images?.find(i => i.id === id)?.product_name || `#${id}`;
+  if (!confirm(`Permanently delete "${name}"?\n\nThis cannot be undone.`)) return;
+  try {
+    const res = await fetchApi('/api/agent/matched-images/' + id, {
+      method: 'DELETE'
+    });
+    const result = await res.json();
+    if (result.success) {
+      toast('Image permanently deleted', 'success');
+      archSelectedIds.delete(id);
+      updateArchBatchBar();
+      await initArchivedImages();
+    } else {
+      toast('Failed to delete: ' + (result.error || 'unknown error'), 'error');
+    }
+  } catch (err) {
+    toast('Error deleting image: ' + err.message, 'error');
+  }
+}
+
+// ── Archived Images Event Listeners ──
+document.addEventListener('DOMContentLoaded', () => {
+  const el = getArchElements();
+
+  // Refresh
+  el.refreshBtn?.addEventListener('click', async () => {
+    if (archivedImagesPanelOpen) await initArchivedImages();
+  });
+
+  // Restore All (selected)
+  el.restoreAllBtn?.addEventListener('click', async () => {
+    if (!archData || !archData.images) return;
+    const images = archSelectedIds.size > 0
+      ? archData.images.filter(img => archSelectedIds.has(img.id))
+      : archData.images;
+    if (images.length === 0) { toast('No images to restore', 'info'); return; }
+    if (!confirm(`Restore ${images.length} image(s) from archives?`)) return;
+    const ids = images.map(img => img.id);
+    try {
+      const res = await fetchApi('/api/agent/matched-images/archive', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids })
+      });
+      const result = await res.json();
+      if (result.success) {
+        toast(`Restored ${result.archived} image(s) successfully`, 'success');
+      } else {
+        toast('Failed to restore: ' + (result.error || 'unknown error'), 'error');
+      }
+    } catch (err) {
+      toast('Error restoring: ' + err.message, 'error');
+    }
+    archSelectedIds.clear();
+    updateArchBatchBar();
+    await initArchivedImages();
+  });
+
+  // Batch Restore
+  el.batchRestoreBtn?.addEventListener('click', async () => {
+    if (archSelectedIds.size === 0) { toast('No images selected', 'info'); return; }
+    const ids = [...archSelectedIds];
+    if (!confirm(`Restore ${ids.length} selected image(s) from archives?`)) return;
+    try {
+      const res = await fetchApi('/api/agent/matched-images/archive', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids })
+      });
+      const result = await res.json();
+      if (result.success) {
+        toast(`Restored ${result.archived} image(s) successfully`, 'success');
+      } else {
+        toast('Failed to restore: ' + (result.error || 'unknown error'), 'error');
+      }
+    } catch (err) {
+      toast('Error restoring: ' + err.message, 'error');
+    }
+    archSelectedIds.clear();
+    updateArchBatchBar();
+    await initArchivedImages();
+  });
+
+  // Batch Delete Permanently
+  el.batchDeleteBtn?.addEventListener('click', async () => {
+    if (archSelectedIds.size === 0) { toast('No images selected', 'info'); return; }
+    const ids = [...archSelectedIds];
+    if (!confirm(`Permanently delete ${ids.length} selected image(s)?\n\nThis cannot be undone.`)) return;
+    let deleted = 0;
+    let errors = 0;
+    for (const id of ids) {
+      try {
+        const res = await fetchApi('/api/agent/matched-images/' + id, { method: 'DELETE' });
+        const result = await res.json();
+        if (result.success) deleted++; else errors++;
+      } catch (err) { errors++; }
+    }
+    if (deleted > 0) toast(`Permanently deleted ${deleted} image(s)`, 'success');
+    if (errors > 0) toast(`${errors} image(s) failed to delete`, 'error');
+    archSelectedIds.clear();
+    updateArchBatchBar();
+    await initArchivedImages();
+  });
+
+  // Batch Cancel
+  el.batchCancelBtn?.addEventListener('click', () => {
+    archSelectedIds.clear();
+    updateArchBatchBar();
+    renderArchCards(archData);
+  });
+
+  // Select All
+  el.selectAllBtn?.addEventListener('click', toggleArchSelectAll);
+
+  // Search
+  let archSearchTimeout = null;
+  el.search?.addEventListener('input', () => {
+    clearTimeout(archSearchTimeout);
+    archSearchTimeout = setTimeout(() => {
+      if (archivedImagesPanelOpen) {
+        archPage = 1;
+        renderArchCards(archData);
+      }
+    }, 400);
+  });
+  el.searchClear?.addEventListener('click', () => {
+    if (el.search) { el.search.value = ''; archPage = 1; renderArchCards(archData); }
+  });
+
+  // Brand filter
+  el.brandFilter?.addEventListener('change', () => {
+    if (archivedImagesPanelOpen) { archPage = 1; renderArchCards(archData); }
+  });
+
+  // Status filter
+  el.statusFilter?.addEventListener('change', () => {
+    if (archivedImagesPanelOpen) { archPage = 1; renderArchCards(archData); }
+  });
+
+  // Per page
+  el.perPage?.addEventListener('change', (e) => {
+    if (archivedImagesPanelOpen) {
+      archPerPage = parseInt(e.target.value, 10);
+      archPage = 1;
+      renderArchCards(archData);
+    }
+  });
+
+  // Pagination
+  el.prevPage?.addEventListener('click', () => {
+    if (archPage > 1) { archPage--; renderArchCards(archData); }
+  });
+  el.nextPage?.addEventListener('click', () => {
+    const totalPages = Math.max(1, Math.ceil(archFiltered.length / archPerPage));
+    if (archPage < totalPages) { archPage++; renderArchCards(archData); }
+  });
+});
 
 // Initialize when DOM is ready
 if (document.readyState === 'loading') {

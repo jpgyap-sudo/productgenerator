@@ -46,6 +46,7 @@ import agentSaveMatchedHandler from './api/agent/save-matched.js';
 import agentMatchedImagesHandler from './api/agent/matched-images.js';
 import agentSaveMatchedPermanentHandler from './api/agent/save-matched-permanent.js';
 import agentMatchedImagesPermanentHandler from './api/agent/matched-images-permanent.js';
+import agentMatchedImagesArchiveHandler from './api/agent/matched-images-archive.js';
 import agentUploadGalleryHandler from './api/agent/upload-gallery.js';
 import agentBatchStatusHandler from './api/agent/batch-status.js';
 import agentMatchPdfOnlyHandler from './api/agent/match-pdf-only.js';
@@ -283,6 +284,17 @@ app.delete('/api/agent/matched-images/:id', async (req, res) => {
     if (!res.headersSent) res.json(result);
   } catch (err) {
     console.error('[MATCHED-IMAGES-DELETE] Error:', err);
+    if (!res.headersSent) res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Matched Images Archive Route (soft-delete) ──
+app.post('/api/agent/matched-images/archive', async (req, res) => {
+  try {
+    const result = await agentMatchedImagesArchiveHandler(req, res);
+    if (!res.headersSent) res.json(result);
+  } catch (err) {
+    console.error('[MATCHED-IMAGES-ARCHIVE] Error:', err);
     if (!res.headersSent) res.status(500).json({ error: err.message });
   }
 });

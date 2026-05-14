@@ -99,18 +99,28 @@ async function handlePatch(req, res) {
 
 /**
  * GET — fetch matched images with batch-enriched render status
+ * Query params:
+ *   archived - if 'true', fetch only archived; if 'false' or omitted, fetch only non-archived
  */
 async function handleGet(req, res) {
   try {
     const limit = Math.min(parseInt(req.query?.limit || '50', 10), 200);
     const offset = parseInt(req.query?.offset || '0', 10);
     const search = req.query?.search || '';
+    const archived = req.query?.archived === 'true';
 
-    console.log(`[MATCHED-IMAGES] Fetching history (limit: ${limit}, offset: ${offset}, search: ${search || 'none'})`);
+    console.log(`[MATCHED-IMAGES] Fetching history (limit: ${limit}, offset: ${offset}, search: ${search || 'none'}, archived: ${archived})`);
 
     let query = supabase
       .from(MATCHED_IMAGES_TABLE)
       .select('*', { count: 'exact' });
+
+    // Filter by archived status
+    if (archived) {
+      query = query.not('archived_at', 'is', null);
+    } else {
+      query = query.is('archived_at', null);
+    }
 
     // Apply text search if provided
     if (search) {
