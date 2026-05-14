@@ -7031,8 +7031,10 @@ async function rerenderHistoryView(btn, itemId, viewId, slot) {
 
     const { imageUrl, providerUsed } = data;
 
-    // Add cache-busting query param so the browser fetches the new image
-    const cacheBustUrl = imageUrl + (imageUrl.includes('?') ? '&' : '?') + '_t=' + Date.now();
+    // The server saves the re-rendered image to a new VPS file with a unique URL,
+    // so no cache-busting needed — the browser will naturally fetch the new URL
+    // and cache it permanently (Cache-Control: immutable, 7 days).
+    const cacheBustUrl = imageUrl;
 
     // Update the image in the slot (if slot still exists in DOM)
     if (slot && document.body.contains(slot)) {
@@ -7446,8 +7448,10 @@ async function rerenderCrView(btn, itemId, viewId) {
     // Surgically update the image in the batch card instead of rebuilding the entire panel
     const { imageUrl, providerUsed } = data;
     if (imageUrl) {
-      // Add cache-busting query param so the browser fetches the new image
-      const cacheBustUrl = imageUrl + (imageUrl.includes('?') ? '&' : '?') + '_t=' + Date.now();
+      // The server saves the re-rendered image to a new VPS file with a unique URL,
+      // so no cache-busting needed — the browser will naturally fetch the new URL
+      // and cache it permanently (Cache-Control: immutable, 7 days).
+      const cacheBustUrl = imageUrl;
       // Find the batch card for this item
       const batchCard = document.querySelector(`.cr-batch-card[data-batch-id="${itemId}"]`);
       if (batchCard) {
