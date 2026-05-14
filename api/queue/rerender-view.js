@@ -11,8 +11,9 @@
 import { supabase, QUEUE_TABLE, RESULTS_TABLE } from '../../lib/supabase.js';
 import { VIEWS } from '../../lib/fal.js';
 import { generateGeminiView } from '../../lib/gemini.js';
-import { saveRenderImageToVps, saveRenderImageBufferToVps } from '../../lib/vps-storage.js';
+import { saveRenderImageToVps, saveRenderImageBufferToVps, readPublicAsset } from '../../lib/vps-storage.js';
 import { saveCompletedBatch, listCompletedBatches } from '../../lib/completed-batches.js';
+import { replaceDriveFile, listRenderImagesInDriveFolder } from '../../lib/drive.js';
 
 // ── In-memory re-render progress store ──────────────────────────────
 // Key: `${itemId}:${viewId}`, Value: { status, progress, message, imageUrl?, error? }
@@ -245,6 +246,54 @@ export default async function handler(req, res) {
       }
     } catch (storeErr) {
       console.warn(`[RERENDER] Failed to update completed-batches for item ${itemId}:`, storeErr.message);
+    }
+
+    // ── Update Google Drive with the new image ──
+    // Find the Drive folder for this item and replace the old view image
+    try {
+      const hasDriveEnv = !!process.env.GOOGLE_SERVICE_ACCOUNT_JSON
+        || !!(process.env.GOOGLE_DRIVE_CLIENT_ID && process.env.GOOGLE_DRIVE_CLIENT_SECRET && process.env.GOOGLE_DRIVE_REFRESH_TOKEN);
+      if (hasDriveEnv) {
+        // Look up the Drive folder info from the item or completed batches
+        let driveFolderId = item?.drive_folder_id || '';
+        let driveFolderName = item?.drive_folder_name || '';
+
+        // If not on the item, check completed-batches.json
+        if (!driveFolderId) {
+          try {
+            const batches = await listCompletedBatches();
+            const batch = batches.find(b => Number(b.id) === Number(itemId));
+            if (batch) {
+              driveFolderId = batch.driveFolderId || '';
+              driveFolderName = batch.driveFolderName || '';
+            }
+          } catch (_) {}
+        }
+
+        if (driveFolderId) {
+          console.log(`[RERENDER] Updating Drive folder "${driveFolderName}" (${driveFolderId}) for item ${itemId} view ${viewId}...`);
+
+          // Read the new image buffer from VPS
+          const localBuffer = await readPublicAsset(publicUrl);
+          if (localBuffer) {
+            const ext = String(publicUrl).split('?')[0].toLowerCase().endsWith('.png') ? 'png' : 'jpg';
+            const mimeType = ext === 'png' ? 'image/png' : 'image/jpeg';
+            const safeLabel = getViewLabel(viewId).replace(/[^a-zA-Z0-9_-]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '');
+            const fileName = `${driveFolderName}_img${viewId}_${safeLabel}.${ext}`;
+            const searchPattern = `_img${viewId}_`;
+
+            const driveResult = await replaceDriveFile(localBuffer, fileName, mimeType, driveFolderId, searchPattern);
+            console.log(`[RERENDER] Drive updated for item ${itemId} view ${viewId}: ${driveResult.fileId}`);
+          } else {
+            console.warn(`[RERENDER] Could not read image from VPS for Drive update: ${publicUrl}`);
+          }
+        } else {
+          console.log(`[RERENDER] No Drive folder found for item ${itemId}, skipping Drive update`);
+        }
+      }
+    } catch (driveErr) {
+      // Non-fatal — the re-render succeeded, Drive update is best-effort
+      console.warn(`[RERENDER] Failed to update Drive for item ${itemId} view ${viewId}:`, driveErr.message);
     }
 
     // Mark as complete
