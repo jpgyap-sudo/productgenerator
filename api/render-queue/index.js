@@ -17,7 +17,10 @@ import {
   resumeAll,
   cancelAllQueued,
   cleanupCompleted,
-  moveNeedsRepairToCompletedReview
+  moveNeedsRepairToCompletedReview,
+  retryFailedItems,
+  getBatchItems,
+  cancelQueueItem
 } from '../../lib/render-queue.service.js';
 
 const router = express.Router();
@@ -152,6 +155,48 @@ router.post('/cleanup-completed', async (req, res) => {
     res.json(result);
   } catch (err) {
     console.error('[RENDER-QUEUE] cleanupCompleted error:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * GET /api/render-queue/batches/:batchId/items
+ * Fetch all items for a specific batch.
+ */
+router.get('/batches/:batchId/items', async (req, res) => {
+  try {
+    const items = await getBatchItems(req.params.batchId);
+    res.json({ success: true, items });
+  } catch (err) {
+    console.error('[RENDER-QUEUE] getBatchItems error:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * POST /api/render-queue/batches/:batchId/retry-failed
+ * Retry all failed items in a batch.
+ */
+router.post('/batches/:batchId/retry-failed', async (req, res) => {
+  try {
+    const result = await retryFailedItems(req.params.batchId);
+    res.json(result);
+  } catch (err) {
+    console.error('[RENDER-QUEUE] retryFailedItems error:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * POST /api/render-queue/items/:itemId/cancel
+ * Cancel a single queued/paused item.
+ */
+router.post('/items/:itemId/cancel', async (req, res) => {
+  try {
+    const result = await cancelQueueItem(req.params.itemId);
+    res.json(result);
+  } catch (err) {
+    console.error('[RENDER-QUEUE] cancelQueueItem error:', err);
     res.status(500).json({ success: false, error: err.message });
   }
 });
