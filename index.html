@@ -9,6 +9,41 @@ s<!DOCTYPE html>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 <style id="mainStyles">
+/* ── IMAGE OPTIMIZATIONS ──────────────────────────────────────── */
+/* Apply to ALL images to prevent layout shift and enable async decode */
+img {
+  max-width: 100%;
+  height: auto;
+}
+img[loading] {
+  background: var(--surface-2);
+  color: transparent;
+}
+/* Image skeleton placeholder for lazy-loaded images */
+.img-skeleton {
+  background: linear-gradient(90deg, var(--surface-2) 25%, var(--surface) 50%, var(--surface-2) 75%);
+  background-size: 200% 100%;
+  animation: imgShimmer 1.5s ease-in-out infinite;
+}
+@keyframes imgShimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+/* Contain images for rendering isolation — prevents layout recalc */
+.cr-image-strip {
+  contain: layout style paint;
+}
+.cr-batch-card {
+  contain: layout style paint;
+  content-visibility: auto;
+  contain-intrinsic-size: 200px;
+}
+.cr-mini-render {
+  contain: layout style paint;
+}
+.rq-thumbs {
+  contain: layout style paint;
+}
 /* ── TOGGLE SWITCH ──────────────────────────────────────────── */
 .toggle-switch {
 position: relative;
@@ -5771,6 +5806,62 @@ const SUPA_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIs
 const SUPA_QUEUE_TABLE = 'product_queue';
 const SUPA_BUCKET = 'product_images';
 
+/**
+ * Transform a Supabase storage URL to request a smaller/resized version.
+ * Uses Supabase's built-in image transformation API (?width=&quality=).
+ * Falls back to the original URL if it's not a Supabase URL.
+ * @param {string} url - The original image URL
+ * @param {number} [width=400] - Desired width in pixels
+ * @param {number} [quality=80] - Image quality (1-100)
+ * @returns {string} Transformed URL or original if not Supabase
+ */
+function supaTransform(url, width = 400, quality = 80) {
+  if (!url || !url.includes(SUPA_URL)) return url;
+  const sep = url.includes('?') ? '&' : '?';
+  return url + sep + 'width=' + width + '&quality=' + quality;
+}
+
+/**
+ * Preload an image into the browser cache before setting it as src.
+ * Returns a promise that resolves when the image is loaded (or rejects on error).
+ * @param {string} url - The image URL to preload
+ * @returns {Promise<void>}
+ */
+function preloadImage(url) {
+  return new Promise((resolve, reject) => {
+    if (!url) { resolve(); return; }
+    const img = new Image();
+    img.onload = () => resolve();
+    img.onerror = () => reject(new Error('Failed to preload: ' + url));
+    img.src = url;
+  });
+}
+
+/**
+ * Set an image element's src with optional preloading and error handling.
+ * Shows a skeleton placeholder while loading, and a fallback on error.
+ * @param {HTMLImageElement} imgEl - The image element
+ * @param {string} url - The image URL
+ * @param {boolean} [useTransform=false] - Whether to apply Supabase transform
+ */
+function setImageWithFallback(imgEl, url, useTransform = false) {
+  if (!imgEl || !url) return;
+  const finalUrl = useTransform ? supaTransform(url) : url;
+  
+  // Add skeleton class while loading
+  imgEl.classList.add('img-skeleton');
+  imgEl.src = finalUrl;
+  
+  imgEl.onload = () => {
+    imgEl.classList.remove('img-skeleton');
+  };
+  imgEl.onerror = () => {
+    imgEl.classList.remove('img-skeleton');
+    imgEl.style.background = 'var(--surface-2)';
+    imgEl.alt = 'Image unavailable';
+  };
+}
+
 // ── ENVIRONMENT CONFIG ─────────────────────────────────────────────
 // Vercel injects FAL_API_KEY at build time via environment variables.
 // Set it in Vercel Dashboard: Settings → Environment Variables → FAL_API_KEY
@@ -7217,7 +7308,7 @@ function renderCrBatches(data) {
     // Header row: thumbnail + info + meta + actions — clickable to open detail modal
     html += '<div class="cr-batch-header" style="cursor:pointer;" onclick="showBatchDetail(' + item.id + ')">';
     if (item.imageUrl) {
-      html += '<img class="cr-batch-thumb" src="' + escHtml(item.imageUrl) + '" alt="' + escHtml(item.name || '') + '" loading="lazy" onclick="openLightbox(\'' + escHtml(item.imageUrl) + '\')" />';
+      html += '<img class="cr-batch-thumb" src="' + escHtml(item.imageUrl) + '" alt="' + escHtml(item.name || '') + '" loading="lazy" decoding="async" onclick="openLightbox(\'' + escHtml(item.imageUrl) + '\')" />';
     }
     html += '<div class="cr-batch-info">';
     html += '<div class="cr-batch-name">' + escHtml(item.name || 'Batch #' + item.id) + '</div>';
@@ -7252,7 +7343,7 @@ function renderCrBatches(data) {
       const badgeText = provider === 'gemini' || provider === 'gemini-flash' ? 'Gemini' : 'GPT';
       html += '<div class="cr-mini-render">';
       if (isDone) {
-        html += '<img src="' + escHtml(v.imageUrl) + '" alt="' + escHtml(viewLabel) + '" loading="lazy" onclick="openLightbox(\'' + escHtml(v.imageUrl) + '\')" style="width:100%;display:block;cursor:pointer;aspect-ratio:1;object-fit:cover;" />';
+        html += '<img src="' + escHtml(v.imageUrl) + '" alt="' + escHtml(viewLabel) + '" loading="lazy" decoding="async" onclick="openLightbox(\'' + escHtml(v.imageUrl) + '\')" style="width:100%;display:block;cursor:pointer;aspect-ratio:1;object-fit:cover;" />';
       } else {
         html += '<div style="aspect-ratio:1;display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:11px;background:var(--surface-2);">❌</div>';
       }
@@ -7372,6 +7463,7 @@ async function rerenderCrView(btn, itemId, viewId) {
             const img = targetRender.querySelector('img');
             if (img) {
               img.src = cacheBustUrl;
+              img.decoding = 'async';
               img.onclick = () => openLightbox(imageUrl);
             } else {
               // Replace the error placeholder with an image
@@ -7380,6 +7472,8 @@ async function rerenderCrView(btn, itemId, viewId) {
                 const newImg = document.createElement('img');
                 newImg.src = cacheBustUrl;
                 newImg.alt = `View ${viewId}`;
+                newImg.decoding = 'async';
+                newImg.loading = 'lazy';
                 newImg.style.cssText = 'width:100%;display:block;cursor:pointer;aspect-ratio:1;object-fit:cover;';
                 newImg.addEventListener('click', () => openLightbox(imageUrl));
                 placeholder.replaceWith(newImg);
@@ -7531,7 +7625,7 @@ function showBatchDetail(batchId) {
   html += '<div class="bd-topbar">';
   html += '<div class="bd-product-box">';
   if (item.imageUrl) {
-    html += '<img src="' + escHtml(item.imageUrl) + '" alt="' + escHtml(item.name || '') + '" onclick="openLightbox(\'' + escHtml(item.imageUrl) + '\')" style="cursor:pointer;" />';
+    html += '<img src="' + escHtml(item.imageUrl) + '" alt="' + escHtml(item.name || '') + '" loading="lazy" decoding="async" onclick="openLightbox(\'' + escHtml(item.imageUrl) + '\')" style="cursor:pointer;" />';
   } else {
     html += '<div style="width:92px;height:92px;border-radius:10px;background:#141a24;flex-shrink:0;"></div>';
   }
@@ -7650,7 +7744,7 @@ function showBatchDetail(batchId) {
     if (isDone && qaLabel) html += '<span class="bd-pill ' + qaBadgeClass + '">' + qaLabel + '</span>';
     html += '<div class="bd-render-image-wrap">';
     if (isDone) {
-      html += '<img src="' + escHtml(v.imageUrl) + '" alt="' + escHtml(viewLabel) + '" onclick="openLightbox(\'' + escHtml(v.imageUrl) + '\')" />';
+      html += '<img src="' + escHtml(v.imageUrl) + '" alt="' + escHtml(viewLabel) + '" loading="lazy" decoding="async" onclick="openLightbox(\'' + escHtml(v.imageUrl) + '\')" />';
     } else {
       html += '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:#0d131d;color:#4a5568;font-size:14px;">❌ Render failed</div>';
     }
@@ -8287,7 +8381,7 @@ document.querySelectorAll('.cr-nav-item').forEach(btn => {
 
       card.innerHTML = `
         <div class="mi-card-img-wrap">
-          <img class="mi-card-img" src="${escapeHtml(displayUrl)}" alt="${escapeHtml(img.product_name)}" onerror="this.style.display='none'" loading="lazy"/>
+          <img class="mi-card-img" src="${escapeHtml(displayUrl)}" alt="${escapeHtml(img.product_name)}" onerror="this.style.display='none'" loading="lazy" decoding="async"/>
           ${statusBadge}
           <label class="mi-card-select" onclick="event.stopPropagation(); toggleMiSelect(${img.id})">
             <input type="checkbox" ${isSelected ? 'checked' : ''} />
@@ -8358,7 +8452,7 @@ document.querySelectorAll('.cr-nav-item').forEach(btn => {
     el.detailContent.innerHTML = `
       <div class="mi-detail-layout">
         <div class="mi-detail-image-section">
-          <img src="${escapeHtml(displayUrl)}" alt="${escapeHtml(img.product_name)}" onerror="this.style.display='none'"/>
+          <img src="${escapeHtml(displayUrl)}" alt="${escapeHtml(img.product_name)}" onerror="this.style.display='none'" decoding="async"/>
           <div class="mi-detail-img-label">${escapeHtml(img.image_name || '')}</div>
         </div>
         <div class="mi-detail-info-section">
@@ -10395,7 +10489,7 @@ function createActiveCard(item) {
     const progEl = document.getElementById('active-prog');
     const dot = document.getElementById('active-dot');
     const skipBtn = document.getElementById('skipBtn');
-    if (thumb) thumb.src = item.dataUrl;
+    if (thumb) { thumb.src = item.dataUrl; thumb.decoding = 'async'; }
     if (nameEl) nameEl.textContent = item.name;
     if (titleEl) titleEl.textContent = `Generating: ${item.name}`;
     if (progEl) progEl.textContent = 'Starting...';
@@ -10443,7 +10537,7 @@ function createActiveCard(item) {
     </div>
     <div class="active-card">
       <div class="card-head">
-        <img class="card-thumb" id="active-thumb" src="${item.dataUrl}" alt="${escHtml(item.name)}"/>
+        <img class="card-thumb" id="active-thumb" src="${item.dataUrl}" alt="${escHtml(item.name)}" decoding="async"/>
         <div class="card-info">
           <h3 id="active-name">${escHtml(item.name)}</h3>
           <p id="active-prog">Starting...</p>
@@ -11485,8 +11579,7 @@ async function submitToServer(itemIds) {
 async function pollStatus() {
   try {
     const res = await fetchApi('/api/queue/status', {
-      method: 'GET',
-      headers: { 'Cache-Control': 'no-cache' }
+      method: 'GET'
     });
     if (!res.ok) return null;
     const data = await res.json();
@@ -11591,14 +11684,29 @@ async function pollStatus() {
           } else if (r.status === 'done' && r.imageUrl) {
             badge.textContent = 'done';
             badge.className = 'rbadge rb-ok';
-            body.innerHTML = `<img src="${r.imageUrl}" alt="View ${r.viewId}"/>`;
-            body.querySelector('img').addEventListener('click', () => openLightbox(r.imageUrl));
-            const dlBtn = document.createElement('button');
-            dlBtn.className = 'btn-dl1';
-            dlBtn.textContent = '⬇ Download';
-            dlBtn.addEventListener('click', () => dlOneUrl(r.imageUrl, `view_${r.viewId}`));
-            body.appendChild(dlBtn);
-            body.className = 'rslot-body';
+            // Preload the image before setting it as src to avoid pop-in
+            body.innerHTML = `<div class="spinner" style="width:32px;height:32px;border-width:3px;"></div>`;
+            body.className = 'rslot-body generating';
+            preloadImage(r.imageUrl).then(() => {
+              body.innerHTML = `<img src="${r.imageUrl}" alt="View ${r.viewId}" decoding="async"/>`;
+              body.querySelector('img').addEventListener('click', () => openLightbox(r.imageUrl));
+              const dlBtn = document.createElement('button');
+              dlBtn.className = 'btn-dl1';
+              dlBtn.textContent = '⬇ Download';
+              dlBtn.addEventListener('click', () => dlOneUrl(r.imageUrl, `view_${r.viewId}`));
+              body.appendChild(dlBtn);
+              body.className = 'rslot-body';
+            }).catch(() => {
+              // Fallback if preload fails — still show the image
+              body.innerHTML = `<img src="${r.imageUrl}" alt="View ${r.viewId}" decoding="async" style="background:var(--surface-2);"/>`;
+              body.querySelector('img').addEventListener('click', () => openLightbox(r.imageUrl));
+              const dlBtn = document.createElement('button');
+              dlBtn.className = 'btn-dl1';
+              dlBtn.textContent = '⬇ Download';
+              dlBtn.addEventListener('click', () => dlOneUrl(r.imageUrl, `view_${r.viewId}`));
+              body.appendChild(dlBtn);
+              body.className = 'rslot-body';
+            });
             doneCount++;
           } else if (r.status === 'error') {
             badge.textContent = 'error';

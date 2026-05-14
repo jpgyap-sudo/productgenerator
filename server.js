@@ -470,8 +470,17 @@ app.get('/favicon.ico', (req, res) => {
 });
 
 // ── Serve static frontend ──
+// Images are immutable once generated — cache aggressively for 7 days
 app.use('/vps-assets', express.static(VPS_ASSET_ROOT, {
-  maxAge: '5m'
+  maxAge: '7d',
+  etag: true,
+  lastModified: true,
+  setHeaders: (res, filePath) => {
+    // For image files, add immutable directive so browsers never revalidate
+    if (/\.(png|jpg|jpeg|webp|avif|gif|svg)$/i.test(filePath)) {
+      res.setHeader('Cache-Control', 'public, max-age=604800, immutable');
+    }
+  }
 }));
 app.get('/completebatch', (req, res) => {
   res.sendFile('index.html', { root: process.cwd() });
@@ -482,7 +491,11 @@ const FURNITURE_RENDER_DIR = path.join(process.cwd(), 'furniture-render');
 const FURNITURE_RENDER_BUILD = path.join(FURNITURE_RENDER_DIR, 'dist');
 // Serve built files if they exist, otherwise serve source files
 if (fs.existsSync(FURNITURE_RENDER_BUILD)) {
-  app.use('/furniture-render', express.static(FURNITURE_RENDER_BUILD, { maxAge: '0' }));
+  // Build assets are immutable — cache for 1 year with immutable directive
+  app.use('/furniture-render', express.static(FURNITURE_RENDER_BUILD, {
+    maxAge: '1y',
+    immutable: true
+  }));
   // SPA fallback — only for non-asset routes (don't catch .js/.css/etc.)
   app.get('/furniture-render/*', (req, res, next) => {
     if (/\.(js|css|png|jpg|jpeg|webp|svg|ico|woff2?|ttf|map)$/.test(req.path)) {
