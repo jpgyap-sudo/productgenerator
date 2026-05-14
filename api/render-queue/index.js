@@ -10,6 +10,7 @@ import express from 'express';
 import {
   listQueueBatches,
   createQueueBatchFromCanvas,
+  checkAlreadyRendered,
   pauseBatch,
   resumeBatch,
   cancelBatch,
@@ -41,9 +42,26 @@ router.get('/batches', async (req, res) => {
 });
 
 /**
+ * POST /api/render-queue/check-duplicates
+ * Check if any matched_image_ids already have completed render items.
+ * Body: { matchedImageIds: number[] }
+ * Returns: { alreadyRendered, hasDuplicates, affectedMatchedImageIds }
+ */
+router.post('/check-duplicates', async (req, res) => {
+  try {
+    const result = await checkAlreadyRendered(req.body.matchedImageIds || []);
+    res.json({ success: true, ...result });
+  } catch (err) {
+    console.error('[RENDER-QUEUE] checkAlreadyRendered error:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
  * POST /api/render-queue/from-image-canvas
  * Create a permanent render queue batch from saved Image Canvas records.
- * Body: { batchName, category, matchedImageIds, priority }
+ * Body: { batchName, category, matchedImageIds, priority, force }
+ * - force: set to true to bypass double-render protection
  */
 router.post('/from-image-canvas', async (req, res) => {
   try {
