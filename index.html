@@ -5108,6 +5108,7 @@ a.cr-meta-pill.cr-drive-link:hover { opacity: 0.8; }
                   <div class="mi-header-actions">
                     <button id="miRefreshBtn">🔄 Refresh</button>
                     <button class="primary" id="miAddAllBtn">➕ Add All to Queue</button>
+                    <button class="primary" id="miCloudAddAllBtn" style="background:var(--accent);">☁️ Add All to Cloud Queue</button>
                   </div>
                 </div>
 
@@ -5125,6 +5126,7 @@ a.cr-meta-pill.cr-drive-link:hover { opacity: 0.8; }
                 <div class="mi-batch-bar" id="miBatchBar">
                   <span class="mi-batch-count" id="miBatchCount">0 selected</span>
                   <button id="miBatchAddBtn">➕ Add Selected to Queue</button>
+                  <button id="miBatchCloudAddBtn" style="background:var(--accent);color:#fff;border:none;padding:6px 12px;border-radius:6px;cursor:pointer;font-size:12px;">☁️ Add Selected to Cloud Queue</button>
                   <button class="mi-batch-cancel" id="miBatchCancelBtn">✕ Cancel</button>
                 </div>
 
@@ -8735,6 +8737,18 @@ document.querySelectorAll('.cr-nav-item').forEach(btn => {
     }
   });
 
+  // ── Add All to Cloud Queue button (permanent render queue) ──
+  document.getElementById('miCloudAddAllBtn')?.addEventListener('click', async () => {
+    if (!matchedImagesPanelOpen || !miData || !miData.images) return;
+    const images = miData.images || [];
+    const matchedImageIds = images.map(img => img.id).filter(id => id != null);
+    if (matchedImageIds.length === 0) {
+      toast('No images to add to cloud queue', 'info');
+      return;
+    }
+    await sendToCloudQueue(matchedImageIds);
+  });
+
   // ── Search clear button ──
   document.getElementById('miSearchClear')?.addEventListener('click', () => {
     const el = getMiElements();
@@ -8789,6 +8803,21 @@ document.querySelectorAll('.cr-nav-item').forEach(btn => {
     } else {
       toast('Selected items already in queue', 'info');
     }
+    miSelectedIds.clear();
+    updateMiBatchBar();
+    renderMiCards(miData);
+  });
+
+  // ── Batch Add Selected to Cloud Queue ──
+  document.getElementById('miBatchCloudAddBtn')?.addEventListener('click', async () => {
+    if (!miData || !miData.images) return;
+    const selectedImages = miData.images.filter(img => miSelectedIds.has(img.id));
+    if (selectedImages.length === 0) {
+      toast('No images selected', 'info');
+      return;
+    }
+    const matchedImageIds = selectedImages.map(img => img.id).filter(id => id != null);
+    await sendToCloudQueue(matchedImageIds);
     miSelectedIds.clear();
     updateMiBatchBar();
     renderMiCards(miData);
@@ -15660,6 +15689,139 @@ async function postQueueAction(url) {
       errorDiv.textContent = 'Action failed: ' + err.message;
       errorDiv.style.display = 'block';
     }
+  }
+}
+
+// ── Send matched images to cloud render queue (with double-render protection) ──
+async function sendToCloudQueue(matchedImageIds) {
+  if (!matchedImageIds || !matchedImageIds.length) {
+    toast('No images to send to cloud queue', 'info');
+    return;
+  }
+
+  const btn = document.getElementById('miCloudAddAllBtn') || document.getElementById('miBatchCloudAddBtn');
+  if (btn) { btn.disabled = true; btn.textContent = '☁️ Sending...'; }
+
+  try {
+    const res = await fetch('/api/render-queue/from-image-canvas', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        batchName: `Canvas Batch ${new Date().toLocaleDateString()}`,
+        category: 'Dining Chairs',
+        matchedImageIds,
+        priority: 'medium'
+      })
+    });
+
+    const data = await res.json();
+
+    // ── Double-render protection: requires user confirmation ──
+    if (data.requiresConfirmation) {
+      const count = data.alreadyRenderedCount || data.alreadyRendered.length;
+      const affectedIds = data.affectedMatchedImageIds || [];
+
+      // Build a detailed list for the modal
+      let detailHtml = '';
+      if (data.groupedByMatchedImage) {
+        for (const [mid, items] of Object.entries(data.groupedByMatchedImage)) {
+          const first = items[0];
+          detailHtml += `<div style="margin-bottom:8px;padding:8px;background:var(--card-bg);border-radius:6px;border:1px solid var(--border);">
+            <strong>${escapeHtml(first.product_name || 'Product #' + mid)}</strong>
+            <span style="font-size:11px;color:var(--text-muted);">(${items.length} view(s))</span>
+            <div style="font-size:11px;color:var(--text-secondary);margin-top:4px;">
+              ${items.map(i => `<span style="display:inline-block;margin-right:8px;">${escapeHtml(i.render_label || i.render_type)} — ✅ ${i.status}</span>`).join('')}
+            </div>
+          </div>`;
+        }
+      }
+
+      // Show confirmation modal
+      const modal = document.getElementById('bdModal');
+      const body = document.getElementById('bdModalBody');
+      if (modal && body) {
+        body.innerHTML = `
+          <div style="padding:20px;">
+            <h3 style="margin:0 0 12px 0;color:var(--warning);">⚠️ Already Rendered Items Found</h3>
+            <p style="margin:0 0 16px 0;color:var(--text-secondary);font-size:13px;">
+              ${count} item(s) from this selection have already been rendered in a completed batch.
+              These images will be re-queued for rendering if you proceed.
+            </p>
+            <div style="max-height:300px;overflow-y:auto;margin-bottom:16px;">
+              ${detailHtml}
+            </div>
+            <div style="display:flex;gap:10px;justify-content:flex-end;border-top:1px solid var(--border);padding-top:16px;">
+              <button class="tb-btn" id="cloudQueueCancelBtn" style="padding:8px 20px;">Cancel</button>
+              <button class="tb-btn" id="cloudQueueProceedBtn" style="padding:8px 20px;background:var(--warning);color:#000;font-weight:600;">Proceed Anyway →</button>
+            </div>
+          </div>
+        `;
+        modal.style.display = 'flex';
+
+        // Wire up modal buttons
+        document.getElementById('cloudQueueCancelBtn')?.addEventListener('click', () => {
+          modal.style.display = 'none';
+          toast('Cloud queue submission cancelled', 'info');
+        });
+        document.getElementById('cloudQueueProceedBtn')?.addEventListener('click', async () => {
+          modal.style.display = 'none';
+          // Resubmit with force: true
+          await sendToCloudQueueWithForce(matchedImageIds);
+        });
+      }
+      return;
+    }
+
+    if (data.success) {
+      toast(`✅ Cloud queue batch created: ${data.totalProducts} product(s), ${data.totalImages} image(s)`, 'success');
+      // Refresh the queue batches list
+      if (typeof fetchQueueBatches === 'function') fetchQueueBatches();
+    } else if (data.error) {
+      toast(`Cloud queue error: ${data.error}`, 'error');
+    } else {
+      toast('Cloud queue submission completed', 'success');
+      if (typeof fetchQueueBatches === 'function') fetchQueueBatches();
+    }
+  } catch (err) {
+    toast(`Cloud queue failed: ${err.message}`, 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = btn.id === 'miCloudAddAllBtn' ? '☁️ Add All to Cloud Queue' : '☁️ Add Selected to Cloud Queue'; }
+  }
+}
+
+// ── Resubmit to cloud queue with force=true (bypass double-render check) ──
+async function sendToCloudQueueWithForce(matchedImageIds) {
+  const btn = document.getElementById('miCloudAddAllBtn') || document.getElementById('miBatchCloudAddBtn');
+  if (btn) { btn.disabled = true; btn.textContent = '☁️ Proceeding...'; }
+
+  try {
+    const res = await fetch('/api/render-queue/from-image-canvas', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        batchName: `Canvas Batch ${new Date().toLocaleDateString()}`,
+        category: 'Dining Chairs',
+        matchedImageIds,
+        priority: 'medium',
+        force: true
+      })
+    });
+
+    const data = await res.json();
+
+    if (data.success) {
+      toast(`✅ Cloud queue batch created (forced): ${data.totalProducts} product(s), ${data.totalImages} image(s)`, 'success');
+      if (typeof fetchQueueBatches === 'function') fetchQueueBatches();
+    } else if (data.error) {
+      toast(`Cloud queue error: ${data.error}`, 'error');
+    } else {
+      toast('Cloud queue submission completed', 'success');
+      if (typeof fetchQueueBatches === 'function') fetchQueueBatches();
+    }
+  } catch (err) {
+    toast(`Cloud queue failed: ${err.message}`, 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = btn.id === 'miCloudAddAllBtn' ? '☁️ Add All to Cloud Queue' : '☁️ Add Selected to Cloud Queue'; }
   }
 }
 
